@@ -1,0 +1,25 @@
+# Node / SvelteKit
+node_modules/
+/build/
+/.svelte-kit/
+/package/
+vite.config.*.timestamp-*
+
+# Rust
+/target/
+
+# Tauri
+/src-tauri/gen/schemas/
+
+# Umgebung & System
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+*.log
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/extensions.json
