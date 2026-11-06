@@ -2,16 +2,12 @@
 import type { Shape } from "./Shape";
 import type { Style } from "./Style";
 
-export type Annotation = {
-  id: string;
-  /**
-   * First frame (inclusive) on which the annotation is visible.
-   */
-  frameStart: number;
-  /**
-   * Last frame (inclusive).
-   */
-  frameEnd: number;
-  shape: Shape;
-  style: Style;
-};
+export type Annotation = { id: string, 
+/**
+ * First frame (inclusive) on which the annotation is visible.
+ */
+frameStart: number, 
+/**
+ * Last frame (inclusive).
+ */
+frameEnd: number, shape: Shape, style: Style, };

@@ -21,5 +21,9 @@
   "settings.language": "Language",
   "settings.languageSystem": "System language",
   "common.close": "Close",
-  "overlay.error": "The screenshot could not be shown."
+  "overlay.error": "The screenshot could not be shown.",
+  "overlay.copy": "Copy",
+  "overlay.copyTitle": "Copy to clipboard (Enter, Ctrl+C or double-click)",
+  "overlay.cancel": "Cancel",
+  "overlay.cancelTitle": "Cancel (Esc or right-click)"
 }

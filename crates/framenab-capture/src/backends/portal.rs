@@ -4,6 +4,7 @@
 //! delete it, so screenshots taken through FrameNab do not pile up in the user's Pictures folder.
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use ashpd::desktop::screenshot::Screenshot;
 use image::RgbaImage;
@@ -16,11 +17,7 @@ pub struct PortalBackend;
 impl PortalBackend {
     /// Takes a non-interactive screenshot of the whole desktop through the portal.
     pub fn screenshot_all() -> Result<RgbaImage> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| CaptureError::Backend(e.to_string()))?;
-        let uri = runtime.block_on(async {
+        let uri = runtime()?.block_on(async {
             let request = Screenshot::request().interactive(false).modal(false).send().await.map_err(map_err)?;
             request.response().map(|r| r.uri().as_str().to_owned()).map_err(map_err)
         })?;
@@ -32,6 +29,23 @@ impl PortalBackend {
         }
         Ok(image.into_rgba8())
     }
+}
+
+/// One runtime for the whole process. ashpd caches its D-Bus connection globally, and zbus runs
+/// that connection on the runtime it was created on: a per-call runtime would leave the cached
+/// connection without a driver, and every portal call after the first would hang forever.
+fn runtime() -> Result<&'static tokio::runtime::Runtime> {
+    static RUNTIME: OnceLock<std::io::Result<tokio::runtime::Runtime>> = OnceLock::new();
+    RUNTIME
+        .get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .thread_name("framenab-portal")
+                .enable_all()
+                .build()
+        })
+        .as_ref()
+        .map_err(|e| CaptureError::Backend(e.to_string()))
 }
 
 fn map_err(err: ashpd::Error) -> CaptureError {

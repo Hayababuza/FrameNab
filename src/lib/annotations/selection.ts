@@ -43,3 +43,23 @@ export function toImagePixels(r: Rect, scale: number, image: { width: number; he
     height: Math.max(1, Math.min(image.height - y, Math.round(r.h * scale))),
   };
 }
+
+/**
+ * Where to place the toolbar for a selection: below it (right-aligned), otherwise above it,
+ * otherwise inside its bottom edge. Always kept on screen.
+ */
+export function toolbarPosition(
+  selection: Rect,
+  toolbar: { w: number; h: number },
+  screen: { w: number; h: number },
+  gap = 8,
+): Point {
+  const x = Math.min(Math.max(selection.x + selection.w - toolbar.w, gap), screen.w - toolbar.w - gap);
+  const below = selection.y + selection.h + gap;
+  const above = selection.y - gap - toolbar.h;
+  let y: number;
+  if (below + toolbar.h <= screen.h - gap) y = below;
+  else if (above >= gap) y = above;
+  else y = selection.y + selection.h - toolbar.h - gap;
+  return { x, y: Math.max(gap, y) };
+}

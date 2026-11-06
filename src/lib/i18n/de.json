@@ -21,5 +21,9 @@
   "settings.language": "Sprache",
   "settings.languageSystem": "Systemsprache",
   "common.close": "Schließen",
-  "overlay.error": "Der Screenshot konnte nicht angezeigt werden."
+  "overlay.error": "Der Screenshot konnte nicht angezeigt werden.",
+  "overlay.copy": "Kopieren",
+  "overlay.copyTitle": "In die Zwischenablage kopieren (Enter, Strg+C oder Doppelklick)",
+  "overlay.cancel": "Abbrechen",
+  "overlay.cancelTitle": "Abbrechen (Esc oder Rechtsklick)"
 }

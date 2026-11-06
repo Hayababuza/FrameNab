@@ -84,7 +84,8 @@ pub fn open_overlay(app: &AppHandle) -> tauri::Result<()> {
         .title("FrameNab – Screenshot")
         .decorations(false)
         .always_on_top(true)
-        .skip_taskbar(true)
+        // Keep a taskbar/dock entry: the main window may be hidden while the overlay is open,
+        // and FrameNab should not look as if it had quit.
         .resizable(false)
         .fullscreen(true)
         .visible(false)

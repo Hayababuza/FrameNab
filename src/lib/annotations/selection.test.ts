@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { beginDrag, toImagePixels, updateDrag } from "./selection";
+import { beginDrag, toImagePixels, toolbarPosition, updateDrag } from "./selection";
 
 const bounds = { w: 100, h: 100 };
 
@@ -39,5 +39,14 @@ describe("selection", () => {
       width: 20,
       height: 1,
     });
+  });
+
+  it("places the toolbar below, above or inside the selection", () => {
+    const toolbar = { w: 200, h: 40 };
+    const screen = { w: 1000, h: 800 };
+    expect(toolbarPosition({ x: 100, y: 100, w: 400, h: 200 }, toolbar, screen)).toEqual({ x: 300, y: 308 });
+    expect(toolbarPosition({ x: 100, y: 500, w: 400, h: 280 }, toolbar, screen)).toEqual({ x: 300, y: 452 });
+    expect(toolbarPosition({ x: 0, y: 0, w: 1000, h: 800 }, toolbar, screen)).toEqual({ x: 792, y: 752 });
+    expect(toolbarPosition({ x: 0, y: 100, w: 50, h: 50 }, toolbar, screen).x).toBe(8);
   });
 });

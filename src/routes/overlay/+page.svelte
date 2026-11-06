@@ -2,7 +2,13 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { Rect } from "$lib/bindings/Rect";
-  import { beginDrag, type Drag, toImagePixels, updateDrag } from "$lib/annotations/selection";
+  import {
+    beginDrag,
+    type Drag,
+    toImagePixels,
+    toolbarPosition,
+    updateDrag,
+  } from "$lib/annotations/selection";
   import { t } from "$lib/i18n/index.svelte";
   import { cancelCapture, captureInfo, copySelection, loadCapture, type CaptureInfo } from "$lib/ipc";
 
@@ -10,7 +16,8 @@
   let info: CaptureInfo | null = null;
   let bitmap: ImageBitmap | null = null;
   let selection = $state<Rect | null>(null);
-  let drag: Drag | null = null;
+  let drag = $state<Drag | null>(null);
+  let toolbarSize = $state({ w: 0, h: 0 });
   let busy = $state(false);
   let error = $state<string | null>(null);
   let size = $state({ w: window.innerWidth, h: window.innerHeight });
@@ -123,6 +130,12 @@
     size = { w: window.innerWidth, h: window.innerHeight };
   }
 
+  const toolbarStyle = $derived.by(() => {
+    if (!selection) return "";
+    const p = toolbarPosition(selection, toolbarSize, size);
+    return `left: ${p.x}px; top: ${p.y}px;`;
+  });
+
   // Label next to the selection: above it, or inside if there is no room.
   const labelStyle = $derived.by(() => {
     if (!selection) return "";
@@ -146,6 +159,27 @@
 
 {#if selection && imageSelection}
   <div class="size" style={labelStyle}>{imageSelection.width} × {imageSelection.height}</div>
+  {#if !drag}
+    <div
+      class="toolbar"
+      style={toolbarStyle}
+      bind:clientWidth={toolbarSize.w}
+      bind:clientHeight={toolbarSize.h}
+    >
+      <button class="primary" title={t("overlay.copyTitle")} onclick={copy} disabled={busy}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="8" y="8" width="12" height="12" rx="2" />
+          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+        </svg>
+        {t("overlay.copy")}
+        <kbd>Enter</kbd>
+      </button>
+      <button title={t("overlay.cancelTitle")} onclick={() => cancelCapture()}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        <kbd>Esc</kbd>
+      </button>
+    </div>
+  {/if}
 {:else if !error}
   <div class="hint">{t("overlay.hint")}</div>
 {/if}
@@ -187,6 +221,53 @@
   .size {
     padding: 2px 8px;
     font-variant-numeric: tabular-nums;
+  }
+  .toolbar {
+    position: fixed;
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 8px;
+    background: rgb(20 20 24 / 92%);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+  }
+  .toolbar button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .toolbar button:hover:not(:disabled) {
+    background: rgb(255 255 255 / 12%);
+  }
+  .toolbar button.primary {
+    background: #e5484d;
+  }
+  .toolbar button.primary:hover:not(:disabled) {
+    background: #f15a5f;
+  }
+  .toolbar svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  kbd {
+    padding: 0 5px;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 15%);
+    font:
+      11px/18px ui-monospace,
+      monospace;
   }
   .error {
     top: 50%;
