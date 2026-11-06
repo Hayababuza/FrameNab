@@ -14,12 +14,12 @@
   "info.ffmpegYes": "gefunden – MP4/WebM verfügbar",
   "info.ffmpegNo": "nicht installiert – GIF, APNG, WebP und PNG funktionieren trotzdem",
   "info.wayland": "Wayland erkannt: Lege im System ein Tastenkürzel auf den Befehl {command} an.",
-  "overlay.hint": "Bereich aufziehen · Esc zum Abbrechen",
-  "overlay.placeholder": "Das Screenshot-Overlay entsteht in Phase 1.",
+  "overlay.hint": "Bereich aufziehen · Enter oder Strg+C kopiert · Esc bricht ab",
   "recorder.title": "Aufnahme",
   "recorder.placeholder": "Der Aufnahme-Rahmen entsteht in Phase 2.",
   "settings.title": "Einstellungen",
   "settings.language": "Sprache",
   "settings.languageSystem": "Systemsprache",
-  "common.close": "Schließen"
+  "common.close": "Schließen",
+  "overlay.error": "Der Screenshot konnte nicht angezeigt werden."
 }

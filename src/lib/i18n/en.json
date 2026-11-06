@@ -14,12 +14,12 @@
   "info.ffmpegYes": "found – MP4/WebM available",
   "info.ffmpegNo": "not installed – GIF, APNG, WebP and PNG still work",
   "info.wayland": "Wayland detected: bind a system shortcut to the command {command}.",
-  "overlay.hint": "Drag to select · Esc to cancel",
-  "overlay.placeholder": "The screenshot overlay arrives in phase 1.",
+  "overlay.hint": "Drag to select an area · Enter or Ctrl+C copies · Esc cancels",
   "recorder.title": "Recording",
   "recorder.placeholder": "The recording frame arrives in phase 2.",
   "settings.title": "Settings",
   "settings.language": "Language",
   "settings.languageSystem": "System language",
-  "common.close": "Close"
+  "common.close": "Close",
+  "overlay.error": "The screenshot could not be shown."
 }

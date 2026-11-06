@@ -7,7 +7,9 @@
 //! | Linux X11     | XShm                    | XShm in a loop             |
 //! | Linux Wayland | xdg-desktop-portal      | Portal ScreenCast+PipeWire |
 //!
-//! Phase 0: trait, types and platform detection. The backends follow in phase 1/2.
+//! Screenshots work on every platform; recording follows in phase 2.
+
+pub mod backends;
 
 use image::RgbaImage;
 use serde::Serialize;
@@ -137,29 +139,35 @@ pub trait CaptureBackend: Send + Sync {
     ) -> Result<Box<dyn RecordingHandle>>;
 }
 
-/// Placeholder backend until the real backends are implemented.
-#[derive(Debug, Clone, Copy)]
-pub struct UnimplementedBackend(Platform);
-
-impl CaptureBackend for UnimplementedBackend {
-    fn platform(&self) -> Platform {
-        self.0
-    }
-    fn monitors(&self) -> Result<Vec<MonitorInfo>> {
-        Err(CaptureError::NotImplemented(self.0))
-    }
-    fn screenshot(&self, _: &CaptureTarget) -> Result<RgbaImage> {
-        Err(CaptureError::NotImplemented(self.0))
-    }
-    fn start_recording(&self, _: &CaptureTarget, _: u32, _: Box<dyn FrameSink>) -> Result<Box<dyn RecordingHandle>> {
-        Err(CaptureError::NotImplemented(self.0))
-    }
-}
-
 /// Returns the matching backend for the current platform.
 #[must_use]
 pub fn backend() -> Box<dyn CaptureBackend> {
-    Box::new(UnimplementedBackend(Platform::detect()))
+    let platform = Platform::detect();
+    match platform {
+        #[cfg(target_os = "linux")]
+        Platform::LinuxWayland => Box::new(backends::portal::PortalBackend),
+        _ => Box::new(backends::xcap::XcapBackend(platform)),
+    }
+}
+
+/// Bounding box `(min_x, min_y, width, height)` of all monitors in the virtual desktop.
+#[must_use]
+pub fn bounds(monitors: &[MonitorInfo]) -> Option<(i32, i32, u32, u32)> {
+    let min_x = monitors.iter().map(|m| m.x).min()?;
+    let min_y = monitors.iter().map(|m| m.y).min()?;
+    let max_x = monitors.iter().map(|m| m.x + m.width as i32).max()?;
+    let max_y = monitors.iter().map(|m| m.y + m.height as i32).max()?;
+    Some((min_x, min_y, (max_x - min_x) as u32, (max_y - min_y) as u32))
+}
+
+/// Crops `image` to the given rectangle, clamped to the image bounds.
+#[must_use]
+pub fn crop(image: &RgbaImage, x: i32, y: i32, width: u32, height: u32) -> RgbaImage {
+    let x0 = x.clamp(0, image.width() as i32) as u32;
+    let y0 = y.clamp(0, image.height() as i32) as u32;
+    let w = width.min(image.width() - x0);
+    let h = height.min(image.height() - y0);
+    image::imageops::crop_imm(image, x0, y0, w, h).to_image()
 }
 
 #[cfg(test)]
@@ -172,6 +180,29 @@ mod tests {
         assert_eq!(Platform::detect_linux(Some("x11"), true), Platform::LinuxX11);
         assert_eq!(Platform::detect_linux(None, true), Platform::LinuxWayland);
         assert_eq!(Platform::detect_linux(Some("tty"), false), Platform::LinuxX11);
+    }
+
+    #[test]
+    fn crop_is_clamped() {
+        let img = RgbaImage::new(10, 10);
+        assert_eq!(crop(&img, 8, -3, 5, 5).dimensions(), (2, 5));
+        assert_eq!(crop(&img, 20, 0, 5, 5).dimensions(), (0, 5));
+    }
+
+    #[test]
+    fn monitor_bounds() {
+        let m = |x, y, w, h| MonitorInfo {
+            id: 0,
+            name: String::new(),
+            x,
+            y,
+            width: w,
+            height: h,
+            scale_factor: 1.0,
+            is_primary: false,
+        };
+        assert_eq!(bounds(&[m(0, 0, 1920, 1080), m(-1280, 200, 1280, 1024)]), Some((-1280, 0, 3200, 1224)));
+        assert_eq!(bounds(&[]), None);
     }
 
     #[test]

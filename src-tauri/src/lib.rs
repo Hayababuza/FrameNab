@@ -1,7 +1,9 @@
 //! Tauri layer of FrameNab. Only glue code lives here (windows, tray, hotkeys, commands);
 //! the actual logic is in `crates/*`.
 
+mod capture;
 mod cli;
+mod clipboard;
 mod commands;
 mod hotkeys;
 mod i18n;
@@ -27,7 +29,15 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(hotkeys::plugin())
-        .invoke_handler(tauri::generate_handler![commands::app_info, commands::run_action])
+        .register_uri_scheme_protocol("framenab", capture::protocol)
+        .manage(capture::CaptureState::default())
+        .invoke_handler(tauri::generate_handler![
+            commands::app_info,
+            commands::run_action,
+            capture::capture_info,
+            capture::copy_selection,
+            capture::cancel_capture,
+        ])
         .setup(move |app| {
             let log_dir = app.path().app_log_dir()?;
             app.manage(logging::init(&log_dir));
@@ -44,14 +54,14 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|window, event| match event {
             // Closing the main window does not quit the app; it hides to the tray.
-            if let WindowEvent::CloseRequested { api, .. } = event
-                && window.label() == windows::MAIN
-            {
+            WindowEvent::CloseRequested { api, .. } if window.label() == windows::MAIN => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            WindowEvent::Destroyed if window.label() == windows::OVERLAY => capture::finish(window.app_handle()),
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("failed to start FrameNab");

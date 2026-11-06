@@ -3,7 +3,7 @@
 use framenab_capture::Platform;
 use framenab_export::ExportFormat;
 use serde::Serialize;
-use tauri::AppHandle;
+use tauri::{AppHandle, WebviewWindow};
 
 use crate::cli::Action;
 use crate::windows;
@@ -31,6 +31,11 @@ pub fn app_info() -> AppInfo {
 }
 
 #[tauri::command]
-pub fn run_action(app: AppHandle, action: Action) {
+pub fn run_action(app: AppHandle, window: WebviewWindow, action: Action) {
+    // Triggered from the main window: hide it so it is not part of the screenshot.
+    if action == Action::Screenshot && window.label() == windows::MAIN {
+        crate::capture::start(&app, true);
+        return;
+    }
     windows::dispatch(&app, action);
 }

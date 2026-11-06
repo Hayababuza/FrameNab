@@ -1,5 +1,5 @@
 /** Type-safe wrappers around the Rust commands (`src-tauri/src/commands`). */
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 export type Platform = "windows" | "macOs" | "linuxX11" | "linuxWayland" | "unknown";
 export type ExportFormat = "gif" | "apng" | "webp" | "pngSequence" | "mp4" | "webm";
@@ -23,3 +23,29 @@ export const platformLabel: Record<Platform, string> = {
 
 export const appInfo = () => invoke<AppInfo>("app_info");
 export const runAction = (action: Action) => invoke<void>("run_action", { action });
+
+export interface CaptureInfo {
+  id: number;
+  width: number;
+  height: number;
+}
+
+/** Selection in image pixels. */
+export interface Selection {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export const captureInfo = () => invoke<CaptureInfo | null>("capture_info");
+export const copySelection = (selection: Selection) => invoke<void>("copy_selection", { selection });
+export const cancelCapture = () => invoke<void>("cancel_capture");
+
+/** Loads the pixels of the current capture through the `framenab://` protocol. */
+export async function loadCapture(info: CaptureInfo): Promise<ImageBitmap> {
+  const response = await fetch(convertFileSrc(String(info.id), "framenab"));
+  if (!response.ok) throw new Error(`capture ${info.id}: HTTP ${response.status}`);
+  const pixels = new Uint8ClampedArray(await response.arrayBuffer());
+  return createImageBitmap(new ImageData(pixels, info.width, info.height));
+}

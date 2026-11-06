@@ -76,7 +76,7 @@ impl FrameStore {
         let data = if header.channels.as_u8() == 4 {
             data
         } else {
-            data.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 0xFF]).collect()
+            data.as_chunks::<3>().0.iter().flat_map(|&[r, g, b]| [r, g, b, 0xFF]).collect()
         };
         RgbaImage::from_raw(header.width, header.height, data).ok_or(CoreError::SizeMismatch {
             got_w: header.width,
