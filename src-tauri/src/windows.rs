@@ -1,4 +1,4 @@
-//! Fensterverwaltung. Jedes Fenster ist eine SvelteKit-Route (`src/routes/<label>`).
+//! Window management. Every window is a SvelteKit route (`src/routes/<label>`).
 
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -13,13 +13,13 @@ pub fn dispatch(app: &AppHandle, action: Action) {
     let result = match action {
         Action::Screenshot => open_overlay(app),
         Action::Record => {
-            open(app, RECORDER, |b| b.title("FrameNab – Aufnahme").inner_size(720.0, 480.0).always_on_top(true))
+            open(app, RECORDER, |b| b.title("FrameNab – Recording").inner_size(720.0, 480.0).always_on_top(true))
         }
         Action::Editor => show_main(app),
-        Action::Settings => open(app, SETTINGS, |b| b.title("FrameNab – Einstellungen").inner_size(640.0, 520.0)),
+        Action::Settings => open(app, SETTINGS, |b| b.title("FrameNab – Settings").inner_size(640.0, 520.0)),
     };
     if let Err(err) = result {
-        tracing::error!(?action, %err, "Fenster konnte nicht geöffnet werden");
+        tracing::error!(?action, %err, "Failed to open window");
     }
 }
 
@@ -38,15 +38,15 @@ pub fn hide_main(app: &AppHandle) {
     }
 }
 
-/// Screenshot-Overlay: randlos, im Vordergrund, über den ganzen Bildschirm.
-/// Phase 1 zeigt hier das eingefrorene Bildschirmbild zum Auswählen/Annotieren.
+/// Screenshot overlay: borderless, always on top, covering the whole screen.
+/// In phase 1 it shows the frozen screen image for selecting/annotating.
 fn open_overlay(app: &AppHandle) -> tauri::Result<()> {
     open(app, OVERLAY, |b| {
         b.title("FrameNab – Screenshot").decorations(false).always_on_top(true).skip_taskbar(true).fullscreen(true)
     })
 }
 
-/// Öffnet ein Fenster bzw. holt ein bereits offenes nach vorn.
+/// Opens a window, or brings an already open one to the front.
 fn open<F>(app: &AppHandle, label: &str, configure: F) -> tauri::Result<()>
 where
     F: for<'a> FnOnce(

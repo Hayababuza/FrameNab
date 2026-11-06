@@ -1,5 +1,5 @@
-//! Undo/Redo über Snapshots. Ein [`crate::Project`] enthält keine Pixeldaten (die liegen als
-//! Dateien im Projektordner), daher sind Snapshots klein und dieser Ansatz ist robust und einfach.
+//! Undo/redo via snapshots. A [`crate::Project`] holds no pixel data (that lives in files in the
+//! project folder), so snapshots are small and this approach stays simple and robust.
 
 #[derive(Debug, Clone)]
 pub struct History<T> {
@@ -14,7 +14,7 @@ impl<T: Clone> History<T> {
         Self { undo: Vec::new(), redo: Vec::new(), limit: limit.max(1) }
     }
 
-    /// Merkt sich den Zustand *vor* einer Änderung.
+    /// Records the state *before* a change.
     pub fn record(&mut self, before: &T) {
         self.undo.push(before.clone());
         if self.undo.len() > self.limit {
@@ -23,7 +23,7 @@ impl<T: Clone> History<T> {
         self.redo.clear();
     }
 
-    /// Macht die letzte Änderung rückgängig und gibt den wiederhergestellten Zustand zurück.
+    /// Undoes the last change and returns the restored state.
     pub fn undo(&mut self, current: &T) -> Option<T> {
         let prev = self.undo.pop()?;
         self.redo.push(current.clone());
@@ -68,7 +68,7 @@ mod tests {
         state = h.redo(&state).unwrap();
         assert_eq!(state, 2);
 
-        h.record(&state); // neue Änderung verwirft Redo
+        h.record(&state); // a new change discards redo
         assert!(!h.can_redo());
     }
 

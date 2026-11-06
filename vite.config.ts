@@ -7,10 +7,10 @@ const host = process.env.TAURI_DEV_HOST;
 // https://v2.tauri.app/start/frontend/sveltekit/
 export default defineConfig({
   plugins: [sveltekit()],
-  // Rust-Fehlermeldungen nicht überdecken
+  // Don't hide Rust error messages
   clearScreen: false,
   server: {
-    // Tauri erwartet einen festen Port
+    // Tauri expects a fixed port
     port: 1420,
     strictPort: true,
     host: host || "127.0.0.1",

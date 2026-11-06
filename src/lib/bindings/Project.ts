@@ -9,11 +9,11 @@ export type Project = {
   frames: Array<Frame>;
   annotations: Array<Annotation>;
   /**
-   * Anzahl Wiederholungen beim Export; 0 = endlos.
+   * Number of repetitions on export; 0 = infinite.
    */
   loop: number;
   /**
-   * Zähler für eindeutige Frame-IDs.
+   * Counter for unique frame IDs.
    */
   nextFrameId: number;
 };

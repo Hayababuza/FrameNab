@@ -1,7 +1,7 @@
 {
   "name": "framenab",
   "version": "0.1.0",
-  "description": "Screenshots und GIF-Aufnahmen mit Annotation – plattformübergreifend",
+  "description": "Cross-platform screenshots and GIF recordings with annotations",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

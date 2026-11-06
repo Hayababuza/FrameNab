@@ -1,7 +1,7 @@
-//! Rendert Annotationen in Frames, für Export und für Screenshots (Zwischenablage/Datei).
+//! Renders annotations into frames, for export and for screenshots (clipboard/file).
 //!
-//! Die UI zeichnet live auf einem HTML-Canvas; dieser Renderer ist die verbindliche Quelle für
-//! das exportierte Ergebnis. Text (cosmic-text) und Weichzeichnen folgen in Phase 1.
+//! The UI draws live on an HTML canvas; this renderer is the source of truth for the exported
+//! result. Text (cosmic-text) and blur follow in phase 1.
 
 use framenab_core::{Annotation, Point, Project, Rect, Rgba, Shape, Style};
 use image::RgbaImage;
@@ -9,11 +9,11 @@ use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RenderError {
-    #[error("Ungültige Bildgröße {0}x{1}")]
+    #[error("Invalid image size {0}x{1}")]
     InvalidSize(u32, u32),
 }
 
-/// Rendert alle auf `frame_index` sichtbaren Annotationen auf eine Kopie von `base`.
+/// Renders every annotation visible on `frame_index` onto a copy of `base`.
 pub fn render_frame(project: &Project, frame_index: u32, base: &RgbaImage) -> Result<RgbaImage, RenderError> {
     let mut image = base.clone();
     for annotation in project.annotations_on(frame_index) {
@@ -22,7 +22,7 @@ pub fn render_frame(project: &Project, frame_index: u32, base: &RgbaImage) -> Re
     Ok(image)
 }
 
-/// Zeichnet eine einzelne Annotation direkt in `image`.
+/// Draws a single annotation directly into `image`.
 pub fn draw(image: &mut RgbaImage, annotation: &Annotation) -> Result<(), RenderError> {
     let style = &annotation.style;
     match &annotation.shape {
@@ -31,12 +31,12 @@ pub fn draw(image: &mut RgbaImage, annotation: &Annotation) -> Result<(), Render
             return Ok(());
         }
         Shape::Blur { rect, radius } => {
-            // Bis zum echten Gauß-Blur (Phase 1): starkes Pixelieren als sichere Abdeckung.
+            // Until the real Gaussian blur lands (phase 1): heavy pixelation as a safe cover.
             pixelate(image, *rect, radius.max(4.0) as u32);
             return Ok(());
         }
         Shape::Text { .. } | Shape::Counter { .. } => {
-            // TODO(Phase 1): Text-Rendering mit cosmic-text.
+            // TODO(phase 1): text rendering with cosmic-text.
             return Ok(());
         }
         _ => {}
@@ -44,8 +44,8 @@ pub fn draw(image: &mut RgbaImage, annotation: &Annotation) -> Result<(), Render
 
     let (w, h) = image.dimensions();
     let mut pixmap = Pixmap::new(w, h).ok_or(RenderError::InvalidSize(w, h))?;
-    // RgbaImage ist nicht vormultipliziert; Annotationen auf einer leeren Ebene zeichnen und dann
-    // per Alpha-Blending über das Bild legen.
+    // RgbaImage is not premultiplied; draw annotations onto an empty layer and then alpha-blend
+    // it over the image.
     match &annotation.shape {
         Shape::Line { from, to } => stroke_path(&mut pixmap, line(*from, *to), style),
         Shape::Arrow { from, to } => {
@@ -74,7 +74,7 @@ pub fn draw(image: &mut RgbaImage, annotation: &Annotation) -> Result<(), Render
             let marker = Style { opacity: style.opacity * 0.4, width: style.width * 3.0, ..style.clone() };
             stroke_path(&mut pixmap, polyline(points), &marker);
         }
-        _ => unreachable!("oben behandelt"),
+        _ => unreachable!("handled above"),
     }
     composite(image, &pixmap);
     Ok(())
@@ -116,7 +116,7 @@ fn polyline(points: &[Point]) -> Option<tiny_skia::Path> {
     let mut pb = PathBuilder::new();
     pb.move_to(first.x, first.y);
     if rest.is_empty() {
-        pb.line_to(first.x + 0.01, first.y); // einzelner Punkt → sichtbarer Klecks
+        pb.line_to(first.x + 0.01, first.y); // single point → visible dot
     }
     for p in rest {
         pb.line_to(p.x, p.y);
@@ -124,7 +124,7 @@ fn polyline(points: &[Point]) -> Option<tiny_skia::Path> {
     pb.finish()
 }
 
-/// Gefüllte Pfeilspitze am Endpunkt `to`. Größe skaliert mit der Strichstärke.
+/// Filled arrow head at the end point `to`. Its size scales with the stroke width.
 fn arrow_head(from: Point, to: Point, width: f32) -> Option<tiny_skia::Path> {
     let (dx, dy) = (to.x - from.x, to.y - from.y);
     let len = dx.hypot(dy);
@@ -143,7 +143,7 @@ fn arrow_head(from: Point, to: Point, width: f32) -> Option<tiny_skia::Path> {
     pb.finish()
 }
 
-/// Legt die (vormultiplizierte) Annotationsebene per Source-Over über das Bild.
+/// Composites the (premultiplied) annotation layer over the image using source-over.
 fn composite(image: &mut RgbaImage, layer: &Pixmap) {
     for (dst, src) in image.pixels_mut().zip(layer.pixels()) {
         let a = u32::from(src.alpha());
@@ -161,7 +161,7 @@ fn composite(image: &mut RgbaImage, layer: &Pixmap) {
     }
 }
 
-/// Pixeliert einen Bereich in Blöcken der Größe `block`.
+/// Pixelates an area in blocks of size `block`.
 pub fn pixelate(image: &mut RgbaImage, rect: Rect, block: u32) {
     let block = block.max(2);
     let r = rect.normalized();

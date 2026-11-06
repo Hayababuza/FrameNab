@@ -1,33 +1,33 @@
-# FrameNab unter Wayland
+# FrameNab on Wayland
 
-Wayland trennt Apps strikt voneinander. Zwei Dinge, die unter Windows, macOS und X11 selbstverständlich sind, gehen dort nur über **xdg-desktop-portal**:
+Wayland isolates apps from each other. Two things that are taken for granted on Windows, macOS and X11 only work through **xdg-desktop-portal** there:
 
-| Funktion | Windows / macOS / X11 | Wayland |
+| Feature | Windows / macOS / X11 | Wayland |
 |---|---|---|
-| Screenshot | direkt | Portal `Screenshot` |
-| Aufnahme | direkt | Portal `ScreenCast` + PipeWire-Stream |
-| Globale Tastenkürzel | FrameNab registriert sie selbst | Systemeinstellungen (oder Portal `GlobalShortcuts`, wo verfügbar) |
+| Screenshot | direct | `Screenshot` portal |
+| Recording | direct | `ScreenCast` portal + PipeWire stream |
+| Global shortcuts | FrameNab registers them itself | system settings (or the `GlobalShortcuts` portal where available) |
 
-## Tastenkürzel einrichten
+## Setting up shortcuts
 
-**GNOME:** Einstellungen → Tastatur → Tastenkombinationen anzeigen und anpassen → Eigene Tastenkombinationen → `+`
+**GNOME:** Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts → `+`
 
-| Name | Befehl | Taste (Vorschlag) |
+| Name | Command | Key (suggestion) |
 |---|---|---|
-| FrameNab Screenshot | `framenab gui` | `Druck` |
-| FrameNab Aufnahme | `framenab record` | `Umschalt+Druck` |
+| FrameNab Screenshot | `framenab gui` | `Print` |
+| FrameNab Recording | `framenab record` | `Shift+Print` |
 
-Belegt GNOME `Druck` bereits mit dem eigenen Screenshot-Tool, dort zuerst die Belegung entfernen.
+If GNOME already uses `Print` for its own screenshot tool, remove that binding first.
 
-**KDE Plasma:** Systemeinstellungen → Tastenkürzel → Neu → Befehl oder Skript.
+**KDE Plasma:** System Settings → Shortcuts → New → Command or Script.
 
-Läuft FrameNab bereits, wird der Befehl an die laufende Instanz weitergereicht (Single-Instance). Sonst startet FrameNab und führt die Aktion direkt aus.
+If FrameNab is already running, the command is forwarded to the running instance (single instance). Otherwise FrameNab starts and runs the action right away.
 
-## Freigabe-Dialog
+## Screen sharing dialog
 
-Bei der ersten Aufnahme fragt das System, welcher Bildschirm freigegeben werden soll. FrameNab speichert danach ein *restore token*, damit der Dialog nicht jedes Mal erscheint (geplant ab Phase 1/2).
+On the first capture the system asks which screen to share. FrameNab then stores a *restore token* so the dialog does not appear every time (planned for phase 1/2).
 
-## Bekannte Probleme
+## Known issues
 
-- **Leeres oder weißes Fenster** (manche GPU-Treiber mit WebKitGTK): mit `WEBKIT_DISABLE_DMABUF_RENDERER=1 framenab` starten.
-- **Kein Tray-Icon unter GNOME:** Die Erweiterung *AppIndicator and KStatusNotifierItem Support* wird benötigt (bei Ubuntu vorinstalliert).
+- **Blank or white window** (some GPU drivers with WebKitGTK): start with `WEBKIT_DISABLE_DMABUF_RENDERER=1 framenab`.
+- **No tray icon on GNOME:** requires the *AppIndicator and KStatusNotifierItem Support* extension (preinstalled on Ubuntu).

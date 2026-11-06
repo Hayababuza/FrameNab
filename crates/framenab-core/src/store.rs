@@ -1,4 +1,4 @@
-//! Projektordner auf der Platte:
+//! Project folder on disk:
 //!
 //! ```text
 //! <name>.framenab/
@@ -8,8 +8,8 @@
 //!    └─ …
 //! ```
 //!
-//! Frames werden als QOI gespeichert: verlustfrei und sehr schnell zu kodieren, damit die
-//! Aufnahme auch bei hohen FPS nicht ausgebremst wird.
+//! Frames are stored as QOI: lossless and very fast to encode, so recording is not slowed
+//! down even at high frame rates.
 
 use std::collections::HashSet;
 use std::fs;
@@ -30,7 +30,7 @@ pub struct FrameStore {
 }
 
 impl FrameStore {
-    /// Legt einen neuen Projektordner an (oder verwendet einen bestehenden).
+    /// Creates a new project folder (or reuses an existing one).
     pub fn create(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         let frames = root.join(FRAMES_DIR);
@@ -43,13 +43,13 @@ impl FrameStore {
         &self.root
     }
 
-    /// Absoluter Pfad einer Frame-Datei.
+    /// Absolute path of a frame file.
     #[must_use]
     pub fn frame_path(&self, frame: &Frame) -> PathBuf {
         self.root.join(&frame.file)
     }
 
-    /// Speichert ein Bild als neuen Frame und hängt ihn ans Projekt an.
+    /// Stores an image as a new frame and appends it to the project.
     pub fn push_frame<'p>(&self, project: &'p mut Project, image: &RgbaImage, delay_ms: u32) -> Result<&'p Frame> {
         if image.width() != project.width || image.height() != project.height {
             return Err(CoreError::SizeMismatch {
@@ -65,10 +65,10 @@ impl FrameStore {
         let bytes = qoi::encode_to_vec(image.as_raw(), image.width(), image.height())?;
         fs::write(&path, bytes).at(&path)?;
         project.frames.push(Frame { id, file, delay_ms: delay_ms.max(1) });
-        Ok(project.frames.last().expect("gerade eingefügt"))
+        Ok(project.frames.last().expect("just pushed"))
     }
 
-    /// Lädt die Pixeldaten eines Frames.
+    /// Loads the pixel data of a frame.
     pub fn load_frame(&self, frame: &Frame) -> Result<RgbaImage> {
         let path = self.frame_path(frame);
         let bytes = fs::read(&path).at(&path)?;
@@ -90,7 +90,7 @@ impl FrameStore {
         let path = self.root.join(PROJECT_FILE);
         let tmp = path.with_extension("json.tmp");
         fs::write(&tmp, serde_json::to_vec_pretty(project)?).at(&tmp)?;
-        // Atomar ersetzen, damit ein Absturz nie eine halbe project.json hinterlässt.
+        // Replace atomically so a crash never leaves a half-written project.json behind.
         fs::rename(&tmp, &path).at(&path)
     }
 
@@ -103,8 +103,8 @@ impl FrameStore {
         Ok(project)
     }
 
-    /// Löscht Frame-Dateien, die vom Projekt nicht mehr referenziert werden.
-    /// Gibt die Anzahl gelöschter Dateien zurück.
+    /// Deletes frame files that are no longer referenced by the project.
+    /// Returns the number of deleted files.
     pub fn collect_garbage(&self, project: &Project) -> Result<usize> {
         let used: HashSet<PathBuf> = project.frames.iter().map(|f| self.frame_path(f)).collect();
         let dir = self.root.join(FRAMES_DIR);

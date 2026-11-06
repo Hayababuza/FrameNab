@@ -1,6 +1,6 @@
-//! Kernlogik von FrameNab: Projektmodell, Frame-Speicher, Frame-Operationen und Undo-Verlauf.
+//! Core logic of FrameNab: project model, frame store, frame operations and undo history.
 //!
-//! Diese Crate ist bewusst unabhängig von Tauri und GUI, damit sie vollständig testbar bleibt.
+//! This crate is deliberately independent of Tauri and any GUI so it stays fully testable.
 
 pub mod error;
 pub mod history;

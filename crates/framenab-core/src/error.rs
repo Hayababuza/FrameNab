@@ -2,21 +2,21 @@ use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
-    #[error("E/A-Fehler bei {path}: {source}")]
+    #[error("I/O error at {path}: {source}")]
     Io {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
-    #[error("Ungültige Projektdatei: {0}")]
+    #[error("Invalid project file: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("QOI-Fehler: {0}")]
+    #[error("QOI error: {0}")]
     Qoi(#[from] qoi::Error),
-    #[error("Frame-Index {index} außerhalb des Bereichs (0..{len})")]
+    #[error("Frame index {index} out of range (0..{len})")]
     FrameOutOfRange { index: usize, len: usize },
-    #[error("Bildgröße {got_w}x{got_h} passt nicht zum Projekt ({want_w}x{want_h})")]
+    #[error("Image size {got_w}x{got_h} does not match the project ({want_w}x{want_h})")]
     SizeMismatch { got_w: u32, got_h: u32, want_w: u32, want_h: u32 },
-    #[error("Nicht unterstützte Projektversion {0}")]
+    #[error("Unsupported project version {0}")]
     UnsupportedVersion(u32),
 }
 

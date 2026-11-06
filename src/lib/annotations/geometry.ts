@@ -1,9 +1,9 @@
-/** Geometrie-Helfer für die Annotationswerkzeuge (Aufziehen, Treffertest beim Auswählen). */
+/** Geometry helpers for the annotation tools (dragging out shapes, hit-testing for selection). */
 import type { Point } from "$lib/bindings/Point";
 import type { Rect } from "$lib/bindings/Rect";
 import type { Shape } from "$lib/bindings/Shape";
 
-/** Rechteck mit positiver Breite/Höhe; entspricht `Rect::normalized` in Rust. */
+/** Rect with positive width/height; mirrors `Rect::normalized` in Rust. */
 export function normalizeRect(r: Rect): Rect {
   return {
     x: r.w < 0 ? r.x + r.w : r.x,
@@ -35,7 +35,7 @@ function inRect(p: Point, r: Rect, tolerance: number): boolean {
   );
 }
 
-/** Liegt `p` auf bzw. in der Form? `tolerance` vergrößert die Trefferzone (z. B. Strichstärke/2). */
+/** Is `p` on or inside the shape? `tolerance` enlarges the hit area (e.g. stroke width / 2). */
 export function hitTest(shape: Shape, p: Point, tolerance = 4): boolean {
   switch (shape.type) {
     case "arrow":

@@ -29,7 +29,7 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
-    "shortDescription": "Screenshots und GIF-Aufnahmen mit Annotation",
+    "shortDescription": "Screenshots and GIF recordings with annotations",
     "license": "MIT",
     "icon": [
       "icons/32x32.png",

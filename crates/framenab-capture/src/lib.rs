@@ -1,32 +1,32 @@
-//! Bildschirmaufnahme hinter einem gemeinsamen Trait.
+//! Screen capture behind a common trait.
 //!
-//! | Plattform     | Screenshot              | Aufnahme                   |
+//! | Platform      | Screenshot              | Recording                  |
 //! |---------------|-------------------------|----------------------------|
 //! | Windows       | DXGI / GDI              | Windows.Graphics.Capture   |
 //! | macOS         | ScreenCaptureKit        | ScreenCaptureKit           |
-//! | Linux X11     | XShm                    | XShm im Loop               |
+//! | Linux X11     | XShm                    | XShm in a loop             |
 //! | Linux Wayland | xdg-desktop-portal      | Portal ScreenCast+PipeWire |
 //!
-//! Phase 0: Trait, Typen und Plattform-Erkennung. Die Backends folgen in Phase 1/2.
+//! Phase 0: trait, types and platform detection. The backends follow in phase 1/2.
 
 use image::RgbaImage;
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CaptureError {
-    #[error("Dieses Capture-Backend ist auf {0} noch nicht implementiert")]
+    #[error("This capture backend is not implemented on {0} yet")]
     NotImplemented(Platform),
-    #[error("Der Nutzer hat die Bildschirmfreigabe abgelehnt")]
+    #[error("The user denied screen sharing")]
     PermissionDenied,
-    #[error("Monitor {0} nicht gefunden")]
+    #[error("Monitor {0} not found")]
     MonitorNotFound(u32),
-    #[error("Capture-Fehler: {0}")]
+    #[error("Capture error: {0}")]
     Backend(String),
 }
 
 pub type Result<T, E = CaptureError> = std::result::Result<T, E>;
 
-/// Auf welcher Plattform bzw. welchem Display-Server läuft FrameNab?
+/// Which platform / display server FrameNab is running on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Platform {
@@ -44,13 +44,13 @@ impl std::fmt::Display for Platform {
             Self::MacOs => "macOS",
             Self::LinuxX11 => "Linux (X11)",
             Self::LinuxWayland => "Linux (Wayland)",
-            Self::Unknown => "unbekannter Plattform",
+            Self::Unknown => "an unknown platform",
         })
     }
 }
 
 impl Platform {
-    /// Erkennt die aktuelle Plattform zur Laufzeit.
+    /// Detects the current platform at runtime.
     #[must_use]
     pub fn detect() -> Self {
         if cfg!(target_os = "windows") {
@@ -76,8 +76,8 @@ impl Platform {
         }
     }
 
-    /// Unter Wayland dürfen Apps weder frei den Bildschirm lesen noch selbst globale
-    /// Tastenkürzel registrieren; beides geht nur über xdg-desktop-portal.
+    /// On Wayland, apps may neither read the screen freely nor register global shortcuts
+    /// themselves; both are only possible through xdg-desktop-portal.
     #[must_use]
     pub fn requires_portal(self) -> bool {
         self == Self::LinuxWayland
@@ -89,7 +89,7 @@ impl Platform {
 pub struct MonitorInfo {
     pub id: u32,
     pub name: String,
-    /// Position und Größe in physischen Pixeln im virtuellen Desktop.
+    /// Position and size in physical pixels within the virtual desktop.
     pub x: i32,
     pub y: i32,
     pub width: u32,
@@ -98,10 +98,10 @@ pub struct MonitorInfo {
     pub is_primary: bool,
 }
 
-/// Was aufgenommen werden soll. Koordinaten in physischen Pixeln.
+/// What to capture. Coordinates are in physical pixels.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CaptureTarget {
-    /// Alle Monitore als ein Bild (Grundlage für das Screenshot-Overlay).
+    /// All monitors as a single image (basis for the screenshot overlay).
     AllMonitors,
     Monitor(u32),
     Region {
@@ -113,12 +113,12 @@ pub enum CaptureTarget {
     Window(u64),
 }
 
-/// Empfängt Frames während einer Aufnahme. `timestamp_ms` zählt ab Aufnahmestart.
+/// Receives frames during a recording. `timestamp_ms` counts from the start of the recording.
 pub trait FrameSink: Send {
     fn push(&mut self, image: RgbaImage, timestamp_ms: u64);
 }
 
-/// Laufende Aufnahme. Wird sie gedroppt, endet die Aufnahme.
+/// A running recording. Dropping it ends the recording.
 pub trait RecordingHandle: Send {
     fn pause(&mut self);
     fn resume(&mut self);
@@ -137,7 +137,7 @@ pub trait CaptureBackend: Send + Sync {
     ) -> Result<Box<dyn RecordingHandle>>;
 }
 
-/// Platzhalter-Backend, bis die echten Backends implementiert sind.
+/// Placeholder backend until the real backends are implemented.
 #[derive(Debug, Clone, Copy)]
 pub struct UnimplementedBackend(Platform);
 
@@ -156,7 +156,7 @@ impl CaptureBackend for UnimplementedBackend {
     }
 }
 
-/// Liefert das passende Backend für die aktuelle Plattform.
+/// Returns the matching backend for the current platform.
 #[must_use]
 pub fn backend() -> Box<dyn CaptureBackend> {
     Box::new(UnimplementedBackend(Platform::detect()))

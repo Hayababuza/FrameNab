@@ -1,6 +1,6 @@
 [package]
 name = "framenab"
-description = "Screenshots und GIF-Aufnahmen mit Annotation – plattformübergreifend"
+description = "Cross-platform screenshots and GIF recordings with annotations"
 default-run = "framenab"
 version.workspace = true
 edition.workspace = true
@@ -12,7 +12,7 @@ rust-version.workspace = true
 workspace = true
 
 [lib]
-# Das `_lib`-Suffix verhindert einen Namenskonflikt mit dem Binary (Cargo-Issue #8519, v. a. Windows).
+# The `_lib` suffix avoids a name clash with the binary (Cargo issue #8519, mainly on Windows).
 name = "framenab_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 

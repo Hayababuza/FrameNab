@@ -1,12 +1,12 @@
-//! Kommandozeile, analog zu `flameshot gui`. Unter Wayland dürfen Apps keine globalen
-//! Tastenkürzel setzen; dort bindet man diese Befehle in den Systemeinstellungen an eine Taste.
+//! Command line, similar to `flameshot gui`. On Wayland apps may not register global shortcuts;
+//! there you bind these commands to a key in the system settings.
 //!
 //! ```text
-//! framenab gui        Screenshot-Overlay öffnen
-//! framenab record     Aufnahme-Rahmen öffnen
-//! framenab editor     Editor öffnen
-//! framenab settings   Einstellungen öffnen
-//! framenab --hidden   nur im Tray starten (Autostart)
+//! framenab gui        open the screenshot overlay
+//! framenab record     open the recording frame
+//! framenab editor     open the editor
+//! framenab settings   open the settings
+//! framenab --hidden   start in the tray only (autostart)
 //! ```
 
 use serde::Deserialize;
@@ -39,7 +39,7 @@ where
             "editor" => out.action = Some(Action::Editor),
             "settings" | "config" => out.action = Some(Action::Settings),
             "--hidden" | "--tray" => out.hidden = true,
-            other => tracing::warn!(arg = other, "Unbekanntes Argument ignoriert"),
+            other => tracing::warn!(arg = other, "Ignoring unknown argument"),
         }
     }
     out

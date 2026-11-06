@@ -1,7 +1,7 @@
-//! Export von Projekten: GIF (gifski), APNG, WebP, PNG-Sequenz und, wenn FFmpeg installiert
-//! ist, MP4/WebM. FFmpeg wird nicht mitgeliefert.
+//! Project export: GIF (gifski), APNG, WebP, PNG sequence and, if FFmpeg is installed,
+//! MP4/WebM. FFmpeg is not bundled.
 //!
-//! Phase 0: Formate, Optionen und FFmpeg-Erkennung. Die Encoder folgen in Phase 4.
+//! Phase 0: formats, options and FFmpeg detection. The encoders follow in phase 4.
 
 use std::path::PathBuf;
 
@@ -42,11 +42,11 @@ impl ExportFormat {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GifOptions {
-    /// 1–100, an gifski durchgereicht.
+    /// 1–100, passed through to gifski.
     pub quality: u8,
-    /// Verlustbehaftete Kompression für kleinere Dateien (gifski `lossy_quality`).
+    /// Lossy compression for smaller files (gifski `lossy_quality`).
     pub lossy: Option<u8>,
-    /// Feste Wiederholungen; `None` = Wert aus dem Projekt.
+    /// Fixed repetitions; `None` = use the project's value.
     pub loop_count: Option<u16>,
 }
 
@@ -56,13 +56,13 @@ impl Default for GifOptions {
     }
 }
 
-/// Sucht eine installierte FFmpeg-Programmdatei im `PATH`.
+/// Looks for an installed FFmpeg executable on `PATH`.
 #[must_use]
 pub fn find_ffmpeg() -> Option<PathBuf> {
     which::which("ffmpeg").ok()
 }
 
-/// Formate, die auf diesem System gerade exportierbar sind.
+/// Formats that can currently be exported on this system.
 #[must_use]
 pub fn available_formats() -> Vec<ExportFormat> {
     let ffmpeg = find_ffmpeg().is_some();

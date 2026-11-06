@@ -3,7 +3,7 @@
 export type Frame = {
   id: string;
   /**
-   * Pfad relativ zum Projektordner, z. B. `frames/f000001.qoi`.
+   * Path relative to the project folder, e.g. `frames/f000001.qoi`.
    */
   file: string;
   delayMs: number;

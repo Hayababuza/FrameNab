@@ -6,13 +6,13 @@ export type Locale = keyof typeof dictionaries;
 export type MessageKey = keyof typeof de;
 export const locales = Object.keys(dictionaries) as Locale[];
 
-/** Wählt die passende Sprache aus einer Browser-/System-Sprachangabe wie `de-AT`. */
+/** Picks the matching locale for a browser/system language tag such as `de-AT`. */
 export function resolveLocale(tag: string | undefined | null): Locale {
   const base = (tag ?? "").toLowerCase().split(/[-_]/)[0];
   return (locales as string[]).includes(base) ? (base as Locale) : "en";
 }
 
-/** Übersetzt `key` und ersetzt Platzhalter wie `{phase}`. Fällt auf Englisch, dann auf den Schlüssel zurück. */
+/** Translates `key` and fills placeholders such as `{phase}`. Falls back to English, then to the key. */
 export function translate(
   locale: Locale,
   key: MessageKey,

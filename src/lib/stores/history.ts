@@ -1,6 +1,6 @@
 /**
- * Undo/Redo über Snapshots, analog zu `framenab_core::History`.
- * Wird im Editor und im Screenshot-Overlay für Annotationen verwendet.
+ * Undo/redo via snapshots, mirroring `framenab_core::History`.
+ * Used for annotations in the editor and the screenshot overlay.
  */
 export class History<T> {
   #undo: T[] = [];
@@ -8,7 +8,7 @@ export class History<T> {
 
   constructor(private readonly limit = 100) {}
 
-  /** Merkt sich den Zustand *vor* einer Änderung. */
+  /** Records the state *before* a change. */
   record(before: T): void {
     this.#undo.push(structuredClone(before));
     if (this.#undo.length > this.limit) this.#undo.shift();

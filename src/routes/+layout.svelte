@@ -9,7 +9,7 @@
 
   onMount(() => {
     getSetting("locale").then((l) => i18n.set(l));
-    // Einstellungen werden in einem eigenen Fenster geändert → alle Fenster aktualisieren.
+    // Settings are changed in a separate window → update every window.
     const unlisten = listen<{ locale: typeof i18n.locale | null }>("settings-changed", (e) =>
       i18n.set(e.payload.locale),
     );

@@ -1,4 +1,4 @@
-//! Tauri-Commands, die das Frontend per `invoke` aufruft (typsicher gekapselt in `src/lib/ipc`).
+//! Tauri commands the frontend calls via `invoke` (wrapped type-safely in `src/lib/ipc`).
 
 use framenab_capture::Platform;
 use framenab_export::ExportFormat;

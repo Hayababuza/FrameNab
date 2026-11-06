@@ -1,12 +1,12 @@
-//! Projektmodell. Ein Screenshot ist ein Projekt mit genau einem Frame.
+//! Project model. A screenshot is a project with exactly one frame.
 //!
-//! Alle Typen werden per `ts-rs` nach TypeScript exportiert (`cargo test` → `src/lib/bindings/`),
-//! damit UI-Vorschau und Export-Renderer dasselbe Schema nutzen.
+//! All types are exported to TypeScript via `ts-rs` (`cargo test` → `src/lib/bindings/`),
+//! so the UI preview and the export renderer share the same schema.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Aktuelle Version des `project.json`-Formats.
+/// Current version of the `project.json` format.
 pub const PROJECT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -18,10 +18,10 @@ pub struct Project {
     pub height: u32,
     pub frames: Vec<Frame>,
     pub annotations: Vec<Annotation>,
-    /// Anzahl Wiederholungen beim Export; 0 = endlos.
+    /// Number of repetitions on export; 0 = infinite.
     #[serde(rename = "loop")]
     pub loop_count: u16,
-    /// Zähler für eindeutige Frame-IDs.
+    /// Counter for unique frame IDs.
     #[serde(default)]
     pub next_frame_id: u32,
 }
@@ -31,7 +31,7 @@ pub struct Project {
 #[ts(export)]
 pub struct Frame {
     pub id: String,
-    /// Pfad relativ zum Projektordner, z. B. `frames/f000001.qoi`.
+    /// Path relative to the project folder, e.g. `frames/f000001.qoi`.
     pub file: String,
     pub delay_ms: u32,
 }
@@ -53,7 +53,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    /// Rechteck mit positiver Breite/Höhe (beim Aufziehen nach links/oben entstehen negative Werte).
+    /// Rect with positive width/height (dragging to the left/top produces negative values).
     #[must_use]
     pub fn normalized(self) -> Self {
         let (x, w) = if self.w < 0.0 { (self.x + self.w, -self.w) } else { (self.x, self.w) };
@@ -91,7 +91,7 @@ impl Default for Style {
     }
 }
 
-/// Geometrie einer Annotation. Serialisiert als `{ "type": "arrow", ... }`.
+/// Geometry of an annotation. Serialized as `{ "type": "arrow", ... }`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 #[ts(export)]
@@ -113,9 +113,9 @@ pub enum Shape {
 #[ts(export)]
 pub struct Annotation {
     pub id: String,
-    /// Erster Frame (inklusive), auf dem die Annotation sichtbar ist.
+    /// First frame (inclusive) on which the annotation is visible.
     pub frame_start: u32,
-    /// Letzter Frame (inklusive).
+    /// Last frame (inclusive).
     pub frame_end: u32,
     pub shape: Shape,
     pub style: Style,
@@ -142,19 +142,19 @@ impl Project {
         }
     }
 
-    /// Gesamtdauer in Millisekunden.
+    /// Total duration in milliseconds.
     #[must_use]
     pub fn duration_ms(&self) -> u64 {
         self.frames.iter().map(|f| u64::from(f.delay_ms)).sum()
     }
 
-    /// Erzeugt eine neue, eindeutige Frame-ID.
+    /// Allocates a new, unique frame ID.
     pub fn allocate_frame_id(&mut self) -> String {
         self.next_frame_id += 1;
         format!("f{:06}", self.next_frame_id)
     }
 
-    /// Annotationen, die auf dem Frame `index` sichtbar sind, in Zeichenreihenfolge.
+    /// Annotations visible on frame `index`, in drawing order.
     pub fn annotations_on(&self, index: u32) -> impl Iterator<Item = &Annotation> {
         self.annotations.iter().filter(move |a| a.visible_on(index))
     }

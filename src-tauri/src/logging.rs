@@ -3,10 +3,10 @@ use std::path::Path;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-/// Hält den Log-Writer am Leben (wird im Tauri-State verwahrt).
+/// Keeps the log writer alive (stored in Tauri state).
 pub struct LogGuard(#[allow(dead_code)] Option<WorkerGuard>);
 
-/// Loggt nach stderr und in `<app_log_dir>/framenab.log`. Level über `RUST_LOG` steuerbar.
+/// Logs to stderr and to `<app_log_dir>/framenab.log`. The level can be set via `RUST_LOG`.
 pub fn init(log_dir: &Path) -> LogGuard {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,framenab=debug"));
     let (file_layer, guard) = match std::fs::create_dir_all(log_dir) {

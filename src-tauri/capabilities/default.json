@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Berechtigungen für alle FrameNab-Fenster",
+  "description": "Permissions for all FrameNab windows",
   "windows": ["main", "overlay", "recorder", "settings"],
   "permissions": [
     "core:default",

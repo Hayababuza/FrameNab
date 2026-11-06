@@ -1,32 +1,32 @@
-# Architektur
+# Architecture
 
 ```
 ┌──────────────────────────── Frontend (SvelteKit, WebView) ─────────────────────────────┐
-│  routes/+page (Start/Editor)   routes/overlay   routes/recorder   routes/settings      │
-│  lib/annotations (Canvas-Vorschau, Treffertests)   lib/i18n   lib/stores   lib/ipc     │
+│  routes/+page (start/editor)   routes/overlay   routes/recorder   routes/settings      │
+│  lib/annotations (canvas preview, hit tests)   lib/i18n   lib/stores   lib/ipc         │
 └───────────────────────────────▲───────────────────────────┬────────────────────────────┘
-               Events / Custom-Protocol (Frames)            │ invoke (Commands)
+               events / custom protocol (frames)            │ invoke (commands)
 ┌───────────────────────────────┴───────────────────────────▼────────────────────────────┐
-│ src-tauri: Fenster · Tray · Hotkeys · CLI/Single-Instance · Commands · Logging          │
+│ src-tauri: windows · tray · hotkeys · CLI/single instance · commands · logging         │
 └──────┬────────────────────┬──────────────────────┬──────────────────────┬──────────────┘
        ▼                    ▼                      ▼                      ▼
  framenab-capture     framenab-core          framenab-render       framenab-export
- CaptureBackend       Project, FrameStore    tiny-skia-Rendering    gifski, APNG, WebP,
- je Plattform         ops, History           der Annotationen       FFmpeg (optional)
+ CaptureBackend       Project, FrameStore    tiny-skia rendering   gifski, APNG, WebP,
+ per platform         ops, History           of annotations        FFmpeg (optional)
 ```
 
-## Prinzipien
+## Principles
 
-1. **Ein Datenmodell für alles.** Ein Screenshot ist ein `Project` mit einem Frame. Overlay und Editor bearbeiten dieselbe Struktur.
-2. **Nicht-destruktiv.** Frames sind unveränderliche QOI-Dateien; Annotationen sind Vektordaten mit Frame-Bereich (`frameStart..=frameEnd`). Pixel werden erst beim Export bzw. beim Kopieren eines Screenshots verrechnet.
-3. **Rust ist die Quelle der Wahrheit.** Die Modelltypen werden mit `ts-rs` nach `src/lib/bindings/` generiert. Der Canvas im UI ist nur Vorschau; das Ergebnis rendert `framenab-render`.
-4. **Keine Pixeldaten über JSON-IPC.** Frames lädt die UI über ein Custom-Protocol (`framenab://…`, ab Phase 3); Thumbnails werden in Rust erzeugt.
-5. **Undo über Snapshots.** Ein `Project` enthält keine Pixel und ist klein, daher genügen Snapshots (`History<T>`) statt eines komplexen Command-Systems.
+1. **One data model for everything.** A screenshot is a `Project` with one frame. The overlay and the editor edit the same structure.
+2. **Non-destructive.** Frames are immutable QOI files; annotations are vector data with a frame range (`frameStart..=frameEnd`). Pixels are only merged on export or when a screenshot is copied.
+3. **Rust is the source of truth.** The model types are generated into `src/lib/bindings/` with `ts-rs`. The canvas in the UI is only a preview; `framenab-render` produces the result.
+4. **No pixel data over JSON IPC.** The UI loads frames through a custom protocol (`framenab://…`, from phase 3); thumbnails are generated in Rust.
+5. **Undo via snapshots.** A `Project` contains no pixels and is small, so snapshots (`History<T>`) are enough; no complex command system is needed.
 
-## Projektordner (`*.framenab`)
+## Project folder (`*.framenab`)
 
 ```
-aufnahme.framenab/
+recording.framenab/
 ├─ project.json
 └─ frames/
    ├─ f000001.qoi
@@ -48,15 +48,15 @@ aufnahme.framenab/
 }
 ```
 
-Frame-Operationen, die die Reihenfolge ändern (löschen, duplizieren, umkehren, Yo-Yo …), laufen alle über `ops::apply_order`. Dadurch werden die Frame-Bereiche der Annotationen automatisch angepasst.
+Every frame operation that changes the order (delete, duplicate, reverse, yo-yo …) goes through `ops::apply_order`, which adjusts the frame ranges of annotations automatically.
 
-## Fenster
+## Windows
 
-| Label | Route | Eigenschaften |
+| Label | Route | Properties |
 |---|---|---|
-| `main` | `/` | Hauptfenster; Schließen versteckt es im Tray |
-| `overlay` | `/overlay` | Vollbild, randlos, immer im Vordergrund |
-| `recorder` | `/recorder` | Aufnahmerahmen |
-| `settings` | `/settings` | Einstellungen; Änderungen per Event `settings-changed` an alle Fenster |
+| `main` | `/` | Main window; closing it hides it to the tray |
+| `overlay` | `/overlay` | Fullscreen, borderless, always on top |
+| `recorder` | `/recorder` | Recording frame |
+| `settings` | `/settings` | Settings; changes reach every window via the `settings-changed` event |
 
-Plattformdetails zu Wayland: [wayland.md](wayland.md).
+Wayland details: [wayland.md](wayland.md).

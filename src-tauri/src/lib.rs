@@ -1,5 +1,5 @@
-//! Tauri-Schicht von FrameNab. Hier liegt nur Glue-Code (Fenster, Tray, Hotkeys, Commands);
-//! die eigentliche Logik steckt in `crates/*`.
+//! Tauri layer of FrameNab. Only glue code lives here (windows, tray, hotkeys, commands);
+//! the actual logic is in `crates/*`.
 
 mod cli;
 mod commands;
@@ -18,8 +18,8 @@ pub fn run() {
     let initial = cli::parse(std::env::args().skip(1));
 
     tauri::Builder::default()
-        // Muss als erstes Plugin registriert werden: ein zweiter Start (z. B. `framenab gui`
-        // per Systemtastenkürzel) leitet seine Argumente an die laufende Instanz weiter.
+        // Must be registered as the first plugin: a second launch (e.g. `framenab gui` from a
+        // system shortcut) forwards its arguments to the running instance.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             let action = cli::parse(argv.into_iter().skip(1)).action.unwrap_or(Action::Editor);
             windows::dispatch(app, action);
@@ -31,7 +31,7 @@ pub fn run() {
         .setup(move |app| {
             let log_dir = app.path().app_log_dir()?;
             app.manage(logging::init(&log_dir));
-            tracing::info!(version = env!("CARGO_PKG_VERSION"), platform = %framenab_capture::Platform::detect(), "FrameNab startet");
+            tracing::info!(version = env!("CARGO_PKG_VERSION"), platform = %framenab_capture::Platform::detect(), "FrameNab starting");
 
             tray::create(app.handle())?;
             hotkeys::register_defaults(app.handle());
@@ -45,7 +45,7 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Das Hauptfenster schließt nicht die App, sondern verschwindet im Tray.
+            // Closing the main window does not quit the app; it hides to the tray.
             if let WindowEvent::CloseRequested { api, .. } = event
                 && window.label() == windows::MAIN
             {
@@ -54,5 +54,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("FrameNab konnte nicht gestartet werden");
+        .expect("failed to start FrameNab");
 }

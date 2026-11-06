@@ -5,11 +5,11 @@ import type { Style } from "./Style";
 export type Annotation = {
   id: string;
   /**
-   * Erster Frame (inklusive), auf dem die Annotation sichtbar ist.
+   * First frame (inclusive) on which the annotation is visible.
    */
   frameStart: number;
   /**
-   * Letzter Frame (inklusive).
+   * Last frame (inclusive).
    */
   frameEnd: number;
   shape: Shape;

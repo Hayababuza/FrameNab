@@ -35,7 +35,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Linux-Abhängigkeiten
+      - name: Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -52,12 +52,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # tauri::generate_context! erwartet ein gebautes Frontend
+      # tauri::generate_context! expects a built frontend
       - run: pnpm build
       - run: cargo fmt --all --check
         if: runner.os == 'Linux'
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
-      - name: Generierte TS-Typen aktuell?
+      - name: Generated TS types up to date?
         if: runner.os == 'Linux'
         run: pnpm prettier --write src/lib/bindings && git diff --exit-code src/lib/bindings

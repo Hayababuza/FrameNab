@@ -1,5 +1,5 @@
-//! Minimale Übersetzung für Texte, die Rust selbst anzeigt (Tray-Menü).
-//! Die UI übersetzt im Frontend (`src/lib/i18n`).
+//! Minimal translations for text that Rust displays itself (tray menu).
+//! The UI is translated in the frontend (`src/lib/i18n`).
 
 use std::sync::OnceLock;
 

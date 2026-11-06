@@ -1,29 +1,29 @@
 # FrameNab
 
-**Screenshots und GIF-Aufnahmen mit Annotation, für Windows, macOS und Linux.**
+**Screenshots and GIF recordings with annotations, for Windows, macOS and Linux.**
 
-FrameNab vereint zwei Werkzeuge in einer App:
+FrameNab combines two tools in one app:
 
-- **Screenshot-Modus:** Tastenkürzel drücken, Bereich wählen, direkt annotieren (Pfeile, Text, Marker, Blur …), dann kopieren oder speichern.
-- **Aufnahme-Modus:** Bildschirmbereich aufnehmen, im Frame-Editor schneiden, Timing anpassen und annotieren, dann als GIF, APNG, WebP oder MP4 exportieren.
+- **Screenshot mode:** press a shortcut, select an area, annotate it right away (arrows, text, markers, blur …), then copy or save.
+- **Recording mode:** record an area of the screen, then trim it, adjust timing and annotate it in the frame editor, and export as GIF, APNG, WebP or MP4.
 
-Beide Modi nutzen dieselben Annotationswerkzeuge. Ein Screenshot ist intern ein Projekt mit genau einem Frame und lässt sich jederzeit im Editor öffnen.
+Both modes share the same annotation tools. Internally a screenshot is a project with exactly one frame and can be opened in the editor at any time.
 
-> **Status:** Phase 0 (Fundament). Siehe [Roadmap](docs/PROJEKT-PROMPT.md#4-funktionsumfang-nach-phasen).
+> **Status:** Phase 0 (foundation). See the [roadmap](docs/PROJECT-PLAN.md#4-features-by-phase).
 
-## Tech-Stack
+## Tech stack
 
 [Tauri 2](https://tauri.app) · Rust · SvelteKit (Svelte 5) · TypeScript · tiny-skia · gifski
 
-## Entwicklung
+## Development
 
-### Voraussetzungen
+### Prerequisites
 
 - [Rust](https://rustup.rs) (stable)
-- Node.js ≥ 20 und [pnpm](https://pnpm.io)
-- Systembibliotheken für Tauri: siehe [Tauri-Voraussetzungen](https://v2.tauri.app/start/prerequisites/)
+- Node.js ≥ 20 and [pnpm](https://pnpm.io)
+- System libraries for Tauri: see the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
 
-Unter Debian/Ubuntu:
+On Debian/Ubuntu:
 
 ```bash
 sudo apt install build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev \
@@ -32,49 +32,49 @@ sudo apt install build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev \
   libgbm-dev libegl-dev
 ```
 
-FFmpeg ist optional und wird nur für den MP4/WebM-Export gebraucht.
+FFmpeg is optional and only needed for MP4/WebM export.
 
-### Befehle
+### Commands
 
-| Befehl | Zweck |
+| Command | Purpose |
 |---|---|
-| `pnpm install` | Abhängigkeiten installieren |
-| `pnpm tauri dev` | App im Entwicklungsmodus starten |
-| `pnpm tauri build` | Installer/Pakete bauen |
-| `pnpm test` / `cargo test --workspace` | Tests (Frontend / Rust) |
-| `pnpm check` / `pnpm lint` | Typprüfung / Linting + Formatierung prüfen |
-| `cargo clippy --workspace --all-targets` | Rust-Linting |
-| `pnpm bindings` | TypeScript-Typen aus dem Rust-Modell neu erzeugen |
+| `pnpm install` | Install dependencies |
+| `pnpm tauri dev` | Run the app in development mode |
+| `pnpm tauri build` | Build installers/packages |
+| `pnpm test` / `cargo test --workspace` | Tests (frontend / Rust) |
+| `pnpm check` / `pnpm lint` | Type checking / linting and format check |
+| `cargo clippy --workspace --all-targets` | Rust linting |
+| `pnpm bindings` | Regenerate the TypeScript types from the Rust model |
 
-## Bedienung per Kommandozeile
+## Command line
 
 ```bash
-framenab gui        # Screenshot-Overlay
-framenab record     # Aufnahme
-framenab editor     # Editor
-framenab settings   # Einstellungen
-framenab --hidden   # nur im Tray starten
+framenab gui        # screenshot overlay
+framenab record     # recording
+framenab editor     # editor
+framenab settings   # settings
+framenab --hidden   # start in the tray only
 ```
 
-Läuft FrameNab bereits, wird der Befehl an die laufende Instanz weitergegeben.
+If FrameNab is already running, the command is passed on to the running instance.
 
-**Wayland (GNOME, KDE …):** Apps dürfen dort keine globalen Tastenkürzel registrieren. Lege in den Systemeinstellungen ein eigenes Tastenkürzel an, z. B. `Druck` → `framenab gui`. Details: [docs/wayland.md](docs/wayland.md).
+**Wayland (GNOME, KDE …):** apps are not allowed to register global shortcuts there. Create a custom shortcut in your system settings instead, e.g. `Print` → `framenab gui`. Details: [docs/wayland.md](docs/wayland.md).
 
-## Projektstruktur
+## Project structure
 
 ```
-src/              Frontend (SvelteKit): eine Route pro Fenster, lib/ für Logik
-src-tauri/        Tauri-App: Fenster, Tray, Hotkeys, Commands (nur Glue-Code)
+src/              Frontend (SvelteKit): one route per window, lib/ for logic
+src-tauri/        Tauri app: windows, tray, hotkeys, commands (glue code only)
 crates/
-  framenab-core     Projektmodell, Frame-Speicher, Frame-Operationen, Undo
-  framenab-capture  Bildschirmaufnahme je Plattform
-  framenab-render   Annotationen in Frames rendern
-  framenab-export   GIF/APNG/WebP/Video-Export
-docs/             Plan, Architektur, Plattformhinweise
+  framenab-core     Project model, frame store, frame operations, undo
+  framenab-capture  Screen capture per platform
+  framenab-render   Rendering annotations into frames
+  framenab-export   GIF/APNG/WebP/video export
+docs/             Plan, architecture, platform notes
 ```
 
-Mehr dazu in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Lizenz
+## License
 
-[MIT](LICENSE). FrameNab ist von ScreenToGif und Flameshot inspiriert, enthält aber keinen Code aus diesen Projekten.
+[MIT](LICENSE). FrameNab is inspired by ScreenToGif and Flameshot but contains no code from either project.

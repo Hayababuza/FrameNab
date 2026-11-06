@@ -4,7 +4,7 @@ import type { Rect } from "./Rect";
 import type { Rgba } from "./Rgba";
 
 /**
- * Geometrie einer Annotation. Serialisiert als `{ "type": "arrow", ... }`.
+ * Geometry of an annotation. Serialized as `{ "type": "arrow", ... }`.
  */
 export type Shape =
   | { type: "arrow"; from: Point; to: Point }

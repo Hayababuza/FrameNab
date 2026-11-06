@@ -1,4 +1,4 @@
-/** Typsichere Wrapper um die Rust-Commands (`src-tauri/src/commands`). */
+/** Type-safe wrappers around the Rust commands (`src-tauri/src/commands`). */
 import { invoke } from "@tauri-apps/api/core";
 
 export type Platform = "windows" | "macOs" | "linuxX11" | "linuxWayland" | "unknown";

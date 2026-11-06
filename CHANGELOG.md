@@ -1,16 +1,16 @@
 # Changelog
 
-Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach [SemVer](https://semver.org/lang/de/).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
-### Hinzugefügt
-- Projektgerüst: Tauri 2, SvelteKit (Svelte 5), TypeScript, Cargo-Workspace
-- `framenab-core`: Projektmodell, QOI-Frame-Speicher, Frame-Operationen (löschen, duplizieren, umkehren, Yo-Yo, jeden n-ten entfernen, Timing), Undo-Verlauf
-- `framenab-render`: Rendering für Linie, Pfeil, Rechteck, Ellipse, Stift, Textmarker, Pixelieren
-- `framenab-capture`: `CaptureBackend`-Trait und Plattform-Erkennung (inkl. Wayland)
-- `framenab-export`: Exportformate und FFmpeg-Erkennung
-- Tray-Menü, Single-Instance mit Befehlsweitergabe (`framenab gui` …), Standard-Tastenkürzel (außer Wayland)
-- Startfenster, Einstellungsfenster (Sprache), Platzhalter für Overlay und Rekorder
-- Deutsch und Englisch
-- CI für Linux, Windows und macOS
+### Added
+- Project scaffold: Tauri 2, SvelteKit (Svelte 5), TypeScript, Cargo workspace
+- `framenab-core`: project model, QOI frame store, frame operations (delete, duplicate, reverse, yo-yo, remove every n-th, timing), undo history
+- `framenab-render`: rendering for line, arrow, rectangle, ellipse, pen, highlighter, pixelate
+- `framenab-capture`: `CaptureBackend` trait and platform detection (including Wayland)
+- `framenab-export`: export formats and FFmpeg detection
+- Tray menu, single instance with command forwarding (`framenab gui` …), default shortcuts (except on Wayland)
+- Start window, settings window (language), placeholders for overlay and recorder
+- German and English UI
+- CI for Linux, Windows and macOS

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from "$lib/i18n/index.svelte";
-  // Phase 2: verschiebbarer Aufnahmerahmen, Größenfelder, FPS, Aufnahme/Pause/Stopp, Countdown.
+  // Phase 2: movable recording frame, size fields, FPS, record/pause/stop, countdown.
 </script>
 
 <main>

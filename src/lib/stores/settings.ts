@@ -1,9 +1,9 @@
-/** Persistente Einstellungen über tauri-plugin-store (`settings.json` im App-Datenordner). */
+/** Persistent settings via tauri-plugin-store (`settings.json` in the app data folder). */
 import { load, type Store } from "@tauri-apps/plugin-store";
 import type { Locale } from "$lib/i18n/translate";
 
 export interface Settings {
-  /** `null` = Systemsprache */
+  /** `null` = system language */
   locale: Locale | null;
 }
 

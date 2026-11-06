@@ -1,6 +1,6 @@
-//! Globale Tastenkürzel. Unter Wayland nicht möglich (siehe `docs/wayland.md`); dort übernimmt
-//! das System das Tastenkürzel und ruft `framenab gui` auf. Phase 5: konfigurierbar und
-//! xdg-desktop-portal GlobalShortcuts.
+//! Global shortcuts. Not possible on Wayland (see `docs/wayland.md`); there the system owns the
+//! shortcut and runs `framenab gui`. Phase 5: configurable shortcuts and xdg-desktop-portal
+//! GlobalShortcuts.
 
 use framenab_capture::Platform;
 use tauri::plugin::TauriPlugin;
@@ -35,12 +35,12 @@ pub fn plugin() -> TauriPlugin<Wry> {
 
 pub fn register_defaults(app: &AppHandle) {
     if Platform::detect().requires_portal() {
-        tracing::info!("Wayland erkannt: globale Tastenkürzel bitte im System auf `framenab gui` legen");
+        tracing::info!("Wayland detected: bind a system shortcut to `framenab gui` instead");
         return;
     }
     for shortcut in [screenshot(), record()] {
         if let Err(err) = app.global_shortcut().register(shortcut) {
-            tracing::warn!(%shortcut, %err, "Tastenkürzel belegt oder nicht verfügbar");
+            tracing::warn!(%shortcut, %err, "Shortcut already taken or unavailable");
         }
     }
 }

@@ -2,7 +2,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { t } from "$lib/i18n/index.svelte";
 
-  // Phase 1: eingefrorenes Bildschirmbild, Bereichsauswahl, Lupe, Annotationswerkzeuge.
+  // Phase 1: frozen screen image, area selection, magnifier, annotation tools.
   function onkeydown(e: KeyboardEvent) {
     if (e.key === "Escape") getCurrentWindow().close();
   }

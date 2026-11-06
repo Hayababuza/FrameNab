@@ -8,14 +8,14 @@ export const i18n = {
   get locale(): Locale {
     return state.locale;
   },
-  /** `null` = Systemsprache */
+  /** `null` = system language */
   set(locale: Locale | null) {
     state.locale = locale ?? resolveLocale(globalThis.navigator?.language);
     document.documentElement.lang = state.locale;
   },
 };
 
-/** Reaktive Übersetzung für Komponenten: `{t("home.record")}` */
+/** Reactive translation for components: `{t("home.record")}` */
 export function t(key: MessageKey, params?: Record<string, string | number>): string {
   return translate(state.locale, key, params);
 }

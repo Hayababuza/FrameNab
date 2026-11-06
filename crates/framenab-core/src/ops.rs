@@ -1,15 +1,15 @@
-//! Frame-Operationen des Editors (löschen, duplizieren, umkehren, Yo-Yo, Timing …).
+//! Editor frame operations (delete, duplicate, reverse, yo-yo, timing …).
 //!
-//! Alle Operationen, die die Frame-Reihenfolge ändern, laufen über [`apply_order`]. Dadurch
-//! werden die Frame-Bereiche der Annotationen immer konsistent mitgeführt.
+//! Every operation that changes the frame order goes through [`apply_order`], which keeps the
+//! frame ranges of annotations consistent.
 
 use crate::{CoreError, Project, Result};
 
-/// Ordnet die Frames neu an. `order[neu] = alt` (Indizes dürfen fehlen oder mehrfach vorkommen).
+/// Reorders frames. `order[new] = old` (indices may be missing or appear more than once).
 ///
-/// Eine Annotation, die vorher die alten Frames `start..=end` abdeckte, deckt danach den
-/// kleinsten Bereich ab, der alle neuen Frames mit Quelle in `start..=end` enthält. Gibt es keinen
-/// solchen Frame mehr, wird die Annotation entfernt.
+/// An annotation that covered the old frames `start..=end` afterwards covers the smallest range
+/// containing every new frame whose source lies in `start..=end`. If no such frame remains, the
+/// annotation is removed.
 pub fn apply_order(project: &mut Project, order: &[usize]) -> Result<()> {
     let len = project.frames.len();
     if let Some(&bad) = order.iter().find(|&&i| i >= len) {
@@ -21,7 +21,7 @@ pub fn apply_order(project: &mut Project, order: &[usize]) -> Result<()> {
     for &old in order {
         let mut frame = project.frames[old].clone();
         if seen[old] {
-            // Duplikat: neue ID, gleiche Bilddatei (Frames sind unveränderlich).
+            // Duplicate: new ID, same image file (frames are immutable).
             frame.id = project.allocate_frame_id();
         }
         seen[old] = true;
@@ -46,13 +46,13 @@ fn identity(project: &Project) -> Vec<usize> {
     (0..project.frames.len()).collect()
 }
 
-/// Löscht die angegebenen Frames.
+/// Deletes the given frames.
 pub fn delete_frames(project: &mut Project, indices: &[usize]) -> Result<()> {
     let order: Vec<usize> = identity(project).into_iter().filter(|i| !indices.contains(i)).collect();
     apply_order(project, &order)
 }
 
-/// Dupliziert die angegebenen Frames; jede Kopie landet direkt hinter dem Original.
+/// Duplicates the given frames; each copy is placed right after its original.
 pub fn duplicate_frames(project: &mut Project, indices: &[usize]) -> Result<()> {
     let mut order = Vec::new();
     for i in identity(project) {
@@ -64,7 +64,7 @@ pub fn duplicate_frames(project: &mut Project, indices: &[usize]) -> Result<()> 
     apply_order(project, &order)
 }
 
-/// Kehrt die Reihenfolge im Bereich `start..=end` um.
+/// Reverses the order within `start..=end`.
 pub fn reverse(project: &mut Project, start: usize, end: usize) -> Result<()> {
     let mut order = identity(project);
     let len = order.len();
@@ -75,15 +75,15 @@ pub fn reverse(project: &mut Project, start: usize, end: usize) -> Result<()> {
     apply_order(project, &order)
 }
 
-/// Yo-Yo: hängt die Frames rückwärts an (ohne den letzten Frame doppelt zu zeigen).
+/// Yo-yo: appends the frames in reverse (without showing the last frame twice).
 pub fn yoyo(project: &mut Project) -> Result<()> {
     let mut order = identity(project);
     order.extend(identity(project).into_iter().rev().skip(1));
     apply_order(project, &order)
 }
 
-/// Entfernt jeden `n`-ten Frame (1-basiert: n=2 entfernt Frame 2, 4, 6 …).
-/// Die Dauer der entfernten Frames wird dem jeweils vorherigen Frame zugeschlagen.
+/// Removes every `n`-th frame (1-based: n=2 removes frames 2, 4, 6 …).
+/// The duration of a removed frame is added to the preceding frame.
 pub fn remove_every_nth(project: &mut Project, n: usize) -> Result<()> {
     if n < 2 {
         return Ok(());
@@ -103,7 +103,7 @@ pub fn remove_every_nth(project: &mut Project, n: usize) -> Result<()> {
     apply_order(project, &keep)
 }
 
-/// Setzt die Anzeigedauer der angegebenen Frames.
+/// Sets the display duration of the given frames.
 pub fn set_delay(project: &mut Project, indices: &[usize], delay_ms: u32) {
     for &i in indices {
         if let Some(f) = project.frames.get_mut(i) {
@@ -112,7 +112,7 @@ pub fn set_delay(project: &mut Project, indices: &[usize], delay_ms: u32) {
     }
 }
 
-/// Skaliert die Anzeigedauer um `percent` (200 = doppelt so lang, 50 = halb so lang).
+/// Scales the display duration by `percent` (200 = twice as long, 50 = half as long).
 pub fn scale_delay(project: &mut Project, indices: &[usize], percent: u32) {
     for &i in indices {
         if let Some(f) = project.frames.get_mut(i) {
