@@ -1,0 +1,37 @@
+[package]
+name = "framenab"
+description = "Screenshots und GIF-Aufnahmen mit Annotation – plattformübergreifend"
+default-run = "framenab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+# Das `_lib`-Suffix verhindert einen Namenskonflikt mit dem Binary (Cargo-Issue #8519, v. a. Windows).
+name = "framenab_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+framenab-capture = { version = "0.1.0", path = "../crates/framenab-capture" }
+framenab-core = { version = "0.1.0", path = "../crates/framenab-core" }
+framenab-export = { version = "0.1.0", path = "../crates/framenab-export" }
+framenab-render = { version = "0.1.0", path = "../crates/framenab-render" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sys-locale = "0.3.2"
+tauri = { version = "2.11.6", features = ["tray-icon"] }
+tauri-plugin-dialog = "2.7.3"
+tauri-plugin-global-shortcut = "2.3.2"
+tauri-plugin-single-instance = "2.4.5"
+tauri-plugin-store = "2.4.5"
+tracing = "0.1.44"
+tracing-appender = "0.2.5"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

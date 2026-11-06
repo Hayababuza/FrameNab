@@ -1,0 +1,45 @@
+//! Minimale Übersetzung für Texte, die Rust selbst anzeigt (Tray-Menü).
+//! Die UI übersetzt im Frontend (`src/lib/i18n`).
+
+use std::sync::OnceLock;
+
+fn is_german() -> bool {
+    static DE: OnceLock<bool> = OnceLock::new();
+    *DE.get_or_init(|| sys_locale::get_locale().is_some_and(|l| l.to_lowercase().starts_with("de")))
+}
+
+pub fn t(key: &str) -> &'static str {
+    let de = is_german();
+    match key {
+        "tray.screenshot" => "Screenshot",
+        "tray.record" => {
+            if de {
+                "Aufnahme"
+            } else {
+                "Record"
+            }
+        }
+        "tray.editor" => {
+            if de {
+                "Editor öffnen"
+            } else {
+                "Open editor"
+            }
+        }
+        "tray.settings" => {
+            if de {
+                "Einstellungen"
+            } else {
+                "Settings"
+            }
+        }
+        "tray.quit" => {
+            if de {
+                "Beenden"
+            } else {
+                "Quit"
+            }
+        }
+        _ => "?",
+    }
+}
