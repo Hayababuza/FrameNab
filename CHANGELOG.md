@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Added
 - Screenshot mode (stage 1a): capture the screen, select an area in a fullscreen overlay and copy it to the clipboard (Enter, Ctrl+C or double-click; Esc or right-click cancels)
+- Annotation tools in the screenshot overlay (stage 1b): select/move, arrow, line, rectangle, ellipse, pen, highlighter, text, numbered markers, pixelate and blur, with 8 preset colors plus a custom color, three stroke widths, undo/redo and keyboard shortcuts; changing color/width restyles the selected annotation; double-click a text to edit it
+- Renderer: text and counters via cosmic-text (system sans-serif font), real blur
 - Capture backends: xdg-desktop-portal on Wayland, `xcap` on Windows, macOS and X11
 - Capture spike: `cargo run -p framenab-capture --example screenshot`
 - Project scaffold: Tauri 2, SvelteKit (Svelte 5), TypeScript, Cargo workspace

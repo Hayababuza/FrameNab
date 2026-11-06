@@ -1,5 +1,6 @@
 /** Type-safe wrappers around the Rust commands (`src-tauri/src/commands`). */
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import type { Annotation } from "$lib/bindings/Annotation";
 
 export type Platform = "windows" | "macOs" | "linuxX11" | "linuxWayland" | "unknown";
 export type ExportFormat = "gif" | "apng" | "webp" | "pngSequence" | "mp4" | "webm";
@@ -39,7 +40,8 @@ export interface Selection {
 }
 
 export const captureInfo = () => invoke<CaptureInfo | null>("capture_info");
-export const copySelection = (selection: Selection) => invoke<void>("copy_selection", { selection });
+export const copySelection = (selection: Selection, annotations: Annotation[]) =>
+  invoke<void>("copy_selection", { selection, annotations });
 export const cancelCapture = () => invoke<void>("cancel_capture");
 
 /** Loads the pixels of the current capture through the `framenab://` protocol. */

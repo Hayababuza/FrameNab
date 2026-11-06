@@ -35,8 +35,8 @@ function inRect(p: Point, r: Rect, tolerance: number): boolean {
   );
 }
 
-/** Is `p` on or inside the shape? `tolerance` enlarges the hit area (e.g. stroke width / 2). */
-export function hitTest(shape: Shape, p: Point, tolerance = 4): boolean {
+/** Is `p` on or inside the shape? `tolerance` enlarges the hit area; `width` is the stroke width. */
+export function hitTest(shape: Shape, p: Point, tolerance = 4, width = 4): boolean {
   switch (shape.type) {
     case "arrow":
     case "line":
@@ -54,17 +54,73 @@ export function hitTest(shape: Shape, p: Point, tolerance = 4): boolean {
     case "pixelate":
       return inRect(p, shape.rect, tolerance);
     case "text":
-      return inRect(
-        p,
-        {
-          x: shape.at.x,
-          y: shape.at.y,
-          w: shape.text.length * shape.fontSize * 0.6,
-          h: shape.fontSize * 1.3,
-        },
-        tolerance,
-      );
+      return inRect(p, shapeBounds(shape), tolerance);
     case "counter":
-      return Math.hypot(p.x - shape.at.x, p.y - shape.at.y) <= 16 + tolerance;
+      return Math.hypot(p.x - shape.at.x, p.y - shape.at.y) <= counterRadius(width) + tolerance;
+  }
+}
+
+/** Sizes derived from the stroke width; mirror `framenab_render::{counter_radius, text_padding}`. */
+export const LINE_HEIGHT = 1.25;
+export const counterRadius = (width: number) => 10 + width * 2;
+export const textPadding = (fontSize: number) => Math.round(fontSize * 0.2);
+
+/** Moves a shape by `(dx, dy)`; mirrors `Shape::translated` in Rust. */
+export function translateShape(shape: Shape, dx: number, dy: number): Shape {
+  const p = (q: Point): Point => ({ x: q.x + dx, y: q.y + dy });
+  const r = (q: Rect): Rect => ({ ...q, x: q.x + dx, y: q.y + dy });
+  switch (shape.type) {
+    case "arrow":
+    case "line":
+      return { ...shape, from: p(shape.from), to: p(shape.to) };
+    case "rect":
+    case "ellipse":
+    case "blur":
+    case "pixelate":
+      return { ...shape, rect: r(shape.rect) };
+    case "pen":
+    case "highlighter":
+      return { ...shape, points: shape.points.map(p) };
+    case "text":
+    case "counter":
+      return { ...shape, at: p(shape.at) };
+  }
+}
+
+/** Approximate bounding box of a shape (text width is estimated). */
+export function shapeBounds(shape: Shape, width = 0): Rect {
+  const fromPoints = (pts: Point[]): Rect => {
+    const xs = pts.map((q) => q.x);
+    const ys = pts.map((q) => q.y);
+    const x = Math.min(...xs);
+    const y = Math.min(...ys);
+    return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+  };
+  switch (shape.type) {
+    case "arrow":
+    case "line":
+      return fromPoints([shape.from, shape.to]);
+    case "pen":
+    case "highlighter":
+      return fromPoints(shape.points);
+    case "rect":
+    case "ellipse":
+    case "blur":
+    case "pixelate":
+      return normalizeRect(shape.rect);
+    case "text": {
+      const lines = shape.text.split("\n");
+      const longest = Math.max(...lines.map((l) => l.length));
+      return {
+        x: shape.at.x,
+        y: shape.at.y,
+        w: longest * shape.fontSize * 0.6,
+        h: lines.length * shape.fontSize * LINE_HEIGHT,
+      };
+    }
+    case "counter": {
+      const r = counterRadius(width);
+      return { x: shape.at.x - r, y: shape.at.y - r, w: 2 * r, h: 2 * r };
+    }
   }
 }

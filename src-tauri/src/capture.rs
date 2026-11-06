@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use framenab_capture::{CaptureError, CaptureTarget};
+use framenab_core::Annotation;
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use tauri::http::{Request, Response, StatusCode};
@@ -162,7 +163,7 @@ pub fn capture_info(app: AppHandle) -> Option<CaptureInfo> {
 }
 
 #[tauri::command]
-pub async fn copy_selection(app: AppHandle, selection: Selection) -> Result<(), String> {
+pub async fn copy_selection(app: AppHandle, selection: Selection, annotations: Vec<Annotation>) -> Result<(), String> {
     let image = {
         let state = app.state::<CaptureState>();
         let guard = state.current.lock().expect("capture lock");
@@ -170,9 +171,19 @@ pub async fn copy_selection(app: AppHandle, selection: Selection) -> Result<(), 
         Arc::clone(&capture.image)
     };
     let Selection { x, y, width, height } = selection;
-    let cropped = framenab_capture::crop(&image, x as i32, y as i32, width.max(1), height.max(1));
-    tracing::info!(width = cropped.width(), height = cropped.height(), "copying selection to clipboard");
-    clipboard::copy_image(&app, cropped).await?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let mut cropped = framenab_capture::crop(&image, x as i32, y as i32, width.max(1), height.max(1));
+        // Annotations are in screen-image coordinates; move them into the cropped area.
+        let (dx, dy) = (-(x as f32), -(y as f32));
+        let moved: Vec<Annotation> =
+            annotations.into_iter().map(|a| Annotation { shape: a.shape.translated(dx, dy), ..a }).collect();
+        framenab_render::render_annotations(&mut cropped, &moved).map(|()| cropped)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    tracing::info!(width = result.width(), height = result.height(), "copying selection to clipboard");
+    clipboard::copy_image(&app, result).await?;
     windows::close_overlay(&app);
     Ok(())
 }

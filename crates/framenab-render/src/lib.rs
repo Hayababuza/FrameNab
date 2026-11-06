@@ -1,7 +1,10 @@
 //! Renders annotations into frames, for export and for screenshots (clipboard/file).
 //!
-//! The UI draws live on an HTML canvas; this renderer is the source of truth for the exported
-//! result. Text (cosmic-text) and blur follow in phase 1.
+//! The UI draws live on an HTML canvas (`src/lib/annotations/render.ts`); this renderer is the
+//! source of truth for the result. Sizes derived from the stroke width (counter radius, text
+//! padding, highlighter width) are defined here and mirrored in the UI.
+
+pub mod text;
 
 use framenab_core::{Annotation, Point, Project, Rect, Rgba, Shape, Style};
 use image::RgbaImage;
@@ -13,6 +16,18 @@ pub enum RenderError {
     InvalidSize(u32, u32),
 }
 
+/// Radius of a numbered counter marker for a given stroke width.
+#[must_use]
+pub fn counter_radius(width: f32) -> f32 {
+    10.0 + width * 2.0
+}
+
+/// Padding around text that has a background.
+#[must_use]
+pub fn text_padding(font_size: f32) -> f32 {
+    (font_size * 0.2).round()
+}
+
 /// Renders every annotation visible on `frame_index` onto a copy of `base`.
 pub fn render_frame(project: &Project, frame_index: u32, base: &RgbaImage) -> Result<RgbaImage, RenderError> {
     let mut image = base.clone();
@@ -20,6 +35,11 @@ pub fn render_frame(project: &Project, frame_index: u32, base: &RgbaImage) -> Re
         draw(&mut image, annotation)?;
     }
     Ok(image)
+}
+
+/// Draws all annotations in order into `image`.
+pub fn render_annotations(image: &mut RgbaImage, annotations: &[Annotation]) -> Result<(), RenderError> {
+    annotations.iter().try_for_each(|a| draw(image, a))
 }
 
 /// Draws a single annotation directly into `image`.
@@ -31,12 +51,21 @@ pub fn draw(image: &mut RgbaImage, annotation: &Annotation) -> Result<(), Render
             return Ok(());
         }
         Shape::Blur { rect, radius } => {
-            // Until the real Gaussian blur lands (phase 1): heavy pixelation as a safe cover.
-            pixelate(image, *rect, radius.max(4.0) as u32);
+            blur(image, *rect, *radius);
             return Ok(());
         }
-        Shape::Text { .. } | Shape::Counter { .. } => {
-            // TODO(phase 1): text rendering with cosmic-text.
+        Shape::Text { at, text, font_size, background } => {
+            if let Some(bg) = background {
+                let (w, h) = text::measure(text, *font_size, false);
+                let pad = text_padding(*font_size);
+                let rect = Rect { x: at.x - pad, y: at.y - pad, w: w + 2.0 * pad, h: h + 2.0 * pad };
+                fill_rect(image, rect, *bg, style.opacity)?;
+            }
+            text::draw(image, *at, text, *font_size, style.stroke, style.opacity, false);
+            return Ok(());
+        }
+        Shape::Counter { at, value } => {
+            draw_counter(image, *at, *value, style)?;
             return Ok(());
         }
         _ => {}
@@ -161,15 +190,55 @@ fn composite(image: &mut RgbaImage, layer: &Pixmap) {
     }
 }
 
-/// Pixelates an area in blocks of size `block`.
-pub fn pixelate(image: &mut RgbaImage, rect: Rect, block: u32) {
-    let block = block.max(2);
+fn fill_rect(image: &mut RgbaImage, rect: Rect, color: Rgba, opacity: f32) -> Result<(), RenderError> {
+    let (w, h) = image.dimensions();
+    let mut pixmap = Pixmap::new(w, h).ok_or(RenderError::InvalidSize(w, h))?;
+    let r = rect.normalized();
+    fill_path(&mut pixmap, tiny_skia::Rect::from_xywh(r.x, r.y, r.w, r.h).map(PathBuilder::from_rect), color, opacity);
+    composite(image, &pixmap);
+    Ok(())
+}
+
+/// A filled circle in the stroke color with the number in white, centered on `at`.
+fn draw_counter(image: &mut RgbaImage, at: Point, value: u32, style: &Style) -> Result<(), RenderError> {
+    let (w, h) = image.dimensions();
+    let mut pixmap = Pixmap::new(w, h).ok_or(RenderError::InvalidSize(w, h))?;
+    let radius = counter_radius(style.width);
+    fill_path(&mut pixmap, PathBuilder::from_circle(at.x, at.y, radius), style.stroke, style.opacity);
+    composite(image, &pixmap);
+
+    let label = value.to_string();
+    let size = radius * 1.1;
+    let (tw, th) = text::measure(&label, size, true);
+    let white = Rgba { r: 255, g: 255, b: 255, a: 255 };
+    text::draw(image, Point { x: at.x - tw / 2.0, y: at.y - th / 2.0 }, &label, size, white, style.opacity, true);
+    Ok(())
+}
+
+/// Clamps a rect to the image and returns `(x, y, w, h)` in whole pixels.
+fn pixel_rect(image: &RgbaImage, rect: Rect) -> Option<(u32, u32, u32, u32)> {
     let r = rect.normalized();
     let (w, h) = image.dimensions();
     let x0 = (r.x.max(0.0) as u32).min(w);
     let y0 = (r.y.max(0.0) as u32).min(h);
     let x1 = ((r.x + r.w).ceil().max(0.0) as u32).min(w);
     let y1 = ((r.y + r.h).ceil().max(0.0) as u32).min(h);
+    (x1 > x0 && y1 > y0).then(|| (x0, y0, x1 - x0, y1 - y0))
+}
+
+/// Gaussian-like blur of an area (`radius` is the sigma in pixels).
+pub fn blur(image: &mut RgbaImage, rect: Rect, radius: f32) {
+    let Some((x, y, w, h)) = pixel_rect(image, rect) else { return };
+    let region = image::imageops::crop_imm(image, x, y, w, h).to_image();
+    let blurred = image::imageops::fast_blur(&region, radius.max(1.0));
+    image::imageops::replace(image, &blurred, i64::from(x), i64::from(y));
+}
+
+/// Pixelates an area in blocks of size `block`.
+pub fn pixelate(image: &mut RgbaImage, rect: Rect, block: u32) {
+    let block = block.max(2);
+    let Some((x0, y0, w, h)) = pixel_rect(image, rect) else { return };
+    let (x1, y1) = (x0 + w, y0 + h);
 
     for by in (y0..y1).step_by(block as usize) {
         for bx in (x0..x1).step_by(block as usize) {
@@ -217,6 +286,36 @@ mod tests {
         let a = annotation(Shape::Arrow { from: Point { x: 5.0, y: 10.0 }, to: Point { x: 90.0, y: 10.0 } });
         draw(&mut img, &a).unwrap();
         assert_ne!(img.get_pixel(85, 10).0, [0, 0, 0, 255]);
+    }
+
+    #[test]
+    fn blur_smooths_edges_inside_the_area_only() {
+        let mut img = RgbaImage::from_fn(20, 10, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255; 4] }));
+        blur(&mut img, Rect { x: 5.0, y: 0.0, w: 10.0, h: 10.0 }, 3.0);
+        let mid = img.get_pixel(10, 5).0[0];
+        assert!(mid > 20 && mid < 235, "edge should be blurred, got {mid}");
+        assert_eq!(img.get_pixel(0, 5).0, [0, 0, 0, 255]);
+        assert_eq!(img.get_pixel(19, 5).0, [255; 4]);
+    }
+
+    #[test]
+    fn text_and_counter_draw_pixels() {
+        let base = RgbaImage::from_pixel(120, 60, image::Rgba([255, 255, 255, 255]));
+        let mut img = base.clone();
+        let text = annotation(Shape::Text {
+            at: Point { x: 5.0, y: 5.0 },
+            text: "Hi".into(),
+            font_size: 24.0,
+            background: None,
+        });
+        draw(&mut img, &text).unwrap();
+        assert_ne!(img, base, "text should change pixels");
+
+        let mut img = base.clone();
+        draw(&mut img, &annotation(Shape::Counter { at: Point { x: 60.0, y: 30.0 }, value: 3 })).unwrap();
+        // Ring of the circle is red, far corner untouched.
+        assert_eq!(img.get_pixel(60 - 15, 30).0, [0xFF, 0x3B, 0x30, 0xFF]);
+        assert_eq!(img.get_pixel(0, 0).0, [255; 4]);
     }
 
     #[test]

@@ -1,7 +1,12 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
+  import type { Annotation } from "$lib/bindings/Annotation";
+  import type { Point } from "$lib/bindings/Point";
   import type { Rect } from "$lib/bindings/Rect";
+  import type { Rgba } from "$lib/bindings/Rgba";
+  import { hitTest, LINE_HEIGHT, translateShape } from "$lib/annotations/geometry";
+  import { drawAnnotation, drawSelectionFrame, FONT_FAMILY } from "$lib/annotations/render";
   import {
     beginDrag,
     type Drag,
@@ -9,31 +14,68 @@
     toolbarPosition,
     updateDrag,
   } from "$lib/annotations/selection";
+  import {
+    colors,
+    fontSizeFor,
+    fromHex,
+    isDragTool,
+    isTrivial,
+    nextCounterValue,
+    shapeFromDrag,
+    toHex,
+    type Tool,
+    toolForKey,
+    tools,
+    widths,
+  } from "$lib/annotations/tools";
   import { t } from "$lib/i18n/index.svelte";
   import { cancelCapture, captureInfo, copySelection, loadCapture, type CaptureInfo } from "$lib/ipc";
+  import { History } from "$lib/stores/history";
+
+  type Interaction =
+    | { kind: "area"; drag: Drag }
+    | { kind: "draw"; start: Point; points: Point[] }
+    | { kind: "move"; id: string; last: Point; recorded: boolean };
 
   let canvas: HTMLCanvasElement;
+  let textEl: HTMLDivElement | undefined = $state();
   let info: CaptureInfo | null = null;
   let bitmap: ImageBitmap | null = null;
+
+  let size = $state({ w: window.innerWidth, h: window.innerHeight });
+  /** Area to copy, in CSS pixels. */
   let selection = $state<Rect | null>(null);
-  let drag = $state<Drag | null>(null);
-  let toolbarSize = $state({ w: 0, h: 0 });
+  let interaction = $state<Interaction | null>(null);
   let busy = $state(false);
   let error = $state<string | null>(null);
-  let size = $state({ w: window.innerWidth, h: window.innerHeight });
+  let toolbarSize = $state({ w: 0, h: 0 });
+  let hovering = $state(false);
+
+  let tool = $state<Tool>("select");
+  let color = $state<Rgba>(colors[0]);
+  let width = $state(widths[1]);
+  /** Annotations in image pixels. */
+  let annotations = $state<Annotation[]>([]);
+  let draft = $state<Annotation | null>(null);
+  let selectedId = $state<string | null>(null);
+  let textEdit = $state<{ at: Point; value: string; style: Annotation["style"]; fontSize: number } | null>(
+    null,
+  );
+  const history = new History<Annotation[]>(200);
+  let historyVersion = $state(0);
+  let nextId = 0;
 
   /** Image pixels per CSS pixel. */
-  const scale = () => (info ? info.width / size.w : 1);
+  let scale = $state(1);
+  const toImage = (p: Point): Point => ({ x: p.x * scale, y: p.y * scale });
 
-  const imageSelection = $derived.by(() => {
-    if (!selection || !info) return null;
-    return toImagePixels(selection, info.width / size.w, info);
-  });
+  const imageSelection = $derived(selection && info ? toImagePixels(selection, scale, info) : null);
 
   onMount(async () => {
     try {
       info = await captureInfo();
       if (!info) return void cancelCapture();
+      scale = info.width / size.w;
       bitmap = await loadCapture(info);
       draw();
       const win = getCurrentWindow();
@@ -49,7 +91,7 @@
   });
 
   function draw() {
-    if (!canvas || !bitmap) return;
+    if (!canvas || !bitmap || !info) return;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(size.w * dpr);
     canvas.height = Math.round(size.h * dpr);
@@ -57,6 +99,15 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bitmap, 0, 0, size.w, size.h);
+
+    // Annotations are in image pixels.
+    ctx.save();
+    ctx.setTransform(dpr / scale, 0, 0, dpr / scale, 0, 0);
+    for (const a of annotations) drawAnnotation(ctx, a);
+    if (draft) drawAnnotation(ctx, draft);
+    const selected = annotations.find((a) => a.id === selectedId);
+    if (selected) drawSelectionFrame(ctx, selected, scale);
+    ctx.restore();
 
     // Dim everything except the selection.
     ctx.fillStyle = "rgb(0 0 0 / 50%)";
@@ -73,42 +124,220 @@
   }
 
   $effect(() => {
-    void selection;
-    void size;
+    void [selection, size, annotations, draft, selectedId];
     draw();
   });
 
-  function point(e: PointerEvent) {
-    return { x: e.clientX, y: e.clientY };
+  $effect(() => {
+    if (textEdit && textEl && document.activeElement !== textEl) textEl.focus();
+  });
+
+  // ---- history -------------------------------------------------------------------------------
+
+  function record() {
+    history.record($state.snapshot(annotations) as Annotation[]);
+    historyVersion++;
   }
+
+  function undo() {
+    const prev = history.undo($state.snapshot(annotations) as Annotation[]);
+    if (prev) {
+      annotations = prev;
+      selectedId = null;
+      historyVersion++;
+    }
+  }
+
+  function redo() {
+    const next = history.redo($state.snapshot(annotations) as Annotation[]);
+    if (next) {
+      annotations = next;
+      selectedId = null;
+      historyVersion++;
+    }
+  }
+
+  const canUndo = $derived((void historyVersion, history.canUndo));
+  const canRedo = $derived((void historyVersion, history.canRedo));
+
+  function add(annotation: Annotation) {
+    record();
+    annotations = [...annotations, annotation];
+  }
+
+  function deleteSelected() {
+    if (!selectedId) return;
+    record();
+    annotations = annotations.filter((a) => a.id !== selectedId);
+    selectedId = null;
+  }
+
+  // ---- annotation helpers --------------------------------------------------------------------
+
+  const currentStyle = (): Annotation["style"] => ({
+    stroke: $state.snapshot(color),
+    width: width * scale,
+    fill: null,
+    opacity: 1,
+  });
+
+  const newAnnotation = (shape: Annotation["shape"]): Annotation => ({
+    id: `a${++nextId}`,
+    frameStart: 0,
+    frameEnd: 0,
+    shape,
+    style: currentStyle(),
+  });
+
+  function annotationAt(p: Point): Annotation | undefined {
+    const tolerance = 6 * scale;
+    return annotations.findLast((a) => hitTest(a.shape, p, tolerance + a.style.width / 2, a.style.width));
+  }
+
+  function commitText() {
+    if (!textEdit) return;
+    const value = (textEl?.innerText ?? textEdit.value).replace(/\n$/, "");
+    const { at, style, fontSize } = textEdit;
+    textEdit = null;
+    const annotation: Annotation = {
+      id: `a${++nextId}`,
+      frameStart: 0,
+      frameEnd: 0,
+      shape: { type: "text", at, text: value, fontSize, background: null },
+      style,
+    };
+    if (!isTrivial(annotation.shape)) add(annotation);
+  }
+
+  function startText(at: Point) {
+    commitText();
+    textEdit = { at, value: "", style: currentStyle(), fontSize: fontSizeFor(width) * scale };
+  }
+
+  function setTool(next: Tool) {
+    commitText();
+    tool = next;
+    if (next !== "select") selectedId = null;
+  }
+
+  function setColor(next: Rgba) {
+    color = next;
+    restyleSelected({ stroke: next });
+  }
+
+  function setWidth(next: number) {
+    width = next;
+    restyleSelected({ width: next * scale });
+  }
+
+  /** Changing color/width while an annotation is selected applies it to that annotation. */
+  function restyleSelected(change: Partial<Annotation["style"]>) {
+    if (!selectedId) return;
+    record();
+    annotations = annotations.map((a) =>
+      a.id === selectedId ? { ...a, style: { ...a.style, ...change } } : a,
+    );
+  }
+
+  // ---- pointer -------------------------------------------------------------------------------
+
+  const point = (e: PointerEvent | MouseEvent): Point => ({ x: e.clientX, y: e.clientY });
 
   function onpointerdown(e: PointerEvent) {
     if (busy) return;
     if (e.button === 2) return void cancelCapture();
     if (e.button !== 0) return;
+    if (textEdit) {
+      commitText();
+      return;
+    }
+    const c = point(e);
+    const p = toImage(c);
     canvas.setPointerCapture(e.pointerId);
-    drag = beginDrag(selection, point(e));
+
+    if (tool === "select") {
+      const hit = annotationAt(p);
+      if (hit) {
+        selectedId = hit.id;
+        interaction = { kind: "move", id: hit.id, last: p, recorded: false };
+        return;
+      }
+      selectedId = null;
+      interaction = { kind: "area", drag: beginDrag(selection, c) };
+    } else if (tool === "text") {
+      startText(p);
+    } else if (tool === "counter") {
+      add(newAnnotation({ type: "counter", at: p, value: nextCounterValue(annotations) }));
+    } else if (isDragTool(tool)) {
+      interaction = { kind: "draw", start: p, points: [p] };
+    }
   }
 
   function onpointermove(e: PointerEvent) {
-    if (!drag) return;
-    selection = updateDrag(drag, point(e), size);
+    const c = point(e);
+    if (!interaction) {
+      hovering = tool === "select" && !!annotationAt(toImage(c));
+      return;
+    }
+    const p = toImage(c);
+    switch (interaction.kind) {
+      case "area":
+        selection = updateDrag(interaction.drag, c, size);
+        break;
+      case "draw": {
+        interaction.points.push(p);
+        const shape = shapeFromDrag(tool, interaction.start, p, [...interaction.points], width * scale);
+        draft = shape ? newAnnotation(shape) : null;
+        break;
+      }
+      case "move": {
+        const { id, last } = interaction;
+        if (!interaction.recorded) {
+          record();
+          interaction.recorded = true;
+        }
+        const dx = p.x - last.x;
+        const dy = p.y - last.y;
+        annotations = annotations.map((a) =>
+          a.id === id ? { ...a, shape: translateShape(a.shape, dx, dy) } : a,
+        );
+        interaction.last = p;
+        break;
+      }
+    }
   }
 
   function onpointerup(e: PointerEvent) {
-    if (!drag) return;
-    canvas.releasePointerCapture(e.pointerId);
-    drag = null;
-    // A plain click without dragging leaves no selection.
-    if (selection && (selection.w < 2 || selection.h < 2)) selection = null;
+    if (!interaction) return;
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    if (interaction.kind === "area" && selection && (selection.w < 2 || selection.h < 2)) selection = null;
+    if (interaction.kind === "draw" && draft && !isTrivial(draft.shape, 3 * scale)) add(draft);
+    draft = null;
+    interaction = null;
   }
+
+  function ondblclick(e: MouseEvent) {
+    // Double-clicking a text annotation edits it; anywhere else copies the screenshot.
+    const hit = tool === "select" ? annotationAt(toImage(point(e))) : undefined;
+    if (hit?.shape.type === "text") {
+      record();
+      annotations = annotations.filter((a) => a.id !== hit.id);
+      selectedId = null;
+      textEdit = { at: hit.shape.at, value: hit.shape.text, style: hit.style, fontSize: hit.shape.fontSize };
+      return;
+    }
+    if (tool === "select") copy();
+  }
+
+  // ---- actions -------------------------------------------------------------------------------
 
   async function copy() {
     if (!info || busy) return;
+    commitText();
     busy = true;
     const target = selection ?? { x: 0, y: 0, w: size.w, h: size.h };
     try {
-      await copySelection(toImagePixels(target, scale(), info));
+      await copySelection(toImagePixels(target, scale, info), $state.snapshot(annotations) as Annotation[]);
     } catch (e) {
       error = String(e);
       busy = false;
@@ -116,19 +345,46 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (textEdit) {
+      // Keys go to the text field; only Enter (confirm) and Esc (discard) are handled here.
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        commitText();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        textEdit = null;
+      }
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
-      if (drag) return;
-      cancelCapture();
-    } else if (e.key === "Enter" || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c")) {
+      if (!interaction) cancelCapture();
+    } else if (e.key === "Enter" || (ctrl && e.key.toLowerCase() === "c")) {
       e.preventDefault();
       copy();
+    } else if (ctrl && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    } else if (ctrl && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      redo();
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      deleteSelected();
+    } else if (!ctrl && !e.altKey && selection) {
+      const next = toolForKey(e.key.toLowerCase());
+      if (next) setTool(next);
     }
   }
 
   function onresize() {
     size = { w: window.innerWidth, h: window.innerHeight };
+    if (info) scale = info.width / size.w;
   }
+
+  // ---- layout --------------------------------------------------------------------------------
 
   const toolbarStyle = $derived.by(() => {
     if (!selection) return "";
@@ -142,6 +398,24 @@
     const top = selection.y >= 28 ? selection.y - 26 : selection.y + 4;
     return `left: ${selection.x}px; top: ${top}px;`;
   });
+
+  const textStyle = $derived.by(() => {
+    if (!textEdit) return "";
+    const fontSize = textEdit.fontSize / scale;
+    const c = textEdit.style.stroke;
+    return [
+      `left: ${textEdit.at.x / scale}px`,
+      `top: ${textEdit.at.y / scale}px`,
+      `font: ${fontSize}px/${LINE_HEIGHT} ${FONT_FAMILY}`,
+      `color: rgb(${c.r} ${c.g} ${c.b})`,
+      `min-width: ${fontSize}px`,
+    ].join("; ");
+  });
+
+  const cursor = $derived(
+    tool === "select" ? (hovering ? "move" : "crosshair") : tool === "text" ? "text" : "crosshair",
+  );
+  const sameColor = (a: Rgba, b: Rgba) => a.r === b.r && a.g === b.g && a.b === b.b;
 </script>
 
 <svelte:window {onkeydown} {onresize} oncontextmenu={(e) => e.preventDefault()} />
@@ -152,32 +426,137 @@
   {onpointerdown}
   {onpointermove}
   {onpointerup}
-  ondblclick={copy}
+  {ondblclick}
   style:width="{size.w}px"
   style:height="{size.h}px"
+  style:cursor
 ></canvas>
+
+{#if textEdit}
+  <div
+    class="text-edit"
+    bind:this={textEl}
+    contenteditable="plaintext-only"
+    role="textbox"
+    tabindex="0"
+    aria-multiline="true"
+    aria-label={t("tool.text")}
+    data-placeholder={t("overlay.textPlaceholder")}
+    style={textStyle}
+  >
+    {textEdit.value}
+  </div>
+{/if}
 
 {#if selection && imageSelection}
   <div class="size" style={labelStyle}>{imageSelection.width} × {imageSelection.height}</div>
-  {#if !drag}
+  {#if !interaction}
     <div
       class="toolbar"
       style={toolbarStyle}
       bind:clientWidth={toolbarSize.w}
       bind:clientHeight={toolbarSize.h}
     >
-      <button class="primary" title={t("overlay.copyTitle")} onclick={copy} disabled={busy}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="8" y="8" width="12" height="12" rx="2" />
-          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
-        </svg>
-        {t("overlay.copy")}
-        <kbd>Enter</kbd>
-      </button>
-      <button title={t("overlay.cancelTitle")} onclick={() => cancelCapture()}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-        <kbd>Esc</kbd>
-      </button>
+      <div class="row">
+        {#each tools as item (item.id)}
+          <button
+            class="icon"
+            class:active={tool === item.id}
+            title="{t(`tool.${item.id}`)} ({item.key.toUpperCase()})"
+            aria-label={t(`tool.${item.id}`)}
+            onclick={() => setTool(item.id)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.icon} /></svg>
+          </button>
+        {/each}
+        <span class="sep"></span>
+        <button
+          class="icon"
+          title={t("overlay.undo")}
+          aria-label={t("overlay.undo")}
+          onclick={undo}
+          disabled={!canUndo}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg
+          >
+        </button>
+        <button
+          class="icon"
+          title={t("overlay.redo")}
+          aria-label={t("overlay.redo")}
+          onclick={redo}
+          disabled={!canRedo}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" /></svg
+          >
+        </button>
+        {#if selectedId}
+          <button
+            class="icon"
+            title={t("overlay.delete")}
+            aria-label={t("overlay.delete")}
+            onclick={deleteSelected}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"
+              ><path d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg
+            >
+          </button>
+        {/if}
+      </div>
+      <div class="row">
+        <div class="swatches" role="radiogroup" aria-label={t("overlay.color")}>
+          {#each colors as c (toHex(c))}
+            <button
+              class="swatch"
+              class:active={sameColor(c, color)}
+              style:background={toHex(c)}
+              role="radio"
+              aria-checked={sameColor(c, color)}
+              aria-label={toHex(c)}
+              onclick={() => setColor(c)}
+            ></button>
+          {/each}
+          <label class="swatch custom" title={t("overlay.customColor")} style:background={toHex(color)}>
+            <input
+              type="color"
+              value={toHex(color)}
+              oninput={(e) => setColor(fromHex(e.currentTarget.value))}
+            />
+          </label>
+        </div>
+        <span class="sep"></span>
+        <div class="widths" role="radiogroup" aria-label={t("overlay.width")}>
+          {#each widths as w (w)}
+            <button
+              class="icon"
+              class:active={width === w}
+              role="radio"
+              aria-checked={width === w}
+              aria-label="{t('overlay.width')} {w}"
+              onclick={() => setWidth(w)}
+            >
+              <span class="dot" style:width="{w + 2}px" style:height="{w + 2}px"></span>
+            </button>
+          {/each}
+        </div>
+        <span class="spacer"></span>
+        <button class="primary" title={t("overlay.copyTitle")} onclick={copy} disabled={busy}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10 8h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" />
+            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+          </svg>
+          {t("overlay.copy")}
+          <kbd>Enter</kbd>
+        </button>
+        <button
+          class="icon"
+          title={t("overlay.cancelTitle")}
+          aria-label={t("overlay.cancel")}
+          onclick={() => cancelCapture()}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
     </div>
   {/if}
 {:else if !error}
@@ -198,7 +577,6 @@
     position: fixed;
     inset: 0;
     display: block;
-    cursor: crosshair;
     outline: none;
     touch-action: none;
   }
@@ -222,44 +600,127 @@
     padding: 2px 8px;
     font-variant-numeric: tabular-nums;
   }
+  .error {
+    top: 50%;
+    background: rgb(160 30 30 / 90%);
+  }
+  .text-edit {
+    position: fixed;
+    margin: 0;
+    padding: 0;
+    white-space: pre;
+    outline: 1px dashed rgb(255 255 255 / 80%);
+    outline-offset: 2px;
+    caret-color: currentColor;
+  }
+  .text-edit:empty::before {
+    content: attr(data-placeholder);
+    font-size: 13px;
+    color: rgb(255 255 255 / 70%);
+    background: rgb(20 20 24 / 85%);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
   .toolbar {
     position: fixed;
     display: flex;
+    flex-direction: column;
     gap: 4px;
-    padding: 4px;
-    border-radius: 8px;
-    background: rgb(20 20 24 / 92%);
+    padding: 6px;
+    border-radius: 10px;
+    background: rgb(20 20 24 / 94%);
     box-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+    color: #fff;
+    font-size: 13px;
   }
-  .toolbar button {
+  .row,
+  .swatches,
+  .widths {
     display: flex;
     align-items: center;
+    gap: 2px;
+  }
+  .sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 4px 4px;
+    background: rgb(255 255 255 / 15%);
+  }
+  .spacer {
+    flex: 1;
+    min-width: 12px;
+  }
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     gap: 6px;
-    padding: 6px 10px;
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: #fff;
-    font-size: 13px;
+    color: inherit;
+    font: inherit;
     cursor: pointer;
   }
-  .toolbar button:hover:not(:disabled) {
+  button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  button.icon {
+    width: 32px;
+    height: 32px;
+  }
+  button:hover:not(:disabled) {
     background: rgb(255 255 255 / 12%);
   }
-  .toolbar button.primary {
+  button.active {
+    background: rgb(255 255 255 / 20%);
+  }
+  button.primary {
+    padding: 0 10px;
+    height: 32px;
     background: #e5484d;
   }
-  .toolbar button.primary:hover:not(:disabled) {
+  button.primary:hover:not(:disabled) {
     background: #f15a5f;
   }
-  .toolbar svg {
-    width: 16px;
-    height: 16px;
+  svg {
+    width: 18px;
+    height: 18px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+  .swatch {
+    width: 20px;
+    height: 20px;
+    margin: 0 2px;
+    border-radius: 50%;
+    border: 2px solid rgb(255 255 255 / 25%);
+    padding: 0;
+  }
+  .swatch.active {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgb(255 255 255 / 35%);
+  }
+  .swatch.custom {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    background-image: conic-gradient(red, yellow, lime, cyan, blue, magenta, red) !important;
+  }
+  .swatch.custom input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .dot {
+    display: block;
+    border-radius: 50%;
+    background: currentColor;
   }
   kbd {
     padding: 0 5px;
@@ -268,9 +729,5 @@
     font:
       11px/18px ui-monospace,
       monospace;
-  }
-  .error {
-    top: 50%;
-    background: rgb(160 30 30 / 90%);
   }
 </style>

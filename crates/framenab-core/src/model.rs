@@ -121,6 +121,42 @@ pub struct Annotation {
     pub style: Style,
 }
 
+impl Point {
+    #[must_use]
+    pub fn offset(self, dx: f32, dy: f32) -> Self {
+        Self { x: self.x + dx, y: self.y + dy }
+    }
+}
+
+impl Rect {
+    #[must_use]
+    pub fn offset(self, dx: f32, dy: f32) -> Self {
+        Self { x: self.x + dx, y: self.y + dy, ..self }
+    }
+}
+
+impl Shape {
+    /// Moves the shape by `(dx, dy)`.
+    #[must_use]
+    pub fn translated(&self, dx: f32, dy: f32) -> Self {
+        let mut shape = self.clone();
+        match &mut shape {
+            Self::Arrow { from, to } | Self::Line { from, to } => {
+                *from = from.offset(dx, dy);
+                *to = to.offset(dx, dy);
+            }
+            Self::Rect { rect } | Self::Ellipse { rect } | Self::Blur { rect, .. } | Self::Pixelate { rect, .. } => {
+                *rect = rect.offset(dx, dy);
+            }
+            Self::Pen { points } | Self::Highlighter { points } => {
+                points.iter_mut().for_each(|p| *p = p.offset(dx, dy));
+            }
+            Self::Text { at, .. } | Self::Counter { at, .. } => *at = at.offset(dx, dy),
+        }
+        shape
+    }
+}
+
 impl Annotation {
     #[must_use]
     pub fn visible_on(&self, frame_index: u32) -> bool {
@@ -182,6 +218,20 @@ mod tests {
         let json = serde_json::to_string(&p).unwrap();
         assert!(json.contains("\"loop\":3"));
         assert_eq!(serde_json::from_str::<Project>(&json).unwrap(), p);
+    }
+
+    #[test]
+    fn shapes_translate() {
+        let pen = Shape::Pen { points: vec![Point { x: 1.0, y: 1.0 }, Point { x: 2.0, y: 3.0 }] };
+        assert_eq!(
+            pen.translated(10.0, -1.0),
+            Shape::Pen { points: vec![Point { x: 11.0, y: 0.0 }, Point { x: 12.0, y: 2.0 }] }
+        );
+        let blur = Shape::Blur { rect: Rect { x: 0.0, y: 0.0, w: 5.0, h: 5.0 }, radius: 3.0 };
+        assert_eq!(
+            blur.translated(1.0, 2.0),
+            Shape::Blur { rect: Rect { x: 1.0, y: 2.0, w: 5.0, h: 5.0 }, radius: 3.0 }
+        );
     }
 
     #[test]

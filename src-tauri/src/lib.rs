@@ -43,6 +43,9 @@ pub fn run() {
             app.manage(logging::init(&log_dir));
             tracing::info!(version = env!("CARGO_PKG_VERSION"), platform = %framenab_capture::Platform::detect(), "FrameNab starting");
 
+            // Loading the system fonts takes a moment; do it now instead of on the first text.
+            std::thread::spawn(framenab_render::text::warm_up);
+
             tray::create(app.handle())?;
             hotkeys::register_defaults(app.handle());
 
