@@ -46,6 +46,9 @@ pub fn run() {
             // Loading the system fonts takes a moment; do it now instead of on the first text.
             std::thread::spawn(framenab_render::text::warm_up);
 
+            if let Some(main) = app.get_webview_window(windows::MAIN) {
+                windows::fix_titlebar(&main);
+            }
             tray::create(app.handle())?;
             hotkeys::register_defaults(app.handle());
 

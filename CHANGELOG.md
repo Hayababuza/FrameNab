@@ -19,3 +19,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Start window, settings window (language), placeholders for overlay and recorder
 - German and English UI
 - CI for Linux, Windows and macOS
+
+### Fixed
+- Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
+- Wayland: a second screenshot in the same session hung forever

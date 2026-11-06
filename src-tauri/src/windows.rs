@@ -93,6 +93,30 @@ pub fn open_overlay(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Works around a tao bug on Wayland: tao wraps the GTK header bar in an `EventBox` whose input
+/// window sits *above* its child, so the minimize/maximize/close buttons ignore clicks until GTK
+/// re-allocates the header (e.g. after maximizing once). Putting the event box below its child
+/// lets the buttons receive clicks; dragging on empty header space still reaches the event box.
+#[cfg(target_os = "linux")]
+pub fn fix_titlebar(window: &WebviewWindow) {
+    use gtk::prelude::*;
+
+    let target = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        let Ok(gtk_window) = target.gtk_window() else { return };
+        let Some(titlebar) = gtk_window.titlebar() else { return };
+        if let Ok(event_box) = titlebar.downcast::<gtk::EventBox>()
+            && event_box.is_above_child()
+        {
+            event_box.set_above_child(false);
+            tracing::debug!(window = target.label(), "titlebar event box moved below the header bar");
+        }
+    });
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn fix_titlebar(_window: &WebviewWindow) {}
+
 /// Opens a window, or brings an already open one to the front.
 fn open<F>(app: &AppHandle, label: &str, configure: F) -> tauri::Result<()>
 where
@@ -105,6 +129,7 @@ where
         w.set_focus()?;
         return Ok(());
     }
-    configure(WebviewWindowBuilder::new(app, label, WebviewUrl::App(label.into()))).build()?;
+    let window = configure(WebviewWindowBuilder::new(app, label, WebviewUrl::App(label.into()))).build()?;
+    fix_titlebar(&window);
     Ok(())
 }
