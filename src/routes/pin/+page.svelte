@@ -1,28 +1,68 @@
 <script lang="ts">
   /**
-   * A pinned screenshot: borderless window showing the image. Drag to move; resize with the
-   * handles (shown on hover) or the mouse wheel. The window keeps the image's aspect ratio.
+   * A pinned screenshot: a borderless, transparent window showing the image with a frame and
+   * resize handles on it (like the overlay selection). Drag to move; resize with the handles or
+   * the mouse wheel. The window keeps the image's aspect ratio.
    */
   import { getCurrentWindow, LogicalSize, type Window } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
+  import { type Handle, handlePoint, handles } from "$lib/annotations/selection";
   import { t } from "$lib/i18n/index.svelte";
   import { copyPin, loadPin, pinInfo, runAction, type PinInfo } from "$lib/ipc";
 
+  type ResizeDirection = Parameters<Window["startResizeDragging"]>[0];
+
+  /** Transparent space around the image; keep in sync with `MARGIN` in `src-tauri/src/pin.rs`. */
+  const MARGIN = 7;
+  const MIN_IMAGE = 32;
+
+  const directions: Record<Handle, ResizeDirection> = {
+    nw: "NorthWest",
+    n: "North",
+    ne: "NorthEast",
+    e: "East",
+    se: "SouthEast",
+    s: "South",
+    sw: "SouthWest",
+    w: "West",
+  };
+  const cursors: Record<Handle, string> = {
+    nw: "nwse-resize",
+    se: "nwse-resize",
+    ne: "nesw-resize",
+    sw: "nesw-resize",
+    n: "ns-resize",
+    s: "ns-resize",
+    e: "ew-resize",
+    w: "ew-resize",
+  };
+
+  const win = getCurrentWindow();
   let canvas: HTMLCanvasElement;
   let info = $state<PinInfo | null>(null);
-  /** Width / height of the image. */
-  let aspect = 1;
-  let snapTimer: ReturnType<typeof setTimeout> | undefined;
   let flash = $state(false);
   let error = $state<string | null>(null);
-  const win = getCurrentWindow();
-  type ResizeDirection = Parameters<Window["startResizeDragging"]>[0];
+  /** Hides handles and controls while a new screenshot is taken, so they are not in the picture. */
+  let capturing = $state(false);
+
+  /** Width / height of the image. */
+  let aspect = $state(1);
+  let view = $state({ w: window.innerWidth, h: window.innerHeight });
+
+  /** Where the image is drawn: as large as fits inside the margins, centered. */
+  const rect = $derived.by(() => {
+    const aw = Math.max(1, view.w - 2 * MARGIN);
+    const ah = Math.max(1, view.h - 2 * MARGIN);
+    const w = Math.min(aw, ah * aspect);
+    const h = w / aspect;
+    return { x: (view.w - w) / 2, y: (view.h - h) / 2, w, h };
+  });
 
   onMount(async () => {
     info = await pinInfo();
     if (!info) return void win.close();
     aspect = info.width / info.height;
-    settled = { w: window.innerWidth, h: window.innerHeight };
+    settled = { ...view };
     try {
       const bitmap = await loadPin(info);
       canvas.width = info.width;
@@ -33,64 +73,54 @@
     }
   });
 
+  // ---- moving and resizing -------------------------------------------------------------------
+
   function onmousedown(e: MouseEvent) {
     if (e.button === 0 && e.detail === 1) win.startDragging();
   }
 
-  const MIN_SIZE = 40;
-
-  /** Resizes the window to `width`, with the height following the image's aspect ratio. */
-  function setWidth(width: number) {
-    const w = Math.max(MIN_SIZE, Math.round(width));
-    return win.setSize(new LogicalSize(w, Math.max(MIN_SIZE, Math.round(w / aspect))));
+  /** Resizes the window so the image is `width` wide. */
+  function setImageWidth(width: number) {
+    const w = Math.max(MIN_IMAGE, width);
+    return win.setSize(new LogicalSize(Math.round(w + 2 * MARGIN), Math.round(w / aspect + 2 * MARGIN)));
   }
 
   async function onwheel(e: WheelEvent) {
     e.preventDefault();
-    await setWidth(window.innerWidth * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+    await setImageWidth(rect.w * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
   }
 
-  // Edges and corners for resizing (useful without a mouse wheel).
-  const handles: { dir: ResizeDirection; cls: string }[] = [
-    { dir: "NorthWest", cls: "nw" },
-    { dir: "North", cls: "n" },
-    { dir: "NorthEast", cls: "ne" },
-    { dir: "East", cls: "e" },
-    { dir: "SouthEast", cls: "se" },
-    { dir: "South", cls: "s" },
-    { dir: "SouthWest", cls: "sw" },
-    { dir: "West", cls: "w" },
-  ];
-
-  function startResize(e: MouseEvent, dir: ResizeDirection) {
+  function startResize(e: MouseEvent, handle: Handle) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    win.startResizeDragging(dir);
+    win.startResizeDragging(directions[handle]);
   }
 
-  /** Window size the last time it matched the image's aspect ratio. */
+  /** Window size the last time the image filled it. */
   let settled = { w: 0, h: 0 };
+  let snapTimer: ReturnType<typeof setTimeout> | undefined;
 
-  /**
-   * After a free resize (handles) the window may no longer match the image; once the size has
-   * settled, snap it back: the dimension the user changed more wins, the other one follows.
-   */
   function onresize() {
+    view = { w: window.innerWidth, h: window.innerHeight };
+    // Where the window manager keeps the aspect ratio (Linux), there is nothing to fix. Elsewhere
+    // trim the window to the image once the size has settled: the dimension the user changed
+    // more is kept and the other follows.
+    if (!info || info.aspectLocked) return;
     clearTimeout(snapTimer);
     snapTimer = setTimeout(() => {
-      const { innerWidth: w, innerHeight: h } = window;
-      if (Math.abs(w - h * aspect) <= 2) {
-        settled = { w, h };
+      const aw = view.w - 2 * MARGIN;
+      const ah = view.h - 2 * MARGIN;
+      if (Math.abs(aw - ah * aspect) <= 2) {
+        settled = { ...view };
         return;
       }
-      if (Math.abs(w - settled.w) >= Math.abs(h - settled.h)) setWidth(w);
-      else setWidth(h * aspect);
-    }, 300);
+      if (Math.abs(view.w - settled.w) >= Math.abs(view.h - settled.h)) setImageWidth(aw);
+      else setImageWidth(ah * aspect);
+    }, 400);
   }
 
-  /** Hides the controls while a new screenshot is taken, so they are not in the picture. */
-  let capturing = $state(false);
+  // ---- actions -------------------------------------------------------------------------------
 
   /** New screenshot with this (and every other) pin still open on screen. */
   async function newScreenshot() {
@@ -101,16 +131,19 @@
   }
 
   async function onkeydown(e: KeyboardEvent) {
+    const ctrl = e.ctrlKey || e.metaKey;
     if (e.key === "Escape") win.close();
-    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+    else if (ctrl && e.key.toLowerCase() === "n") {
       e.preventDefault();
       newScreenshot();
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+    } else if (ctrl && e.key.toLowerCase() === "c") {
       await copyPin();
       flash = true;
       setTimeout(() => (flash = false), 250);
     }
   }
+
+  const rectStyle = $derived(`left: ${rect.x}px; top: ${rect.y}px; width: ${rect.w}px; height: ${rect.h}px;`);
 </script>
 
 <svelte:window {onkeydown} {onresize} />
@@ -119,6 +152,7 @@
   bind:this={canvas}
   title={t("pin.hint")}
   class:flash
+  style={rectStyle}
   {onmousedown}
   ondblclick={() => win.close()}
   {onwheel}
@@ -128,13 +162,19 @@
   }}
 ></canvas>
 
-<div class="handles" class:capturing>
-  {#each handles as h (h.dir)}
-    <span class="handle {h.cls}" role="presentation" onmousedown={(e) => startResize(e, h.dir)}></span>
+{#if !capturing}
+  {#each handles as h (h)}
+    {@const c = handlePoint(rect, h)}
+    <span
+      class="handle"
+      role="presentation"
+      style="left: {c.x}px; top: {c.y}px; cursor: {cursors[h]};"
+      onmousedown={(e) => startResize(e, h)}
+    ></span>
   {/each}
-</div>
+{/if}
 
-<div class="controls" class:capturing>
+<div class="controls" class:capturing style="top: {rect.y + 6}px; right: {view.w - rect.x - rect.w + 6}px;">
   <button title={t("pin.newScreenshot")} aria-label={t("pin.newScreenshot")} onclick={newScreenshot}>
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
@@ -150,75 +190,33 @@
 {/if}
 
 <style>
-  .handles {
+  :global(html),
+  :global(body) {
+    margin: 0;
+    overflow: hidden;
+    background: transparent;
+  }
+  canvas {
     position: fixed;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s;
+    display: block;
+    cursor: move;
+    outline: 1px solid #ff6369;
+    transition: filter 0.2s;
   }
-  :global(body:hover) .handles {
-    opacity: 1;
+  canvas.flash {
+    filter: brightness(1.4);
   }
-  .handles.capturing {
-    opacity: 0 !important;
-    transition: none;
-  }
+  /* Same look as the handles of the overlay selection: centered on the frame line. */
   .handle {
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    margin: -5px 0 0 -5px;
-    border: 1px solid #e5484d;
-    border-radius: 2px;
+    position: fixed;
+    width: 7px;
+    height: 7px;
+    margin: -4px 0 0 -4px;
+    border: 1px solid #ff6369;
     background: #fff;
-    box-shadow: 0 0 0 1px rgb(0 0 0 / 30%);
-    pointer-events: auto;
-  }
-  .nw {
-    left: 5px;
-    top: 5px;
-    cursor: nwse-resize;
-  }
-  .n {
-    left: 50%;
-    top: 5px;
-    cursor: ns-resize;
-  }
-  .ne {
-    left: calc(100% - 5px);
-    top: 5px;
-    cursor: nesw-resize;
-  }
-  .e {
-    left: calc(100% - 5px);
-    top: 50%;
-    cursor: ew-resize;
-  }
-  .se {
-    left: calc(100% - 5px);
-    top: calc(100% - 5px);
-    cursor: nwse-resize;
-  }
-  .s {
-    left: 50%;
-    top: calc(100% - 5px);
-    cursor: ns-resize;
-  }
-  .sw {
-    left: 5px;
-    top: calc(100% - 5px);
-    cursor: nesw-resize;
-  }
-  .w {
-    left: 5px;
-    top: 50%;
-    cursor: ew-resize;
   }
   .controls {
     position: fixed;
-    top: 6px;
-    right: 6px;
     display: flex;
     gap: 4px;
     opacity: 0;
@@ -268,24 +266,5 @@
     background: rgb(160 30 30 / 90%);
     color: #fff;
     font: 12px sans-serif;
-  }
-  :global(html),
-  :global(body) {
-    margin: 0;
-    overflow: hidden;
-    background: #000;
-  }
-  canvas {
-    display: block;
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-    cursor: move;
-    box-sizing: border-box;
-    border: 1px solid rgb(255 99 105 / 70%);
-    transition: filter 0.2s;
-  }
-  canvas.flash {
-    filter: brightness(1.4);
   }
 </style>

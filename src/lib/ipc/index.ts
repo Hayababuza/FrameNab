@@ -58,6 +58,8 @@ export interface PinInfo {
   id: number;
   width: number;
   height: number;
+  /** The window manager keeps the aspect ratio while resizing. */
+  aspectLocked: boolean;
 }
 
 export const pinInfo = () => invoke<PinInfo | null>("pin_info");
