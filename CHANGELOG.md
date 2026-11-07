@@ -5,6 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
+- Editor: "Save as…" (Ctrl+Shift+S) picks location and format (GIF, MP4, WebM); the filmstrip only renders visible frames, images are served off the main thread and thumbnails are cached (no more stutter while scrolling); drag over frames to select several (auto-scrolls at the edges); the mouse wheel scrolls the filmstrip
 - Editor for recordings (first version): opens automatically after a recording stops; preview with playback (Space, ←/→), a filmstrip of all frames with their durations, select frames (click, Shift/Ctrl+click, Ctrl+A) and delete them (Del) with undo/redo; "Save" writes the result into the save folder with the file name template, in the format chosen in the settings ("Format for recordings": GIF via gifski, MP4/WebM via FFmpeg), with progress and cancel
 - "Open project" on the start page and `framenab edit <folder>` open a recording in the editor
 - Wayland recorder: GNOME puts black behind transparent fullscreen windows, so before recording the recorder shows the frozen screen image with the frame and the control bar, and from "Record" on the window shrinks to a compact, draggable bar (countdown, timer, pause, stop, result) that leaves the live screen usable

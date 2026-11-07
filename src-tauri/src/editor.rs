@@ -31,6 +31,8 @@ struct Open {
 #[derive(Default)]
 pub struct EditorState {
     open: Mutex<Option<Open>>,
+    /// Filmstrip thumbnails (JPEG) by frame id; frames never change, so entries stay valid.
+    thumbs: Mutex<std::collections::HashMap<String, std::sync::Arc<Vec<u8>>>>,
     export: Mutex<Option<ExportControl>>,
     /// The main window was hidden for the capture; show it again when the editor closes.
     restore_main: std::sync::atomic::AtomicBool,
@@ -48,6 +50,7 @@ pub fn open(app: &AppHandle, root: PathBuf, restore_main: bool) -> Result<(), St
     let project = store.load_project().map_err(|e| e.to_string())?;
     let state = app.state::<EditorState>();
     *state.lock() = Some(Open { store, project, history: History::new(200) });
+    state.thumbs.lock().expect("thumb lock").clear();
     if restore_main {
         state.restore_main.store(true, Ordering::SeqCst);
     }
@@ -146,10 +149,12 @@ pub fn editor_undo(app: AppHandle, redo: bool) -> Result<EditorView, String> {
 /// Settings key for the format of saved recordings.
 const FORMAT_KEY: &str = "recordingFormat";
 
-/// Saves the project as an animation into the save folder (format from the settings).
-/// Progress goes to the editor window as `export-progress` events (`[done, total]`).
+/// Saves the project as an animation: into the save folder in the format from the settings, or
+/// with `ask` wherever and in whatever format the user picks in a "Save as" dialog. Resolves to
+/// the path, or `None` if the dialog was cancelled. Progress goes to the editor window as
+/// `export-progress` events (`[done, total]`).
 #[tauri::command]
-pub async fn editor_export(app: AppHandle) -> Result<String, String> {
+pub async fn editor_export(app: AppHandle, ask: bool) -> Result<Option<String>, String> {
     let (store, project) = {
         let state = app.state::<EditorState>();
         let guard = state.lock();
@@ -164,7 +169,15 @@ pub async fn editor_export(app: AppHandle) -> Result<String, String> {
         .unwrap_or(ExportFormat::Gif);
     let config = settings::save_settings(&app);
     let name = framenab_export::still::file_name_now(&config.template);
-    let path = framenab_export::still::unique_path(&config.directory, &name, format.extension());
+    let (path, format) = if ask {
+        let Some(path) = ask_path(&app, &config.directory, &name, format).await? else { return Ok(None) };
+        let picked = path.extension().and_then(|e| e.to_str()).and_then(format_for_extension);
+        let format = picked.unwrap_or(format);
+        let path = if picked.is_none() { path.with_extension(format.extension()) } else { path };
+        (path, format)
+    } else {
+        (framenab_export::still::unique_path(&config.directory, &name, format.extension()), format)
+    };
 
     let control = ExportControl::default();
     *app.state::<EditorState>().export.lock().expect("export lock") = Some(control.clone());
@@ -204,7 +217,51 @@ pub async fn editor_export(app: AppHandle) -> Result<String, String> {
     {
         tracing::warn!(%err, "could not show notification");
     }
-    Ok(shown)
+    Ok(Some(shown))
+}
+
+fn format_for_extension(ext: &str) -> Option<ExportFormat> {
+    match ext.to_ascii_lowercase().as_str() {
+        "gif" => Some(ExportFormat::Gif),
+        "mp4" | "m4v" => Some(ExportFormat::Mp4),
+        "webm" => Some(ExportFormat::Webm),
+        _ => None,
+    }
+}
+
+/// "Save as" dialog for recordings; offers the formats that work on this system.
+async fn ask_path(
+    app: &AppHandle,
+    directory: &std::path::Path,
+    name: &str,
+    format: ExportFormat,
+) -> Result<Option<PathBuf>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let _ = std::fs::create_dir_all(directory);
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_title(t("save.recordingTitle"))
+        .set_directory(directory)
+        .set_file_name(format!("{name}.{}", format.extension()));
+    // The default format first, so the dialog starts with it.
+    let mut formats = recording_formats();
+    formats.sort_by_key(|f| *f != format);
+    for f in formats {
+        let (label, extensions): (&str, &[&str]) = match f {
+            ExportFormat::Gif => ("GIF", &["gif"]),
+            ExportFormat::Mp4 => ("MP4 (H.264)", &["mp4"]),
+            _ => ("WebM (VP9)", &["webm"]),
+        };
+        dialog = dialog.add_filter(label, extensions);
+    }
+    if let Some(window) = app.get_webview_window(LABEL) {
+        dialog = dialog.set_parent(&window);
+    }
+    let picked =
+        tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file()).await.map_err(|e| e.to_string())?;
+    picked.map(|p| p.into_path().map_err(|e| e.to_string())).transpose()
 }
 
 #[tauri::command]
@@ -224,6 +281,11 @@ const PREVIEW_MAX: (u32, u32) = (1600, 900);
 /// Serves `thumb/<frame id>` and `preview/<frame id>` as JPEG for the editor.
 pub fn serve<R: tauri::Runtime>(app: &AppHandle<R>, path: &str) -> Option<Vec<u8>> {
     let (kind, id) = path.split_once('/')?;
+    if kind == "thumb"
+        && let Some(cached) = app.state::<EditorState>().thumbs.lock().expect("thumb lock").get(id)
+    {
+        return Some(cached.to_vec());
+    }
     let (store, frame) = {
         let state = app.state::<EditorState>();
         let guard = state.lock();
@@ -245,6 +307,13 @@ pub fn serve<R: tauri::Runtime>(app: &AppHandle<R>, path: &str) -> Option<Vec<u8
     let rgb = image::DynamicImage::ImageRgba8(scaled).into_rgb8();
     let mut out = Vec::new();
     JpegEncoder::new_with_quality(&mut out, if kind == "thumb" { 75 } else { 88 }).encode_image(&rgb).ok()?;
+    if kind == "thumb" {
+        app.state::<EditorState>()
+            .thumbs
+            .lock()
+            .expect("thumb lock")
+            .insert(id.to_owned(), std::sync::Arc::new(out.clone()));
+    }
     Some(out)
 }
 

@@ -100,5 +100,6 @@
   "editor.prev": "Vorheriger Frame (←)",
   "editor.next": "Nächster Frame (→)",
   "editor.frame": "Frame {i} / {n}",
-  "editor.hint": "Frame anklicken zum Auswählen · Umschalt/Strg+Klick für mehrere · Entf löscht · Strg+A wählt alle"
+  "editor.hint": "Frame anklicken zum Auswählen · Umschalt/Strg+Klick für mehrere · Entf löscht · Strg+A wählt alle",
+  "editor.saveAs": "Speichern unter… (Strg+Umschalt+S)"
 }

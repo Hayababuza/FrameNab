@@ -154,8 +154,9 @@ export interface EditorView {
 export const editorView = () => invoke<EditorView | null>("editor_view");
 export const editorDelete = (indices: number[]) => invoke<EditorView>("editor_delete", { indices });
 export const editorUndo = (redo = false) => invoke<EditorView>("editor_undo", { redo });
-/** Saves the recording into the save folder; resolves to the file path. */
-export const editorExport = () => invoke<string>("editor_export");
+/** Saves the recording (into the save folder, or with `ask` via a "Save as" dialog); resolves to the
+ * file path, or null if the dialog was cancelled. */
+export const editorExport = (ask = false) => invoke<string | null>("editor_export", { ask });
 export const editorCancelExport = () => invoke<void>("editor_cancel_export");
 /** Formats recordings can be saved in on this system (MP4/WebM need FFmpeg). */
 export const recordingFormats = () => invoke<ExportFormat[]>("recording_formats");

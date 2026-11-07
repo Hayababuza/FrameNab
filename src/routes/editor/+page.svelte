@@ -5,7 +5,7 @@
    */
   import { listen } from "@tauri-apps/api/event";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
     editorCancelExport,
@@ -33,6 +33,12 @@
   let saved = $state<string | null>(null);
   let error = $state<string | null>(null);
   let strip: HTMLDivElement | undefined = $state();
+  /** Filmstrip scroll position and visible width, for rendering only the visible frames. */
+  let scrollLeft = $state(0);
+  let stripWidth = $state(0);
+  /** Selecting by dragging over the filmstrip. */
+  let drag: { anchor: number; base: Set<number> | null; x: number } | null = null;
+  let autoScroll: ReturnType<typeof setInterval> | undefined;
 
   const frames = $derived(view?.project.frames ?? []);
   const duration = $derived(frames.reduce((sum, f) => sum + f.delayMs, 0));
@@ -95,12 +101,82 @@
     current = Math.max(0, Math.min(frames.length - 1, i));
   }
 
+  // ---- filmstrip (virtualized) -----------------------------------------------------------------
+
+  const GAP = 6;
+  const PAD = 12;
+  const stride = $derived(thumbWidth + GAP);
+  /** Only frames in (or near) the visible part are rendered. */
+  const visible = $derived.by(() => {
+    const first = Math.max(0, Math.floor((scrollLeft - PAD) / stride) - 4);
+    const last = Math.min(frames.length, Math.ceil((scrollLeft + stripWidth) / stride) + 4);
+    return frames.slice(first, last).map((frame, k) => ({ frame, i: first + k }));
+  });
+
+  /** Keeps the current frame in view. */
   $effect(() => {
     void current;
-    tick().then(() =>
-      strip?.querySelector(".frame.current")?.scrollIntoView({ block: "nearest", inline: "nearest" }),
-    );
+    if (!strip) return;
+    const left = PAD + current * stride;
+    if (left < strip.scrollLeft) strip.scrollLeft = left - PAD;
+    else if (left + thumbWidth > strip.scrollLeft + strip.clientWidth)
+      strip.scrollLeft = left + thumbWidth + PAD - strip.clientWidth;
   });
+
+  /** The mouse wheel scrolls the filmstrip sideways. */
+  function onwheel(e: WheelEvent) {
+    if (!strip || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    strip.scrollLeft += e.deltaY;
+  }
+
+  /** Index of the frame under screen x (clamped). */
+  function indexAt(x: number) {
+    if (!strip) return current;
+    const offset = x - strip.getBoundingClientRect().left + strip.scrollLeft - PAD;
+    return Math.max(0, Math.min(frames.length - 1, Math.floor(offset / stride)));
+  }
+
+  function onframedown(i: number, e: MouseEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    select(i, e);
+    drag = {
+      anchor: e.shiftKey ? anchor : i,
+      base: e.ctrlKey || e.metaKey ? new Set(selected) : null,
+      x: e.clientX,
+    };
+    // Near the edges, keep scrolling while dragging.
+    autoScroll = setInterval(() => {
+      if (!drag || !strip) return;
+      const r = strip.getBoundingClientRect();
+      const step = drag.x < r.left + 40 ? -16 : drag.x > r.right - 40 ? 16 : 0;
+      if (step) {
+        strip.scrollLeft += step;
+        extendDrag();
+      }
+    }, 16);
+  }
+
+  function extendDrag() {
+    if (!drag) return;
+    const i = indexAt(drag.x);
+    const [a, b] = [Math.min(drag.anchor, i), Math.max(drag.anchor, i)];
+    const range = Array.from({ length: b - a + 1 }, (_, k) => a + k);
+    selected = new Set(drag.base ? [...drag.base, ...range] : range);
+    current = i;
+  }
+
+  function ondragmove(e: MouseEvent) {
+    if (!drag) return;
+    drag.x = e.clientX;
+    extendDrag();
+  }
+
+  function enddrag() {
+    drag = null;
+    clearInterval(autoScroll);
+  }
 
   // ---- edits ---------------------------------------------------------------------------------
 
@@ -147,14 +223,15 @@
 
   // ---- saving --------------------------------------------------------------------------------
 
-  async function save() {
+  async function save(ask = false) {
     if (progress || !frames.length) return;
     stop();
     error = null;
     saved = null;
     progress = [0, frames.length];
     try {
-      saved = await editorExport();
+      const path = await editorExport(ask);
+      if (path) saved = path;
     } catch (e) {
       const message = String(e);
       if (!message.toLowerCase().includes("cancel")) error = message;
@@ -170,7 +247,7 @@
     const actions: [boolean, () => void][] = [
       [ctrl && key === "z", () => undo(e.shiftKey)],
       [ctrl && key === "y", () => undo(true)],
-      [ctrl && key === "s", () => save()],
+      [ctrl && key === "s", () => save(e.shiftKey)],
       [ctrl && key === "a", () => (selected = new Set(frames.map((_, i) => i)))],
       [e.key === "Delete" || e.key === "Backspace", () => deleteFrames()],
       [e.key === " ", () => play()],
@@ -195,7 +272,7 @@
   const startOf = (i: number) => frames.slice(0, i).reduce((sum, f) => sum + f.delayMs, 0);
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} onmousemove={ondragmove} onmouseup={enddrag} />
 
 {#if !view}
   <p class="empty">{t("editor.empty")}</p>
@@ -248,7 +325,17 @@
         </span>
         <button onclick={() => editorCancelExport()}>{t("editor.cancel")}</button>
       {:else}
-        <button class="primary" title={t("editor.save", { format: formatNames[format] })} onclick={save}>
+        <button title={t("editor.saveAs")} onclick={() => save(true)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M11 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10l3 3v3M8 4v5h7V4M13 21l.5-3 5-5 2.5 2.5-5 5z" />
+          </svg>
+          {t("editor.saveAs").replace(/ \(.*\)$/, "")}
+        </button>
+        <button
+          class="primary"
+          title={t("editor.save", { format: formatNames[format] })}
+          onclick={() => save()}
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 4v5h7V4M8 20v-6h8v6" />
           </svg>
@@ -310,25 +397,34 @@
       <span class="hint">{t("editor.hint")}</span>
     </div>
 
-    <div class="strip" bind:this={strip}>
-      {#each frames as frame, i (frame.id)}
-        <button
-          class="frame"
-          class:current={i === current}
-          class:selected={selected.has(i)}
-          onclick={(e) => select(i, e)}
-          style:width="{thumbWidth}px"
-        >
-          <img
-            src={thumbUrl(frame.id)}
-            alt=""
-            loading="lazy"
-            draggable="false"
-            style:height="{THUMB_HEIGHT}px"
-          />
-          <span class="meta"><b>{i + 1}</b>{frame.delayMs} ms</span>
-        </button>
-      {/each}
+    <div
+      class="strip"
+      bind:this={strip}
+      bind:clientWidth={stripWidth}
+      onscroll={() => strip && (scrollLeft = strip.scrollLeft)}
+      {onwheel}
+    >
+      <div class="track" style:width="{PAD * 2 + frames.length * stride - GAP}px">
+        {#each visible as { frame, i } (frame.id)}
+          <button
+            class="frame"
+            class:current={i === current}
+            class:selected={selected.has(i)}
+            onmousedown={(e) => onframedown(i, e)}
+            style:left="{PAD + i * stride}px"
+            style:width="{thumbWidth}px"
+          >
+            <img
+              src={thumbUrl(frame.id)}
+              alt=""
+              loading="lazy"
+              draggable="false"
+              style:height="{THUMB_HEIGHT}px"
+            />
+            <span class="meta"><b>{i + 1}</b>{frame.delayMs} ms</span>
+          </button>
+        {/each}
+      </div>
     </div>
   </div>
 {/if}
@@ -469,15 +565,19 @@
     box-shadow: var(--shadow);
   }
   .strip {
-    display: flex;
-    gap: 6px;
-    padding: 10px 12px 12px;
     overflow-x: auto;
+    overflow-y: hidden;
     background: var(--surface);
     border-top: 1px solid var(--border);
   }
+  .track {
+    position: relative;
+    height: 128px;
+  }
   .frame {
-    flex: none;
+    position: absolute;
+    top: 10px;
+    user-select: none;
     flex-direction: column;
     align-items: stretch;
     gap: 2px;

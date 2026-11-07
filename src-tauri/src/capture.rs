@@ -15,7 +15,7 @@ use framenab_export::still::{self, StillFormat};
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use tauri::http::{Request, Response, StatusCode};
-use tauri::{AppHandle, Manager, Runtime, UriSchemeContext};
+use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt;
 
@@ -390,7 +390,10 @@ pub fn cancel_capture(app: AppHandle) {
 
 /// Serves raw RGBA pixels: `framenab://localhost/<id>` for the current capture and
 /// `framenab://localhost/pin/<id>` for pinned screenshots.
-pub fn protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
+///
+/// Runs off the main thread (registered as an asynchronous protocol), so decoding and encoding
+/// images never blocks the UI.
+pub fn protocol<R: Runtime>(app: &AppHandle<R>, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let respond_as = |status: StatusCode, content_type: &str, body: Vec<u8>| {
         Response::builder()
             .status(status)
@@ -402,7 +405,6 @@ pub fn protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u
     // `convertFileSrc` in the frontend percent-encodes the path, so `pin/3` arrives as `pin%2F3`.
     let decoded = request.uri().path().replace("%2F", "/").replace("%2f", "/");
     let path = decoded.trim_matches('/');
-    let app = ctx.app_handle();
     let respond = |status: StatusCode, body: Vec<u8>| respond_as(status, "application/octet-stream", body);
     if path.starts_with("thumb/") || path.starts_with("preview/") {
         return match crate::editor::serve(app, path) {

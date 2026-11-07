@@ -100,5 +100,6 @@
   "editor.prev": "Previous frame (←)",
   "editor.next": "Next frame (→)",
   "editor.frame": "Frame {i} / {n}",
-  "editor.hint": "Click a frame to select it · Shift/Ctrl+click for several · Del deletes · Ctrl+A selects all"
+  "editor.hint": "Click a frame to select it · Shift/Ctrl+click for several · Del deletes · Ctrl+A selects all",
+  "editor.saveAs": "Save as… (Ctrl+Shift+S)"
 }
