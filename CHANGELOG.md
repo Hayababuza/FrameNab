@@ -6,6 +6,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Added
 - Wayland sessions: FrameNab's windows run on XWayland by default, so the recording frame, its control bar and pins stay on top (also when clicking into other apps) and are placed exactly; capture still uses the portal; Settings → System switches back to native Wayland (after a restart)
+- Editor: the preview fills the available space (small recordings are enlarged), on a plain background instead of a checkerboard
 - Editor: "New recording" button; the editor hides during the capture and comes back afterwards (also when the selection is cancelled)
 - Wayland recorder shows the frame around the area while recording: the window switches from fullscreen to maximized (which can be transparent on GNOME), finds its position on screen by locating a color marker in a portal screenshot, and draws the frame and the control bar next to the area; if the marker is not found it falls back to the compact bar
 - Editor: "Save as…" (Ctrl+Shift+S) picks location and format (GIF, MP4, WebM); the filmstrip only renders visible frames, images are served off the main thread and thumbnails are cached (no more stutter while scrolling); drag over frames to select several (auto-scrolls at the edges); the mouse wheel scrolls the filmstrip

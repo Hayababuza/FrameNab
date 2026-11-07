@@ -570,14 +570,14 @@
     place-items: center;
     min-height: 0;
     overflow: hidden;
-    padding: 16px;
-    background: repeating-conic-gradient(var(--surface-hover) 0 25%, var(--bg) 0 50%) 0 0 / 20px 20px;
+    padding: 8px;
+    background: var(--bg);
   }
+  /* Fill the available space (also enlarging small recordings), keeping the aspect ratio. */
   .preview img {
-    max-width: 100%;
-    max-height: 100%;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
-    box-shadow: var(--shadow);
   }
   .strip {
     overflow-x: auto;
