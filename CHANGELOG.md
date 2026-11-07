@@ -4,6 +4,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-07
+
+First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 and Wayland).
+
 ### Added
 - Corner resize handles on pin windows, always visible and centered on the image frame like on the overlay selection; the aspect ratio is kept while resizing (GTK geometry hints on Linux, snapping elsewhere)
 - Close button (✕) and New screenshot button (Ctrl+N) in pin windows, shown on hover; open pins stay on screen and appear in the new screenshot, so several pins can be combined into one picture
@@ -28,3 +32,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Pinning no longer brings back the main window on top of the new pin; the pin gets focus. The main window comes back once the last pin is closed (if it was hidden for the screenshot)
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
+
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Hayababuza/FrameNab/releases/tag/v0.1.0
