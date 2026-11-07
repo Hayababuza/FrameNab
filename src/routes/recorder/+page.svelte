@@ -225,7 +225,8 @@
     phase = "saving";
     try {
       summary = await recorderStop();
-      phase = "done";
+      // The recording continues in the editor (opened by the backend).
+      await win.close();
     } catch (e) {
       error = String(e);
       phase = "setup";

@@ -5,6 +5,7 @@ mod capture;
 mod cli;
 mod clipboard;
 mod commands;
+mod editor;
 mod hotkeys;
 mod i18n;
 mod logging;
@@ -25,9 +26,12 @@ pub fn run() {
     tauri::Builder::default()
         // Must be registered as the first plugin: a second launch (e.g. `framenab gui` from a
         // system shortcut) forwards its arguments to the running instance.
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            let action = cli::parse(argv.into_iter().skip(1)).action.unwrap_or(Action::Editor);
-            windows::dispatch(app, action);
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            let args = cli::parse(argv.into_iter().skip(1));
+            match args.project {
+                Some(path) => open_project(app, std::path::Path::new(&cwd).join(path)),
+                None => windows::dispatch(app, args.action.unwrap_or(Action::Editor)),
+            }
         }))
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -38,6 +42,7 @@ pub fn run() {
         .manage(capture::CaptureState::default())
         .manage(pin::PinState::default())
         .manage(recorder::RecorderState::default())
+        .manage(editor::EditorState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::run_action,
@@ -54,6 +59,14 @@ pub fn run() {
             recorder::recorder_status,
             recorder::recorder_stop,
             recorder::set_input_region,
+            editor::editor_view,
+            editor::editor_delete,
+            editor::editor_undo,
+            editor::editor_export,
+            editor::editor_cancel_export,
+            editor::recording_formats,
+            editor::open_project,
+            editor::recordings_directory,
             pin::pin_info,
             pin::copy_pin,
             settings::default_save_directory,
@@ -76,7 +89,9 @@ pub fn run() {
             if initial.hidden {
                 windows::hide_main(app.handle());
             }
-            if let Some(action) = initial.action {
+            if let Some(path) = initial.project.clone() {
+                open_project(app.handle(), path);
+            } else if let Some(action) = initial.action {
                 windows::dispatch(app.handle(), action);
             }
             Ok(())
@@ -89,6 +104,7 @@ pub fn run() {
             }
             WindowEvent::Destroyed if window.label() == windows::OVERLAY => capture::finish(window.app_handle()),
             WindowEvent::Destroyed if window.label() == windows::RECORDER => recorder::cleanup(window.app_handle()),
+            WindowEvent::Destroyed if window.label() == editor::LABEL => editor::cleanup(window.app_handle()),
             WindowEvent::Destroyed if window.label().starts_with(pin::PREFIX) => {
                 pin::forget(window.app_handle(), window.label());
             }
@@ -96,4 +112,11 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("failed to start FrameNab");
+}
+
+/// Opens a recording folder in the editor, reporting failures in the log.
+fn open_project(app: &tauri::AppHandle, path: std::path::PathBuf) {
+    if let Err(err) = editor::open(app, path, false) {
+        tracing::error!(%err, "could not open the project");
+    }
 }

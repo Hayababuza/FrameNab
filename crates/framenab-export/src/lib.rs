@@ -1,8 +1,9 @@
 //! Project export: GIF (gifski), APNG, WebP, PNG sequence and, if FFmpeg is installed,
 //! MP4/WebM. FFmpeg is not bundled.
 //!
-//! Phase 0: formats, options and FFmpeg detection. The encoders follow in phase 4.
+//! Still images: [`still`]; recordings: [`animation`] (GIF, MP4, WebM so far).
 
+pub mod animation;
 pub mod still;
 
 use std::path::PathBuf;

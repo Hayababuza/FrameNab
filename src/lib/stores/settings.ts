@@ -3,6 +3,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import type { Locale } from "$lib/i18n/translate";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
+export type RecordingFormat = "gif" | "mp4" | "webm";
 
 export interface Settings {
   /** `null` = system language */
@@ -16,6 +17,8 @@ export interface Settings {
   /** Seconds before the recording starts. */
   recorderCountdown: number;
   recorderCursor: boolean;
+  /** Format for saving recordings from the editor. */
+  recordingFormat: RecordingFormat;
 }
 
 export const DEFAULT_TEMPLATE = "FrameNab_{yyyy-MM-dd_HH-mm-ss}";
@@ -28,6 +31,7 @@ const defaults: Settings = {
   recorderFps: 15,
   recorderCountdown: 3,
   recorderCursor: true,
+  recordingFormat: "gif",
 };
 
 let store: Promise<Store> | undefined;

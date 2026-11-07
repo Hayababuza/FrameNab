@@ -1,11 +1,14 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
+  import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
     appInfo,
     defaultSaveDirectory,
+    openProject,
     platformLabel,
+    recordingsDirectory,
     runAction,
     type Action,
     type AppInfo,
@@ -17,6 +20,12 @@
 
   async function loadSaveDirectory() {
     saveDirectory = (await getSetting("saveDirectory")) ?? (await defaultSaveDirectory());
+  }
+
+  /** "Open project": choose a recording folder (*.framenab) and open it in the editor. */
+  async function pickProject() {
+    const picked = await open({ directory: true, defaultPath: await recordingsDirectory() });
+    if (typeof picked === "string") await openProject(picked);
   }
 
   onMount(() => {
@@ -50,7 +59,6 @@
       icon: "M4 6h16M4 12h16M4 18h10",
       title: "home.open",
       hint: "home.openHint",
-      phase: 3,
     },
   ];
 </script>
@@ -69,7 +77,11 @@
 
   <section class="cards">
     {#each cards as card (card.action)}
-      <button class="card" disabled={card.phase !== undefined} onclick={() => runAction(card.action)}>
+      <button
+        class="card"
+        disabled={card.phase !== undefined}
+        onclick={() => (card.action === "editor" ? pickProject() : runAction(card.action))}
+      >
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
           <path d={card.icon} fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
         </svg>

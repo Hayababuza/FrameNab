@@ -19,6 +19,13 @@ pub fn t(key: &str) -> &'static str {
                 "Screenshot saved:"
             }
         }
+        "save.recordingDone" => {
+            if de {
+                "Aufnahme gespeichert:"
+            } else {
+                "Recording saved:"
+            }
+        }
         "save.title" => {
             if de {
                 "Screenshot speichern"

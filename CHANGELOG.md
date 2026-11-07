@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
+- Editor for recordings (first version): opens automatically after a recording stops; preview with playback (Space, ←/→), a filmstrip of all frames with their durations, select frames (click, Shift/Ctrl+click, Ctrl+A) and delete them (Del) with undo/redo; "Save" writes the result into the save folder with the file name template, in the format chosen in the settings ("Format for recordings": GIF via gifski, MP4/WebM via FFmpeg), with progress and cancel
+- "Open project" on the start page and `framenab edit <folder>` open a recording in the editor
 - Wayland recorder: GNOME puts black behind transparent fullscreen windows, so before recording the recorder shows the frozen screen image with the frame and the control bar, and from "Record" on the window shrinks to a compact, draggable bar (countdown, timer, pause, stop, result) that leaves the live screen usable
 - `framenab record-screen` opens the recorder for the whole screen right away
 - Recorder (stage 2b): "Record" opens the selection overlay in record mode (drag an area, click a window on Windows/macOS/X11, "Whole screen", or "App window…" via the system dialog on Wayland); then a borderless, transparent recorder window shows a frame around the area and a control bar (FPS, countdown, mouse cursor, record, pause/resume, stop, timer); everything except the control bar is click-through; the Wayland screen-sharing choice is remembered in the settings; recordings are saved as project folders under the app data folder, with "Open folder" afterwards; "Record" from the tray or a shortcut stops a running recording

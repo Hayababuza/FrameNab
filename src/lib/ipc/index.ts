@@ -1,6 +1,7 @@
 /** Type-safe wrappers around the Rust commands (`src-tauri/src/commands`). */
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Annotation } from "$lib/bindings/Annotation";
+import type { Project } from "$lib/bindings/Project";
 
 export type Platform = "windows" | "macOs" | "linuxX11" | "linuxWayland" | "unknown";
 export type ExportFormat = "gif" | "apng" | "webp" | "pngSequence" | "mp4" | "webm";
@@ -140,3 +141,26 @@ export const recorderStop = () => invoke<RecordingSummary>("recorder_stop");
 /** Only these rects (CSS pixels) of the calling window take mouse input; the rest clicks through. */
 export const setInputRegion = (rects: { x: number; y: number; w: number; h: number }[]) =>
   invoke<void>("set_input_region", { rects });
+
+// ---- editor --------------------------------------------------------------------------------------
+
+export interface EditorView {
+  project: Project;
+  path: string;
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+export const editorView = () => invoke<EditorView | null>("editor_view");
+export const editorDelete = (indices: number[]) => invoke<EditorView>("editor_delete", { indices });
+export const editorUndo = (redo = false) => invoke<EditorView>("editor_undo", { redo });
+/** Saves the recording into the save folder; resolves to the file path. */
+export const editorExport = () => invoke<string>("editor_export");
+export const editorCancelExport = () => invoke<void>("editor_cancel_export");
+/** Formats recordings can be saved in on this system (MP4/WebM need FFmpeg). */
+export const recordingFormats = () => invoke<ExportFormat[]>("recording_formats");
+
+export const thumbUrl = (frameId: string) => convertFileSrc(`thumb/${frameId}`, "framenab");
+export const previewUrl = (frameId: string) => convertFileSrc(`preview/${frameId}`, "framenab");
+export const openProject = (path: string) => invoke<void>("open_project", { path });
+export const recordingsDirectory = () => invoke<string>("recordings_directory");

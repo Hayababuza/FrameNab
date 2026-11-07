@@ -391,10 +391,10 @@ pub fn cancel_capture(app: AppHandle) {
 /// Serves raw RGBA pixels: `framenab://localhost/<id>` for the current capture and
 /// `framenab://localhost/pin/<id>` for pinned screenshots.
 pub fn protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
-    let respond = |status: StatusCode, body: Vec<u8>| {
+    let respond_as = |status: StatusCode, content_type: &str, body: Vec<u8>| {
         Response::builder()
             .status(status)
-            .header("Content-Type", "application/octet-stream")
+            .header("Content-Type", content_type)
             .header("Access-Control-Allow-Origin", "*")
             .body(Cow::Owned(body))
             .expect("valid response")
@@ -403,6 +403,13 @@ pub fn protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u
     let decoded = request.uri().path().replace("%2F", "/").replace("%2f", "/");
     let path = decoded.trim_matches('/');
     let app = ctx.app_handle();
+    let respond = |status: StatusCode, body: Vec<u8>| respond_as(status, "application/octet-stream", body);
+    if path.starts_with("thumb/") || path.starts_with("preview/") {
+        return match crate::editor::serve(app, path) {
+            Some(jpeg) => respond_as(StatusCode::OK, "image/jpeg", jpeg),
+            None => respond(StatusCode::NOT_FOUND, Vec::new()),
+        };
+    }
     if let Some(pin_id) = path.strip_prefix("pin/").and_then(|id| id.parse().ok()) {
         return match app.state::<pin::PinState>().image(pin_id) {
             Some(image) => respond(StatusCode::OK, image.as_raw().clone()),

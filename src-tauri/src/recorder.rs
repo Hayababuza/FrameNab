@@ -246,6 +246,9 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
     .map_err(|e| e.to_string())?
     .map_err(|e| e.to_string())?;
     tracing::info!(path = %dir.display(), frames = stats.frames, dropped = stats.dropped, "recording finished");
+    // Continue in the editor; it takes over bringing the main window back.
+    let restore_main = app.state::<RecorderState>().restore_main.swap(false, Ordering::SeqCst);
+    crate::editor::open(&app, dir.clone(), restore_main)?;
     Ok(Summary {
         path: dir.display().to_string(),
         frames: project.frames.len(),
@@ -257,7 +260,7 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
 }
 
 /// `<app data>/recordings`
-fn recordings_dir(app: &AppHandle) -> PathBuf {
+pub fn recordings_dir(app: &AppHandle) -> PathBuf {
     app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("framenab")).join("recordings")
 }
 

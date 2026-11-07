@@ -3,8 +3,14 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { i18n, locales, t, type Locale } from "$lib/i18n/index.svelte";
-  import { defaultSaveDirectory } from "$lib/ipc";
-  import { DEFAULT_TEMPLATE, getSetting, type ImageFormat, setSetting } from "$lib/stores/settings";
+  import { defaultSaveDirectory, recordingFormats, type ExportFormat } from "$lib/ipc";
+  import {
+    DEFAULT_TEMPLATE,
+    getSetting,
+    type ImageFormat,
+    type RecordingFormat,
+    setSetting,
+  } from "$lib/stores/settings";
   import { expandTemplate } from "$lib/util/filename";
 
   const names: Record<Locale, string> = { de: "Deutsch", en: "English" };
@@ -19,6 +25,13 @@
   let defaultDirectory = $state("");
   let template = $state(DEFAULT_TEMPLATE);
   let imageFormat = $state<ImageFormat>("png");
+  let recordingFormat = $state<RecordingFormat>("gif");
+  let available = $state<ExportFormat[]>(["gif"]);
+  const recordingLabels: Record<RecordingFormat, string> = {
+    gif: "GIF",
+    mp4: "MP4 (H.264)",
+    webm: "WebM (VP9)",
+  };
 
   const example = $derived(
     `${expandTemplate(template, new Date())}.${formats.find((f) => f.value === imageFormat)?.ext}`,
@@ -30,6 +43,8 @@
     template = await getSetting("filenameTemplate");
     imageFormat = await getSetting("imageFormat");
     defaultDirectory = await defaultSaveDirectory();
+    recordingFormat = await getSetting("recordingFormat");
+    available = await recordingFormats();
   });
 
   async function changeLocale() {
@@ -100,6 +115,16 @@
       <select bind:value={imageFormat} onchange={() => setSetting("imageFormat", imageFormat)}>
         {#each formats as f (f.value)}
           <option value={f.value}>{f.label}</option>
+        {/each}
+      </select>
+    </label>
+    <label class="row">
+      <span>{t("settings.recordingFormat")}</span>
+      <select bind:value={recordingFormat} onchange={() => setSetting("recordingFormat", recordingFormat)}>
+        {#each Object.entries(recordingLabels) as [value, label] (value)}
+          <option {value} disabled={!available.includes(value as ExportFormat)}>
+            {label}{available.includes(value as ExportFormat) ? "" : ` – ${t("settings.needsFfmpeg")}`}
+          </option>
         {/each}
       </select>
     </label>

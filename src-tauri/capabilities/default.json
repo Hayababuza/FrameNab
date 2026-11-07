@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions for all FrameNab windows",
-  "windows": ["main", "overlay", "recorder", "settings", "pin-*"],
+  "windows": ["main", "overlay", "recorder", "settings", "editor", "pin-*"],
   "permissions": [
     "core:default",
     "core:window:allow-close",
