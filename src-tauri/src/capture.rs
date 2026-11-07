@@ -19,11 +19,21 @@ use tauri::{AppHandle, Manager, Runtime, UriSchemeContext};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt;
 
-use crate::{clipboard, i18n::t, pin, settings, windows};
+use crate::{clipboard, i18n::t, pin, recorder, settings, windows};
+
+/// What the overlay is for: a screenshot, or choosing the area of a recording.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CaptureMode {
+    #[default]
+    Screenshot,
+    Record,
+}
 
 #[derive(Default)]
 pub struct CaptureState {
     current: Mutex<Option<Capture>>,
+    mode: Mutex<CaptureMode>,
     next_id: AtomicU64,
     /// A capture is in progress or the overlay is open.
     busy: AtomicBool,
@@ -56,6 +66,9 @@ pub struct CaptureInfo {
     width: u32,
     height: u32,
     windows: Vec<WindowRect>,
+    mode: CaptureMode,
+    /// Whether the platform can record a single window chosen in a system dialog (Wayland).
+    window_picker: bool,
 }
 
 /// Selection in image pixels.
@@ -67,14 +80,16 @@ pub struct Selection {
     height: u32,
 }
 
-/// Starts a screenshot. `hide_main` hides the main window first so it is not in the picture.
-pub fn start(app: &AppHandle, hide_main: bool) {
+/// Starts a screenshot (or the area selection of a recording). `hide_main` hides the main
+/// window first so it is not in the picture.
+pub fn start(app: &AppHandle, hide_main: bool, mode: CaptureMode) {
     let state = app.state::<CaptureState>();
     if state.busy.swap(true, Ordering::SeqCst) {
         tracing::debug!("screenshot already in progress");
         windows::focus_overlay(app);
         return;
     }
+    *state.mode.lock().expect("mode lock") = mode;
 
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -198,7 +213,46 @@ pub fn capture_info(app: AppHandle) -> Option<CaptureInfo> {
         width: capture.image.width(),
         height: capture.image.height(),
         windows: capture.windows.clone(),
+        mode: *state.mode.lock().expect("mode lock"),
+        window_picker: framenab_capture::Platform::detect().requires_portal(),
     })
+}
+
+/// Record mode: records `selection` (image pixels), or the whole screen if `None`.
+#[tauri::command]
+pub fn record_selection(app: AppHandle, selection: Option<Selection>) -> Result<(), String> {
+    let (width, height) = {
+        let state = app.state::<CaptureState>();
+        let guard = state.current.lock().expect("capture lock");
+        let capture = guard.as_ref().ok_or("no active screenshot")?;
+        (capture.image.width(), capture.image.height())
+    };
+    let region = match selection {
+        Some(s) => recorder::Region { x: s.x as i32, y: s.y as i32, w: s.width.max(2), h: s.height.max(2) },
+        None => recorder::Region { x: 0, y: 0, w: width, h: height },
+    };
+    open_recorder(&app, Some(region), width, height);
+    Ok(())
+}
+
+/// Record mode: records a single window chosen in the system dialog (Wayland).
+#[tauri::command]
+pub fn record_window(app: AppHandle) -> Result<(), String> {
+    let (width, height) = {
+        let state = app.state::<CaptureState>();
+        let guard = state.current.lock().expect("capture lock");
+        let capture = guard.as_ref().ok_or("no active screenshot")?;
+        (capture.image.width(), capture.image.height())
+    };
+    open_recorder(&app, None, width, height);
+    Ok(())
+}
+
+fn open_recorder(app: &AppHandle, region: Option<recorder::Region>, width: u32, height: u32) {
+    // The recorder takes over bringing the main window back.
+    let restore_main = app.state::<CaptureState>().restore_main.swap(false, Ordering::SeqCst);
+    windows::close_overlay(app);
+    recorder::open(app, region, width, height, restore_main);
 }
 
 /// Crops the current capture to `selection` and renders the annotations into it.

@@ -6,17 +6,18 @@ use crate::cli::Action;
 
 pub const MAIN: &str = "main";
 pub const OVERLAY: &str = "overlay";
-const RECORDER: &str = "recorder";
+pub const RECORDER: &str = "recorder";
 const SETTINGS: &str = "settings";
 
 pub fn dispatch(app: &AppHandle, action: Action) {
     let result = match action {
         Action::Screenshot => {
-            crate::capture::start(app, false);
+            crate::capture::start(app, false, crate::capture::CaptureMode::Screenshot);
             Ok(())
         }
         Action::Record => {
-            open(app, RECORDER, |b| b.title("FrameNab – Recording").inner_size(720.0, 480.0).always_on_top(true))
+            record(app, false);
+            Ok(())
         }
         Action::Editor => {
             show_main(app);
@@ -26,6 +27,18 @@ pub fn dispatch(app: &AppHandle, action: Action) {
     };
     if let Err(err) = result {
         tracing::error!(?action, %err, "failed to open window");
+    }
+}
+
+/// "Record" from the tray, a shortcut or the CLI: stops a running recording, brings an open
+/// recorder to the front, or starts choosing the area of a new one.
+pub fn record(app: &AppHandle, hide_main: bool) {
+    if crate::recorder::is_recording(app) {
+        crate::recorder::request_stop(app);
+    } else if let Some(w) = app.get_webview_window(RECORDER) {
+        let _ = w.set_focus();
+    } else {
+        crate::capture::start(app, hide_main, crate::capture::CaptureMode::Record);
     }
 }
 
@@ -86,6 +99,31 @@ pub fn open_overlay(app: &AppHandle) -> tauri::Result<()> {
         .always_on_top(true)
         // Keep a taskbar/dock entry: the main window may be hidden while the overlay is open,
         // and FrameNab should not look as if it had quit.
+        .resizable(false)
+        .fullscreen(true)
+        .visible(false)
+        .build()?;
+    Ok(())
+}
+
+/// Recorder: borderless, transparent and fullscreen; the page draws the frame and controls and
+/// makes everything else click-through. Starts hidden until the page has laid itself out.
+pub fn open_recorder(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(w) = app.get_webview_window(RECORDER) {
+        let _ = w.close();
+    }
+    let mut builder = WebviewWindowBuilder::new(app, RECORDER, WebviewUrl::App(RECORDER.into()));
+    let monitor = app.primary_monitor().ok().flatten().or_else(|| app.available_monitors().ok()?.into_iter().next());
+    if let Some(monitor) = monitor {
+        let size = monitor.size().to_logical::<f64>(monitor.scale_factor());
+        let pos = monitor.position().to_logical::<f64>(monitor.scale_factor());
+        builder = builder.inner_size(size.width, size.height).position(pos.x, pos.y);
+    }
+    builder
+        .title("FrameNab – Recording")
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
         .resizable(false)
         .fullscreen(true)
         .visible(false)

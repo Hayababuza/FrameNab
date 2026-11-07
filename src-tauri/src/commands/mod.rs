@@ -33,9 +33,12 @@ pub fn app_info() -> AppInfo {
 #[tauri::command]
 pub fn run_action(app: AppHandle, window: WebviewWindow, action: Action) {
     // Triggered from the main window: hide it so it is not part of the screenshot.
-    if action == Action::Screenshot && window.label() == windows::MAIN {
-        crate::capture::start(&app, true);
-        return;
+    if window.label() == windows::MAIN {
+        match action {
+            Action::Screenshot => return crate::capture::start(&app, true, crate::capture::CaptureMode::Screenshot),
+            Action::Record => return windows::record(&app, true),
+            _ => {}
+        }
     }
     windows::dispatch(&app, action);
 }

@@ -43,6 +43,8 @@
     defaultSaveDirectory,
     loadCapture,
     pinSelection,
+    recordSelection,
+    recordWindow,
     saveSelection,
     type CaptureInfo,
   } from "$lib/ipc";
@@ -416,6 +418,33 @@
 
   const copy = () => finish("copy");
 
+  // ---- record mode (choosing the area of a recording) -------------------------------------------
+
+  const recordMode = $derived(info?.mode === "record");
+
+  /** Records the selection, or the whole screen with `whole` (or when nothing is selected). */
+  async function startRecording(whole = false) {
+    if (!info || busy) return;
+    busy = true;
+    try {
+      await recordSelection(whole || !selection ? null : toImagePixels(selection, scale, info));
+    } catch (e) {
+      error = String(e);
+      busy = false;
+    }
+  }
+
+  async function pickWindow() {
+    if (busy) return;
+    busy = true;
+    try {
+      await recordWindow();
+    } catch (e) {
+      error = String(e);
+      busy = false;
+    }
+  }
+
   function onkeydown(e: KeyboardEvent) {
     const ctrl = e.ctrlKey || e.metaKey;
     if (textEdit) {
@@ -432,6 +461,11 @@
     if (e.key === "Escape") {
       e.preventDefault();
       if (!interaction) cancelCapture();
+    } else if (recordMode) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        startRecording();
+      }
     } else if (ctrl && e.key.toLowerCase() === "s") {
       e.preventDefault();
       finish(e.shiftKey ? "saveAs" : "save");
@@ -561,7 +595,35 @@
 
 {#if selection && imageSelection}
   <div class="size" style={labelStyle}>{imageSelection.width} × {imageSelection.height}</div>
-  {#if !interaction}
+  {#if !interaction && recordMode}
+    <div
+      class="toolbar"
+      style={toolbarStyle}
+      bind:clientWidth={toolbarSize.w}
+      bind:clientHeight={toolbarSize.h}
+    >
+      <div class="row">
+        <button
+          class="primary"
+          title={t("record.regionTitle")}
+          onclick={() => startRecording()}
+          disabled={busy}
+        >
+          <span class="rec-dot"></span>
+          {t("record.region")}
+          <kbd>Enter</kbd>
+        </button>
+        <button
+          class="icon"
+          title={t("overlay.cancelTitle")}
+          aria-label={t("overlay.cancel")}
+          onclick={() => cancelCapture()}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+    </div>
+  {:else if !interaction}
     <div
       class="toolbar"
       style={toolbarStyle}
@@ -703,6 +765,29 @@
       </div>
     </div>
   {/if}
+{:else if !error && recordMode && !interaction}
+  <div class="record-panel">
+    <span>{t(info?.windows.length ? "record.hintWithWindows" : "record.hint")}</span>
+    <div class="row">
+      <button class="primary" onclick={() => startRecording(true)} disabled={busy}>
+        <span class="rec-dot"></span>
+        {t("record.fullscreen")}
+      </button>
+      {#if info?.windowPicker}
+        <button class="secondary" title={t("record.windowTitle")} onclick={pickWindow} disabled={busy}>
+          {t("record.window")}
+        </button>
+      {/if}
+      <button
+        class="icon"
+        title={t("overlay.cancelTitle")}
+        aria-label={t("overlay.cancel")}
+        onclick={() => cancelCapture()}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
+    </div>
+  </div>
 {:else if !error}
   <div class="hint">{t("overlay.hint")}</div>
 {/if}
@@ -732,6 +817,34 @@
     background: rgb(20 20 24 / 85%);
     border-radius: 6px;
     font-size: 13px;
+  }
+  .record-panel {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgb(20 20 24 / 94%);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+    color: #fff;
+    font-size: 13px;
+  }
+  button.secondary {
+    height: 32px;
+    padding: 0 10px;
+    background: rgb(255 255 255 / 12%);
+  }
+  .rec-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 2px rgb(255 255 255 / 35%);
   }
   .hint {
     top: 24px;

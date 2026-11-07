@@ -9,6 +9,7 @@ mod hotkeys;
 mod i18n;
 mod logging;
 mod pin;
+mod recorder;
 mod settings;
 mod tray;
 mod windows;
@@ -31,10 +32,12 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(hotkeys::plugin())
         .register_uri_scheme_protocol("framenab", capture::protocol)
         .manage(capture::CaptureState::default())
         .manage(pin::PinState::default())
+        .manage(recorder::RecorderState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::run_action,
@@ -42,6 +45,15 @@ pub fn run() {
             capture::copy_selection,
             capture::save_selection,
             capture::pin_selection,
+            capture::record_selection,
+            capture::record_window,
+            recorder::recorder_info,
+            recorder::recorder_prepare,
+            recorder::recorder_start,
+            recorder::recorder_pause,
+            recorder::recorder_status,
+            recorder::recorder_stop,
+            recorder::set_input_region,
             pin::pin_info,
             pin::copy_pin,
             settings::default_save_directory,
@@ -76,6 +88,7 @@ pub fn run() {
                 let _ = window.hide();
             }
             WindowEvent::Destroyed if window.label() == windows::OVERLAY => capture::finish(window.app_handle()),
+            WindowEvent::Destroyed if window.label() == windows::RECORDER => recorder::cleanup(window.app_handle()),
             WindowEvent::Destroyed if window.label().starts_with(pin::PREFIX) => {
                 pin::forget(window.app_handle(), window.label());
             }

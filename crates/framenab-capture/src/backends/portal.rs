@@ -103,8 +103,9 @@ impl CaptureBackend for PortalBackend {
         }
     }
 
-    fn open_stream(&self, _target: &CaptureTarget, options: &StreamOptions) -> Result<Box<dyn FrameStream>> {
-        Ok(Box::new(super::screencast::PortalStream::open(options)?))
+    fn open_stream(&self, target: &CaptureTarget, options: &StreamOptions) -> Result<Box<dyn FrameStream>> {
+        let window = matches!(target, CaptureTarget::Window(_));
+        Ok(Box::new(super::screencast::PortalStream::open(options, window)?))
     }
 }
 

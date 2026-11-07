@@ -31,6 +31,10 @@ export interface CaptureInfo {
   height: number;
   /** Other apps' windows in image pixels, topmost first (empty on Wayland). */
   windows: { x: number; y: number; w: number; h: number }[];
+  /** "record": the overlay chooses the area of a recording. */
+  mode: "screenshot" | "record";
+  /** A single window can be recorded via the system dialog (Wayland). */
+  windowPicker: boolean;
 }
 
 /** Selection in image pixels. */
@@ -83,3 +87,44 @@ export async function loadCapture(
   const bitmap = await createImageBitmap(new ImageData(pixels, info.width, info.height));
   return { bitmap, pixels };
 }
+
+// ---- recording -----------------------------------------------------------------------------------
+
+/** Record mode: record the selection (image pixels), or the whole screen with `null`. */
+export const recordSelection = (selection: Selection | null) =>
+  invoke<void>("record_selection", { selection });
+/** Record mode: record a window chosen in the system dialog. */
+export const recordWindow = () => invoke<void>("record_window");
+
+export interface RecorderSetup {
+  /** In image pixels; null = a window chosen in the system dialog. */
+  region: { x: number; y: number; w: number; h: number } | null;
+  imageWidth: number;
+  imageHeight: number;
+}
+
+export interface RecorderStatus {
+  recording: boolean;
+  paused: boolean;
+  elapsedMs: number;
+  error: string | null;
+}
+
+export interface RecordingSummary {
+  path: string;
+  frames: number;
+  durationMs: number;
+  width: number;
+  height: number;
+  dropped: number;
+}
+
+export const recorderInfo = () => invoke<RecorderSetup | null>("recorder_info");
+export const recorderPrepare = (cursor: boolean) => invoke<void>("recorder_prepare", { cursor });
+export const recorderStart = (fps: number) => invoke<void>("recorder_start", { fps });
+export const recorderPause = (paused: boolean) => invoke<void>("recorder_pause", { paused });
+export const recorderStatus = () => invoke<RecorderStatus>("recorder_status");
+export const recorderStop = () => invoke<RecordingSummary>("recorder_stop");
+/** Only these rects (CSS pixels) of the calling window take mouse input; the rest clicks through. */
+export const setInputRegion = (rects: { x: number; y: number; w: number; h: number }[]) =>
+  invoke<void>("set_input_region", { rects });

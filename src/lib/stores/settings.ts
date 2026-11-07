@@ -12,6 +12,10 @@ export interface Settings {
   /** File name with `{…}` date tokens: yyyy, yy, MM, dd, HH, mm, ss. */
   filenameTemplate: string;
   imageFormat: ImageFormat;
+  recorderFps: number;
+  /** Seconds before the recording starts. */
+  recorderCountdown: number;
+  recorderCursor: boolean;
 }
 
 export const DEFAULT_TEMPLATE = "FrameNab_{yyyy-MM-dd_HH-mm-ss}";
@@ -21,6 +25,9 @@ const defaults: Settings = {
   saveDirectory: null,
   filenameTemplate: DEFAULT_TEMPLATE,
   imageFormat: "png",
+  recorderFps: 15,
+  recorderCountdown: 3,
+  recorderCursor: true,
 };
 
 let store: Promise<Store> | undefined;

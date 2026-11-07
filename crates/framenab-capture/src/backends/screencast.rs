@@ -35,9 +35,16 @@ pub struct PortalStream {
 }
 
 impl PortalStream {
-    pub fn open(options: &StreamOptions) -> Result<Self> {
+    /// Opens a screen cast of a monitor, or with `window` of a single window (the user picks it
+    /// in the portal dialog; window choices are not remembered).
+    pub fn open(options: &StreamOptions, window: bool) -> Result<Self> {
         let cursor = if options.cursor { CursorMode::EMBEDDED } else { CursorMode::HIDDEN };
-        let token = options.restore_token.clone();
+        let token = if window { None } else { options.restore_token.clone() };
+        let (sources, persist) = if window {
+            (SourceType::WINDOW, PersistMode::DoNot)
+        } else {
+            (SourceType::MONITOR, PersistMode::ExplicitlyRevoked)
+        };
         let (session, node_id, position, fd, restore_token) = runtime()?.block_on(async move {
             let proxy = Screencast::new().await.map_err(map_err)?;
             let session = proxy.create_session(Default::default()).await.map_err(map_err)?;
@@ -46,9 +53,9 @@ impl PortalStream {
                     &session,
                     SelectSourcesOptions::default()
                         .set_cursor_mode(cursor)
-                        .set_sources(SourceType::MONITOR)
+                        .set_sources(sources)
                         .set_multiple(false)
-                        .set_persist_mode(PersistMode::ExplicitlyRevoked)
+                        .set_persist_mode(persist)
                         .set_restore_token(token.as_deref()),
                 )
                 .await
