@@ -3,6 +3,8 @@
 //!
 //! Phase 0: formats, options and FFmpeg detection. The encoders follow in phase 4.
 
+pub mod still;
+
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};

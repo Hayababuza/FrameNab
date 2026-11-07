@@ -8,6 +8,8 @@ mod commands;
 mod hotkeys;
 mod i18n;
 mod logging;
+mod pin;
+mod settings;
 mod tray;
 mod windows;
 
@@ -28,14 +30,21 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(hotkeys::plugin())
         .register_uri_scheme_protocol("framenab", capture::protocol)
         .manage(capture::CaptureState::default())
+        .manage(pin::PinState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::run_action,
             capture::capture_info,
             capture::copy_selection,
+            capture::save_selection,
+            capture::pin_selection,
+            pin::pin_info,
+            pin::copy_pin,
+            settings::default_save_directory,
             capture::cancel_capture,
         ])
         .setup(move |app| {
@@ -67,6 +76,9 @@ pub fn run() {
                 let _ = window.hide();
             }
             WindowEvent::Destroyed if window.label() == windows::OVERLAY => capture::finish(window.app_handle()),
+            WindowEvent::Destroyed if window.label().starts_with(pin::PREFIX) => {
+                pin::forget(window.app_handle(), window.label());
+            }
             _ => {}
         })
         .run(tauri::generate_context!())

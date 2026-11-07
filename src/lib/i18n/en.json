@@ -43,5 +43,16 @@
   "overlay.customColor": "Custom color",
   "overlay.width": "Stroke width",
   "overlay.delete": "Delete (Del)",
-  "overlay.textPlaceholder": "Type text · Enter confirms · Shift+Enter new line"
+  "overlay.textPlaceholder": "Type text · Enter confirms · Shift+Enter new line",
+  "overlay.save": "Save (Ctrl+S) · Save as… (Ctrl+Shift+S)",
+  "overlay.pin": "Pin as floating window",
+  "pin.hint": "Drag to move · scroll to zoom · Ctrl+C copies · Esc or double-click closes",
+  "settings.saving": "Saving",
+  "settings.saveDirectory": "Folder",
+  "settings.choose": "Choose…",
+  "settings.reset": "Default",
+  "settings.filenameTemplate": "File name",
+  "settings.filenameHelp": "Placeholders in braces: yyyy MM dd HH mm ss — e.g. {yyyy-MM-dd}",
+  "settings.imageFormat": "Format",
+  "settings.preview": "Example"
 }

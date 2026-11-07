@@ -43,5 +43,16 @@
   "overlay.customColor": "Eigene Farbe",
   "overlay.width": "Strichstärke",
   "overlay.delete": "Löschen (Entf)",
-  "overlay.textPlaceholder": "Text eingeben · Enter bestätigt · Umschalt+Enter neue Zeile"
+  "overlay.textPlaceholder": "Text eingeben · Enter bestätigt · Umschalt+Enter neue Zeile",
+  "overlay.save": "Speichern (Strg+S) · Speichern unter… (Strg+Umschalt+S)",
+  "overlay.pin": "Als schwebendes Fenster anheften",
+  "pin.hint": "Ziehen verschiebt · Mausrad zoomt · Strg+C kopiert · Esc oder Doppelklick schließt",
+  "settings.saving": "Speichern",
+  "settings.saveDirectory": "Ordner",
+  "settings.choose": "Auswählen…",
+  "settings.reset": "Standard",
+  "settings.filenameTemplate": "Dateiname",
+  "settings.filenameHelp": "Platzhalter in geschweiften Klammern: yyyy MM dd HH mm ss – z. B. {yyyy-MM-dd}",
+  "settings.imageFormat": "Format",
+  "settings.preview": "Beispiel"
 }

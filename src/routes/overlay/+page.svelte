@@ -35,7 +35,15 @@
   } from "$lib/annotations/tools";
   import Magnifier from "$lib/components/Magnifier.svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { cancelCapture, captureInfo, copySelection, loadCapture, type CaptureInfo } from "$lib/ipc";
+  import {
+    cancelCapture,
+    captureInfo,
+    copySelection,
+    loadCapture,
+    pinSelection,
+    saveSelection,
+    type CaptureInfo,
+  } from "$lib/ipc";
   import { History } from "$lib/stores/history";
 
   type Interaction =
@@ -355,18 +363,24 @@
 
   // ---- actions -------------------------------------------------------------------------------
 
-  async function copy() {
+  /** Runs a final action (copy, save, pin) on the selection, or the whole screen if none. */
+  async function finish(action: "copy" | "save" | "saveAs" | "pin") {
     if (!info || busy) return;
     commitText();
     busy = true;
-    const target = selection ?? { x: 0, y: 0, w: size.w, h: size.h };
+    const target = toImagePixels(selection ?? { x: 0, y: 0, w: size.w, h: size.h }, scale, info);
+    const list = $state.snapshot(annotations) as Annotation[];
     try {
-      await copySelection(toImagePixels(target, scale, info), $state.snapshot(annotations) as Annotation[]);
+      if (action === "copy") await copySelection(target, list);
+      else if (action === "pin") await pinSelection(target, list, scale);
+      else if ((await saveSelection(target, list, action === "saveAs")) === null) busy = false; // dialog cancelled
     } catch (e) {
       error = String(e);
       busy = false;
     }
   }
+
+  const copy = () => finish("copy");
 
   function onkeydown(e: KeyboardEvent) {
     const ctrl = e.ctrlKey || e.metaKey;
@@ -384,6 +398,9 @@
     if (e.key === "Escape") {
       e.preventDefault();
       if (!interaction) cancelCapture();
+    } else if (ctrl && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      finish(e.shiftKey ? "saveAs" : "save");
     } else if (e.key === "Enter" || (ctrl && e.key.toLowerCase() === "c")) {
       e.preventDefault();
       copy();
@@ -600,6 +617,28 @@
           {/each}
         </div>
         <span class="spacer"></span>
+        <button
+          class="icon"
+          title={t("overlay.save")}
+          aria-label={t("overlay.save")}
+          onclick={(e) => finish(e.shiftKey ? "saveAs" : "save")}
+          disabled={busy}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 4v5h7V4M8 20v-6h8v6" />
+          </svg>
+        </button>
+        <button
+          class="icon"
+          title={t("overlay.pin")}
+          aria-label={t("overlay.pin")}
+          onclick={() => finish("pin")}
+          disabled={busy}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 4l5 5-3 1-3 3 1 5-2 1-4-4-5 5M9 15l-4-4 1-2 5 1 3-3 1-3" />
+          </svg>
+        </button>
         <button class="primary" title={t("overlay.copyTitle")} onclick={copy} disabled={busy}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M10 8h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" />

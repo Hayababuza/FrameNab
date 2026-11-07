@@ -1,5 +1,5 @@
 //! Screenshot flow: capture the screen → show the overlay with the frozen image → the user
-//! selects an area → copy it to the clipboard.
+//! selects and annotates an area → copy, save or pin it.
 //!
 //! The frozen image is kept in [`CaptureState`] and served to the overlay as raw RGBA through
 //! the `framenab://` protocol, so no pixel data travels through JSON IPC.
@@ -11,13 +11,15 @@ use std::time::Duration;
 
 use framenab_capture::{CaptureError, CaptureTarget};
 use framenab_core::Annotation;
+use framenab_export::still::{self, StillFormat};
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use tauri::http::{Request, Response, StatusCode};
 use tauri::{AppHandle, Manager, Runtime, UriSchemeContext};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use tauri_plugin_notification::NotificationExt;
 
-use crate::{clipboard, i18n::t, windows};
+use crate::{clipboard, i18n::t, pin, settings, windows};
 
 #[derive(Default)]
 pub struct CaptureState {
@@ -162,8 +164,12 @@ pub fn capture_info(app: AppHandle) -> Option<CaptureInfo> {
     Some(CaptureInfo { id: capture.id, width: capture.image.width(), height: capture.image.height() })
 }
 
-#[tauri::command]
-pub async fn copy_selection(app: AppHandle, selection: Selection, annotations: Vec<Annotation>) -> Result<(), String> {
+/// Crops the current capture to `selection` and renders the annotations into it.
+async fn render_selection(
+    app: &AppHandle,
+    selection: Selection,
+    annotations: Vec<Annotation>,
+) -> Result<RgbaImage, String> {
     let image = {
         let state = app.state::<CaptureState>();
         let guard = state.current.lock().expect("capture lock");
@@ -171,7 +177,7 @@ pub async fn copy_selection(app: AppHandle, selection: Selection, annotations: V
         Arc::clone(&capture.image)
     };
     let Selection { x, y, width, height } = selection;
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         let mut cropped = framenab_capture::crop(&image, x as i32, y as i32, width.max(1), height.max(1));
         // Annotations are in screen-image coordinates; move them into the cropped area.
         let (dx, dy) = (-(x as f32), -(y as f32));
@@ -181,11 +187,105 @@ pub async fn copy_selection(app: AppHandle, selection: Selection, annotations: V
     })
     .await
     .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn copy_selection(app: AppHandle, selection: Selection, annotations: Vec<Annotation>) -> Result<(), String> {
+    let result = render_selection(&app, selection, annotations).await?;
     tracing::info!(width = result.width(), height = result.height(), "copying selection to clipboard");
     clipboard::copy_image(&app, result).await?;
     windows::close_overlay(&app);
     Ok(())
+}
+
+/// Saves the selection. With `ask`, a file dialog picks the location; otherwise it goes to the
+/// configured folder with the configured name template and format. Returns the path, or `None`
+/// if the dialog was cancelled.
+#[tauri::command]
+pub async fn save_selection(
+    app: AppHandle,
+    selection: Selection,
+    annotations: Vec<Annotation>,
+    ask: bool,
+) -> Result<Option<String>, String> {
+    let result = render_selection(&app, selection, annotations).await?;
+    let config = settings::save_settings(&app);
+    let name = still::file_name_now(&config.template);
+
+    let (path, format) = if ask {
+        let Some(path) = ask_save_path(&app, &config.directory, &name, config.format).await? else {
+            return Ok(None);
+        };
+        let format =
+            path.extension().and_then(|e| e.to_str()).and_then(StillFormat::from_extension).unwrap_or(config.format);
+        let path = if path.extension().is_none() { path.with_extension(format.extension()) } else { path };
+        (path, format)
+    } else {
+        (still::unique_path(&config.directory, &name, config.format.extension()), config.format)
+    };
+
+    let target = path.clone();
+    tauri::async_runtime::spawn_blocking(move || still::save_still(&result, &target, format))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    tracing::info!(path = %path.display(), "screenshot saved");
+    windows::close_overlay(&app);
+
+    let shown = path.display().to_string();
+    if let Err(err) = app.notification().builder().title("FrameNab").body(format!("{}\n{shown}", t("save.done"))).show()
+    {
+        tracing::warn!(%err, "could not show notification");
+    }
+    Ok(Some(shown))
+}
+
+/// "Save as" dialog. The overlay is fullscreen and always on top, so it steps back while the
+/// dialog is open.
+async fn ask_save_path(
+    app: &AppHandle,
+    directory: &std::path::Path,
+    name: &str,
+    format: StillFormat,
+) -> Result<Option<std::path::PathBuf>, String> {
+    let overlay = windows::overlay(app);
+    if let Some(w) = &overlay {
+        let _ = w.set_always_on_top(false);
+    }
+    let _ = std::fs::create_dir_all(directory);
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_title(t("save.title"))
+        .set_directory(directory)
+        .set_file_name(format!("{name}.{}", format.extension()))
+        .add_filter("PNG", &["png"])
+        .add_filter("JPEG", &["jpg", "jpeg"])
+        .add_filter("WebP", &["webp"]);
+    if let Some(w) = &overlay {
+        dialog = dialog.set_parent(w);
+    }
+    let picked =
+        tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file()).await.map_err(|e| e.to_string())?;
+    if let Some(w) = &overlay {
+        let _ = w.set_always_on_top(true);
+        let _ = w.set_focus();
+    }
+    picked.map(|p| p.into_path().map_err(|e| e.to_string())).transpose()
+}
+
+/// Pins the selection as a floating window. `scale` = image pixels per CSS pixel in the overlay.
+#[tauri::command]
+pub async fn pin_selection(
+    app: AppHandle,
+    selection: Selection,
+    annotations: Vec<Annotation>,
+    scale: f64,
+) -> Result<(), String> {
+    let result = render_selection(&app, selection, annotations).await?;
+    windows::close_overlay(&app);
+    pin::open(&app, result, scale.max(0.1)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -193,7 +293,8 @@ pub fn cancel_capture(app: AppHandle) {
     windows::close_overlay(&app);
 }
 
-/// Serves `framenab://localhost/<id>` as raw RGBA pixels of the current capture.
+/// Serves raw RGBA pixels: `framenab://localhost/<id>` for the current capture and
+/// `framenab://localhost/pin/<id>` for pinned screenshots.
 pub fn protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let respond = |status: StatusCode, body: Vec<u8>| {
         Response::builder()
@@ -203,8 +304,16 @@ pub fn protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u
             .body(Cow::Owned(body))
             .expect("valid response")
     };
-    let id: Option<u64> = request.uri().path().trim_matches('/').parse().ok();
-    let state = ctx.app_handle().state::<CaptureState>();
+    let path = request.uri().path().trim_matches('/');
+    let app = ctx.app_handle();
+    if let Some(pin_id) = path.strip_prefix("pin/").and_then(|id| id.parse().ok()) {
+        return match app.state::<pin::PinState>().image(pin_id) {
+            Some(image) => respond(StatusCode::OK, image.as_raw().clone()),
+            None => respond(StatusCode::NOT_FOUND, Vec::new()),
+        };
+    }
+    let id: Option<u64> = path.parse().ok();
+    let state = app.state::<CaptureState>();
     let guard = state.current.lock().expect("capture lock");
     match guard.as_ref() {
         Some(capture) if Some(capture.id) == id => respond(StatusCode::OK, capture.image.as_raw().clone()),

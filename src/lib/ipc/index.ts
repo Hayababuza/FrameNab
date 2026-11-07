@@ -44,6 +44,31 @@ export const copySelection = (selection: Selection, annotations: Annotation[]) =
   invoke<void>("copy_selection", { selection, annotations });
 export const cancelCapture = () => invoke<void>("cancel_capture");
 
+/** Saves the selection; `ask` opens a "Save as" dialog. Resolves to the path, or null if cancelled. */
+export const saveSelection = (selection: Selection, annotations: Annotation[], ask: boolean) =>
+  invoke<string | null>("save_selection", { selection, annotations, ask });
+
+/** Pins the selection as a floating window; `scale` = image pixels per CSS pixel. */
+export const pinSelection = (selection: Selection, annotations: Annotation[], scale: number) =>
+  invoke<void>("pin_selection", { selection, annotations, scale });
+
+export interface PinInfo {
+  id: number;
+  width: number;
+  height: number;
+}
+
+export const pinInfo = () => invoke<PinInfo | null>("pin_info");
+export const copyPin = () => invoke<void>("copy_pin");
+export const defaultSaveDirectory = () => invoke<string>("default_save_directory");
+
+export async function loadPin(info: PinInfo): Promise<ImageBitmap> {
+  const response = await fetch(convertFileSrc(`pin/${info.id}`, "framenab"));
+  if (!response.ok) throw new Error(`pin ${info.id}: HTTP ${response.status}`);
+  const pixels = new Uint8ClampedArray(await response.arrayBuffer());
+  return createImageBitmap(new ImageData(pixels, info.width, info.height));
+}
+
 /** Loads the pixels of the current capture through the `framenab://` protocol. */
 export async function loadCapture(
   info: CaptureInfo,

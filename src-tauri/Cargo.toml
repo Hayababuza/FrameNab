@@ -31,6 +31,7 @@ sys-locale = "0.3.2"
 tauri = { version = "2.11.6", features = ["tray-icon"] }
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-global-shortcut = "2.3.2"
+tauri-plugin-notification = "2.4.0"
 tauri-plugin-single-instance = "2.4.5"
 tauri-plugin-store = "2.4.5"
 tracing = "0.1.44"

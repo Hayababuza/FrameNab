@@ -12,6 +12,20 @@ pub fn t(key: &str) -> &'static str {
     let de = is_german();
     match key {
         "tray.screenshot" => "Screenshot",
+        "save.done" => {
+            if de {
+                "Screenshot gespeichert:"
+            } else {
+                "Screenshot saved:"
+            }
+        }
+        "save.title" => {
+            if de {
+                "Screenshot speichern"
+            } else {
+                "Save screenshot"
+            }
+        }
         "capture.failed" => {
             if de {
                 "Der Screenshot konnte nicht aufgenommen werden."

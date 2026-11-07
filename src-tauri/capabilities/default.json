@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions for all FrameNab windows",
-  "windows": ["main", "overlay", "recorder", "settings"],
+  "windows": ["main", "overlay", "recorder", "settings", "pin-*"],
   "permissions": [
     "core:default",
     "core:window:allow-close",
@@ -10,6 +10,8 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "core:window:allow-set-fullscreen",
+    "core:window:allow-set-size",
+    "core:window:allow-start-dragging",
     "store:default",
     "dialog:default"
   ]
