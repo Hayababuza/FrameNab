@@ -46,7 +46,7 @@
   "overlay.textPlaceholder": "Text eingeben · Enter bestätigt · Umschalt+Enter neue Zeile",
   "overlay.save": "In {dir} speichern (Strg+S)",
   "overlay.pin": "Als schwebendes Fenster anheften",
-  "pin.hint": "Ziehen verschiebt · Mausrad zoomt · Strg+C kopiert · Esc oder Doppelklick schließt",
+  "pin.hint": "Ziehen verschiebt · Mausrad zoomt · Strg+C kopiert · Strg+N neuer Screenshot · Esc oder Doppelklick schließt",
   "settings.saving": "Speichern",
   "settings.saveDirectory": "Ordner",
   "settings.choose": "Auswählen…",
@@ -58,5 +58,6 @@
   "overlay.saveAs": "Speichern unter… (Strg+Umschalt+S)",
   "info.saveDirectory": "Speicherort",
   "info.change": "Ändern",
-  "pin.close": "Schließen (Esc)"
+  "pin.close": "Schließen (Esc)",
+  "pin.newScreenshot": "Neuer Screenshot (Strg+N)"
 }

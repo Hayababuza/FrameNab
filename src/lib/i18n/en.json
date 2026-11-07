@@ -46,7 +46,7 @@
   "overlay.textPlaceholder": "Type text · Enter confirms · Shift+Enter new line",
   "overlay.save": "Save to {dir} (Ctrl+S)",
   "overlay.pin": "Pin as floating window",
-  "pin.hint": "Drag to move · scroll to zoom · Ctrl+C copies · Esc or double-click closes",
+  "pin.hint": "Drag to move · scroll to zoom · Ctrl+C copies · Ctrl+N new screenshot · Esc or double-click closes",
   "settings.saving": "Saving",
   "settings.saveDirectory": "Folder",
   "settings.choose": "Choose…",
@@ -58,5 +58,6 @@
   "overlay.saveAs": "Save as… (Ctrl+Shift+S)",
   "info.saveDirectory": "Save folder",
   "info.change": "Change",
-  "pin.close": "Close (Esc)"
+  "pin.close": "Close (Esc)",
+  "pin.newScreenshot": "New screenshot (Ctrl+N)"
 }

@@ -3,7 +3,7 @@
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { copyPin, loadPin, pinInfo, type PinInfo } from "$lib/ipc";
+  import { copyPin, loadPin, pinInfo, runAction, type PinInfo } from "$lib/ipc";
 
   let canvas: HTMLCanvasElement;
   let info = $state<PinInfo | null>(null);
@@ -37,9 +37,23 @@
     await win.setSize(new LogicalSize(Math.round(base.w * zoom), Math.round(base.h * zoom)));
   }
 
+  /** Hides the controls while a new screenshot is taken, so they are not in the picture. */
+  let capturing = $state(false);
+
+  /** New screenshot with this (and every other) pin still open on screen. */
+  async function newScreenshot() {
+    capturing = true;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await runAction("screenshot");
+    setTimeout(() => (capturing = false), 1500);
+  }
+
   async function onkeydown(e: KeyboardEvent) {
     if (e.key === "Escape") win.close();
-    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+      e.preventDefault();
+      newScreenshot();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
       await copyPin();
       flash = true;
       setTimeout(() => (flash = false), 250);
@@ -62,19 +76,40 @@
   }}
 ></canvas>
 
-<button class="close" title={t("pin.close")} aria-label={t("pin.close")} onclick={() => win.close()}>
-  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-</button>
+<div class="controls" class:capturing>
+  <button title={t("pin.newScreenshot")} aria-label={t("pin.newScreenshot")} onclick={newScreenshot}>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
+    </svg>
+  </button>
+  <button class="close" title={t("pin.close")} aria-label={t("pin.close")} onclick={() => win.close()}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+  </button>
+</div>
 
 {#if error}
   <p class="error">{error}</p>
 {/if}
 
 <style>
-  .close {
+  .controls {
     position: fixed;
     top: 6px;
     right: 6px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  :global(body:hover) .controls,
+  .controls:focus-within {
+    opacity: 1;
+  }
+  .controls.capturing {
+    opacity: 0 !important;
+    transition: none;
+  }
+  .controls button {
     display: grid;
     place-items: center;
     width: 26px;
@@ -85,23 +120,21 @@
     background: rgb(20 20 24 / 80%);
     color: #fff;
     cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.15s;
   }
-  :global(body:hover) .close,
-  .close:focus-visible {
-    opacity: 1;
+  .controls button:hover {
+    background: rgb(70 70 80 / 95%);
   }
-  .close:hover {
+  .controls .close:hover {
     background: #e5484d;
   }
-  .close svg {
+  .controls svg {
     width: 14px;
     height: 14px;
     fill: none;
     stroke: currentColor;
-    stroke-width: 2.5;
+    stroke-width: 2.2;
     stroke-linecap: round;
+    stroke-linejoin: round;
   }
   .error {
     position: fixed;
