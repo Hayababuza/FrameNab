@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 use ashpd::desktop::screenshot::Screenshot;
 use image::RgbaImage;
 
-use crate::{CaptureBackend, CaptureError, CaptureTarget, FrameSink, MonitorInfo, Platform, RecordingHandle, Result};
+use crate::{CaptureBackend, CaptureError, CaptureTarget, FrameStream, MonitorInfo, Platform, Result, StreamOptions};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct PortalBackend;
@@ -34,7 +34,7 @@ impl PortalBackend {
 /// One runtime for the whole process. ashpd caches its D-Bus connection globally, and zbus runs
 /// that connection on the runtime it was created on: a per-call runtime would leave the cached
 /// connection without a driver, and every portal call after the first would hang forever.
-fn runtime() -> Result<&'static tokio::runtime::Runtime> {
+pub(crate) fn runtime() -> Result<&'static tokio::runtime::Runtime> {
     static RUNTIME: OnceLock<std::io::Result<tokio::runtime::Runtime>> = OnceLock::new();
     RUNTIME
         .get_or_init(|| {
@@ -48,7 +48,7 @@ fn runtime() -> Result<&'static tokio::runtime::Runtime> {
         .map_err(|e| CaptureError::Backend(e.to_string()))
 }
 
-fn map_err(err: ashpd::Error) -> CaptureError {
+pub(crate) fn map_err(err: ashpd::Error) -> CaptureError {
     match err {
         ashpd::Error::Response(ashpd::desktop::ResponseError::Cancelled) => CaptureError::PermissionDenied,
         other => CaptureError::Backend(other.to_string()),
@@ -103,8 +103,8 @@ impl CaptureBackend for PortalBackend {
         }
     }
 
-    fn start_recording(&self, _: &CaptureTarget, _: u32, _: Box<dyn FrameSink>) -> Result<Box<dyn RecordingHandle>> {
-        Err(CaptureError::NotImplemented(self.platform()))
+    fn open_stream(&self, _target: &CaptureTarget, options: &StreamOptions) -> Result<Box<dyn FrameStream>> {
+        Ok(Box::new(super::screencast::PortalStream::open(options)?))
     }
 }
 

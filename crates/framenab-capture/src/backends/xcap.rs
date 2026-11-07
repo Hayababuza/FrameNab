@@ -2,8 +2,14 @@
 
 use image::RgbaImage;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use crate::recording::{LatestFrame, SourceFrame};
 use crate::{
-    CaptureBackend, CaptureError, CaptureTarget, FrameSink, MonitorInfo, Platform, RecordingHandle, Result, WindowInfo,
+    CaptureBackend, CaptureError, CaptureTarget, FrameStream, MonitorInfo, Platform, Result, StreamOptions, WindowInfo,
     bounds,
 };
 
@@ -89,7 +95,97 @@ impl CaptureBackend for XcapBackend {
         Ok(windows.into_iter().map(|(_, w)| w).collect())
     }
 
-    fn start_recording(&self, _: &CaptureTarget, _: u32, _: Box<dyn FrameSink>) -> Result<Box<dyn RecordingHandle>> {
-        Err(CaptureError::NotImplemented(self.0))
+    fn open_stream(&self, target: &CaptureTarget, _options: &StreamOptions) -> Result<Box<dyn FrameStream>> {
+        let monitors = xcap::Monitor::all().map_err(map_err)?;
+        let monitor = match target {
+            CaptureTarget::Region { x, y, .. } => xcap::Monitor::from_point(*x, *y).map_err(map_err)?,
+            CaptureTarget::Monitor(id) => {
+                monitors.into_iter().find(|m| m.id().ok() == Some(*id)).ok_or(CaptureError::MonitorNotFound(*id))?
+            }
+            CaptureTarget::AllMonitors | CaptureTarget::Window(_) => monitors
+                .iter()
+                .find(|m| m.is_primary().unwrap_or(false))
+                .or(monitors.first())
+                .cloned()
+                .ok_or(CaptureError::MonitorNotFound(0))?,
+        };
+        Ok(Box::new(XcapStream::start(monitor.id().map_err(map_err)?, origin(&monitor)?)?))
+    }
+}
+
+fn origin(monitor: &xcap::Monitor) -> Result<(i32, i32)> {
+    Ok((monitor.x().map_err(map_err)?, monitor.y().map_err(map_err)?))
+}
+
+/// Recording through xcap's video recorder (DXGI on Windows, ScreenCaptureKit on macOS, XShm on
+/// X11). The recorder lives entirely on its own thread: on macOS it is not `Send`.
+struct XcapStream {
+    latest: Arc<LatestFrame>,
+    origin: (i32, i32),
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl XcapStream {
+    fn start(monitor_id: u32, origin: (i32, i32)) -> Result<Self> {
+        let latest = Arc::new(LatestFrame::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (started_tx, started_rx) = mpsc::channel::<Result<()>>();
+        let thread = {
+            let (latest, stop) = (Arc::clone(&latest), Arc::clone(&stop));
+            thread::Builder::new()
+                .name("framenab-xcap-recorder".into())
+                .spawn(move || {
+                    let opened = xcap::Monitor::all()
+                        .map_err(map_err)
+                        .and_then(|all| {
+                            all.into_iter()
+                                .find(|m| m.id().ok() == Some(monitor_id))
+                                .ok_or(CaptureError::MonitorNotFound(monitor_id))
+                        })
+                        .and_then(|m| m.video_recorder().map_err(map_err))
+                        .and_then(|(recorder, frames)| recorder.start().map_err(map_err).map(|()| (recorder, frames)));
+                    let (recorder, frames) = match opened {
+                        Ok(r) => {
+                            let _ = started_tx.send(Ok(()));
+                            r
+                        }
+                        Err(err) => {
+                            let _ = started_tx.send(Err(err));
+                            return;
+                        }
+                    };
+                    while !stop.load(Ordering::SeqCst) {
+                        match frames.recv_timeout(Duration::from_millis(100)) {
+                            Ok(f) => latest.publish(SourceFrame { width: f.width, height: f.height, rgba: f.raw }),
+                            Err(mpsc::RecvTimeoutError::Timeout) => {}
+                            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                        }
+                    }
+                    if let Err(err) = recorder.stop() {
+                        tracing::debug!(%err, "stopping the recorder failed");
+                    }
+                })
+                .map_err(|e| CaptureError::Backend(e.to_string()))?
+        };
+        started_rx.recv().map_err(|e| CaptureError::Backend(e.to_string()))??;
+        Ok(Self { latest, origin, stop, thread: Some(thread) })
+    }
+}
+
+impl FrameStream for XcapStream {
+    fn latest(&self) -> Arc<LatestFrame> {
+        Arc::clone(&self.latest)
+    }
+
+    fn origin(&self) -> (i32, i32) {
+        self.origin
+    }
+
+    fn stop(mut self: Box<Self>) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
     }
 }

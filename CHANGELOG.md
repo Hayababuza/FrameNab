@@ -4,6 +4,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- Recording engine (stage 2a): streams the screen via the xdg-desktop-portal ScreenCast portal and PipeWire on Wayland (the screen choice is remembered with a restore token; cursor on/off) and via xcap on Windows, macOS and X11; a common sampler takes the latest frame at the chosen FPS, crops it to the region, excludes paused time and lets unchanged frames last longer; frames are written as QOI by a background writer with a small queue (dropped frames are counted)
+- Recording spike: `cargo run --release -p framenab-capture --example record -- <dir> [seconds] [fps] [--cursor] [--region x,y,w,h] [--token-file f]` (60 s at 15 fps in 1080p on Wayland: 0 dropped frames, 126 MB peak memory)
+
 ## [0.1.0] - 2026-11-07
 
 First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 and Wayland).

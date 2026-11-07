@@ -7,9 +7,12 @@
 //! | Linux X11     | XShm                    | XShm in a loop             |
 //! | Linux Wayland | xdg-desktop-portal      | Portal ScreenCast+PipeWire |
 //!
-//! Screenshots work on every platform; recording follows in phase 2.
+//! Screenshots and recording work on every platform (see [`recording`]).
 
 pub mod backends;
+pub mod recording;
+
+pub use recording::{Crop, FrameSink, FrameStream, Recording, SamplerStats, StreamOptions, record};
 
 use image::RgbaImage;
 use serde::Serialize;
@@ -126,18 +129,6 @@ pub enum CaptureTarget {
     Window(u64),
 }
 
-/// Receives frames during a recording. `timestamp_ms` counts from the start of the recording.
-pub trait FrameSink: Send {
-    fn push(&mut self, image: RgbaImage, timestamp_ms: u64);
-}
-
-/// A running recording. Dropping it ends the recording.
-pub trait RecordingHandle: Send {
-    fn pause(&mut self);
-    fn resume(&mut self);
-    fn stop(self: Box<Self>) -> Result<()>;
-}
-
 pub trait CaptureBackend: Send + Sync {
     fn platform(&self) -> Platform;
     fn monitors(&self) -> Result<Vec<MonitorInfo>>;
@@ -147,12 +138,9 @@ pub trait CaptureBackend: Send + Sync {
     fn windows(&self) -> Result<Vec<WindowInfo>> {
         Ok(Vec::new())
     }
-    fn start_recording(
-        &self,
-        target: &CaptureTarget,
-        fps: u32,
-        sink: Box<dyn FrameSink>,
-    ) -> Result<Box<dyn RecordingHandle>>;
+    /// Opens a live stream of the monitor that contains `target` (on Wayland the user picks
+    /// the monitor in the screen-sharing dialog). Use [`recording::record`] to sample it.
+    fn open_stream(&self, target: &CaptureTarget, options: &StreamOptions) -> Result<Box<dyn FrameStream>>;
 }
 
 /// Returns the matching backend for the current platform.

@@ -10,6 +10,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+framenab-core = { version = "0.1.0", path = "../framenab-core" }
 image = "0.25.9"
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"
@@ -17,5 +18,6 @@ tracing = "0.1.44"
 xcap = "0.9.8"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ashpd = { version = "0.14", default-features = false, features = ["tokio", "screenshot"] }
+ashpd = { version = "0.14", default-features = false, features = ["tokio", "screenshot", "screencast"] }
+pipewire = "0.10"
 tokio = { version = "1.54.1", features = ["rt-multi-thread"] }

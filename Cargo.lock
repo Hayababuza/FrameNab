@@ -1555,7 +1555,9 @@ name = "framenab-capture"
 version = "0.1.0"
 dependencies = [
  "ashpd",
+ "framenab-core",
  "image",
+ "pipewire",
  "serde",
  "thiserror 2.0.21",
  "tokio",
