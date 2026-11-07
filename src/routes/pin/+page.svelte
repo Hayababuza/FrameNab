@@ -62,11 +62,47 @@
   }}
 ></canvas>
 
+<button class="close" title={t("pin.close")} aria-label={t("pin.close")} onclick={() => win.close()}>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+</button>
+
 {#if error}
   <p class="error">{error}</p>
 {/if}
 
 <style>
+  .close {
+    position: fixed;
+    top: 6px;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgb(20 20 24 / 80%);
+    color: #fff;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  :global(body:hover) .close,
+  .close:focus-visible {
+    opacity: 1;
+  }
+  .close:hover {
+    background: #e5484d;
+  }
+  .close svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+  }
   .error {
     position: fixed;
     inset: auto 8px 8px;

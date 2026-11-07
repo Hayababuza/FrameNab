@@ -321,9 +321,10 @@ pub async fn pin_selection(
     scale: f64,
 ) -> Result<(), String> {
     let result = render_selection(&app, selection, annotations).await?;
-    // Don't bring the main window back: it would cover the new pin.
-    app.state::<CaptureState>().restore_main.store(false, Ordering::SeqCst);
-    pin::open(&app, result, scale.max(0.1)).map_err(|e| e.to_string())?;
+    // Don't bring the main window back now (it would cover the new pin); hand that over to the
+    // pin, which restores it when the last pin closes.
+    let restore_main = app.state::<CaptureState>().restore_main.swap(false, Ordering::SeqCst);
+    pin::open(&app, result, scale.max(0.1), restore_main).map_err(|e| e.to_string())?;
     windows::close_overlay(&app);
     Ok(())
 }

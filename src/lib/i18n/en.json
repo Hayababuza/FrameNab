@@ -57,5 +57,6 @@
   "settings.preview": "Example",
   "overlay.saveAs": "Save as… (Ctrl+Shift+S)",
   "info.saveDirectory": "Save folder",
-  "info.change": "Change"
+  "info.change": "Change",
+  "pin.close": "Close (Esc)"
 }

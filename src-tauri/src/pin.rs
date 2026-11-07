@@ -2,7 +2,7 @@
 //! (Wayland compositors may ignore "always on top" for normal windows.)
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use image::RgbaImage;
@@ -17,6 +17,8 @@ pub const PREFIX: &str = "pin-";
 pub struct PinState {
     images: Mutex<HashMap<u64, Arc<RgbaImage>>>,
     next_id: AtomicU64,
+    /// The main window was hidden for the screenshot; show it again when the last pin closes.
+    restore_main: AtomicBool,
 }
 
 impl PinState {
@@ -38,8 +40,12 @@ fn id_from_label(label: &str) -> Option<u64> {
 }
 
 /// Opens a pin window for `image`. `scale` = image pixels per logical pixel (the overlay's scale).
-pub fn open(app: &AppHandle, image: RgbaImage, scale: f64) -> tauri::Result<()> {
+/// `restore_main`: show the main window again once all pins are closed.
+pub fn open(app: &AppHandle, image: RgbaImage, scale: f64, restore_main: bool) -> tauri::Result<()> {
     let state = app.state::<PinState>();
+    if restore_main {
+        state.restore_main.store(true, Ordering::SeqCst);
+    }
     let id = state.next_id.fetch_add(1, Ordering::SeqCst) + 1;
     let (w, h) = (f64::from(image.width()) / scale, f64::from(image.height()) / scale);
     state.images.lock().expect("pin lock").insert(id, Arc::new(image));
@@ -60,8 +66,15 @@ pub fn open(app: &AppHandle, image: RgbaImage, scale: f64) -> tauri::Result<()> 
 
 /// Called when a pin window is destroyed.
 pub fn forget(app: &AppHandle, label: &str) {
-    if let Some(id) = id_from_label(label) {
-        app.state::<PinState>().images.lock().expect("pin lock").remove(&id);
+    let Some(id) = id_from_label(label) else { return };
+    let state = app.state::<PinState>();
+    let remaining = {
+        let mut images = state.images.lock().expect("pin lock");
+        images.remove(&id);
+        images.len()
+    };
+    if remaining == 0 && state.restore_main.swap(false, Ordering::SeqCst) {
+        windows::show_main(app);
     }
 }
 
