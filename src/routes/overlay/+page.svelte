@@ -10,6 +10,11 @@
   import {
     beginDrag,
     type Drag,
+    type Handle,
+    handleAt,
+    handleCursor,
+    handlePoint,
+    handles,
     toImagePixels,
     toolbarPosition,
     updateDrag,
@@ -28,6 +33,7 @@
     tools,
     widths,
   } from "$lib/annotations/tools";
+  import Magnifier from "$lib/components/Magnifier.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { cancelCapture, captureInfo, copySelection, loadCapture, type CaptureInfo } from "$lib/ipc";
   import { History } from "$lib/stores/history";
@@ -39,8 +45,12 @@
 
   let canvas: HTMLCanvasElement;
   let textEl: HTMLDivElement | undefined = $state();
-  let info: CaptureInfo | null = null;
+  let info = $state<CaptureInfo | null>(null);
   let bitmap: ImageBitmap | null = null;
+  let pixels = $state<Uint8ClampedArray | null>(null);
+  /** Cursor in CSS pixels, while it is over the overlay. */
+  let pointer = $state<Point | null>(null);
+  let hoverHandle = $state<Handle | null>(null);
 
   let size = $state({ w: window.innerWidth, h: window.innerHeight });
   /** Area to copy, in CSS pixels. */
@@ -76,7 +86,9 @@
       info = await captureInfo();
       if (!info) return void cancelCapture();
       scale = info.width / size.w;
-      bitmap = await loadCapture(info);
+      const loaded = await loadCapture(info);
+      bitmap = loaded.bitmap;
+      pixels = loaded.pixels;
       draw();
       const win = getCurrentWindow();
       await win.show();
@@ -120,11 +132,21 @@
       ctx.strokeStyle = "#ff6369";
       ctx.lineWidth = 1;
       ctx.strokeRect(selection.x + 0.5, selection.y + 0.5, selection.w - 1, selection.h - 1);
+      if (showHandles) {
+        ctx.fillStyle = "#ffffff";
+        for (const h of handles) {
+          const c = handlePoint(selection, h);
+          ctx.fillRect(c.x - 3.5, c.y - 3.5, 7, 7);
+          ctx.strokeRect(c.x - 3.5, c.y - 3.5, 7, 7);
+        }
+      }
     }
   }
 
+  const showHandles = $derived(tool === "select" && (!interaction || interaction.kind === "area"));
+
   $effect(() => {
-    void [selection, size, annotations, draft, selectedId];
+    void [selection, size, annotations, draft, selectedId, showHandles];
     draw();
   });
 
@@ -275,8 +297,10 @@
 
   function onpointermove(e: PointerEvent) {
     const c = point(e);
+    pointer = c;
     if (!interaction) {
-      hovering = tool === "select" && !!annotationAt(toImage(c));
+      hoverHandle = tool === "select" && selection ? handleAt(selection, c) : null;
+      hovering = tool === "select" && !hoverHandle && !!annotationAt(toImage(c));
       return;
     }
     const p = toImage(c);
@@ -412,8 +436,32 @@
     ].join("; ");
   });
 
+  const resizeHandle = $derived(
+    interaction?.kind === "area" && interaction.drag.kind === "resize"
+      ? interaction.drag.handle
+      : hoverHandle,
+  );
+
+  // The loupe helps while choosing the area: before there is one, and while drawing/resizing it.
+  const showLoupe = $derived(
+    tool === "select" &&
+      pointer !== null &&
+      pixels !== null &&
+      (interaction
+        ? interaction.kind === "area" && interaction.drag.kind !== "move"
+        : !selection && !hovering),
+  );
+
   const cursor = $derived(
-    tool === "select" ? (hovering ? "move" : "crosshair") : tool === "text" ? "text" : "crosshair",
+    resizeHandle
+      ? handleCursor[resizeHandle]
+      : tool === "select"
+        ? hovering
+          ? "move"
+          : "crosshair"
+        : tool === "text"
+          ? "text"
+          : "crosshair",
   );
   const sameColor = (a: Rgba, b: Rgba) => a.r === b.r && a.g === b.g && a.b === b.b;
 </script>
@@ -430,7 +478,19 @@
   style:width="{size.w}px"
   style:height="{size.h}px"
   style:cursor
+  onpointerleave={() => (pointer = null)}
 ></canvas>
+
+{#if showLoupe && pointer && pixels && info}
+  <Magnifier
+    {pixels}
+    imageWidth={info.width}
+    imageHeight={info.height}
+    at={toImage(pointer)}
+    cursor={pointer}
+    screen={size}
+  />
+{/if}
 
 {#if textEdit}
   <div

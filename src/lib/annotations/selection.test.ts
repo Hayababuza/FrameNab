@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { beginDrag, toImagePixels, toolbarPosition, updateDrag } from "./selection";
+import { beginDrag, handleAt, toImagePixels, toolbarPosition, updateDrag } from "./selection";
 
 const bounds = { w: 100, h: 100 };
 
@@ -48,5 +48,24 @@ describe("selection", () => {
     expect(toolbarPosition({ x: 100, y: 500, w: 400, h: 280 }, toolbar, screen)).toEqual({ x: 300, y: 452 });
     expect(toolbarPosition({ x: 0, y: 0, w: 1000, h: 800 }, toolbar, screen)).toEqual({ x: 792, y: 752 });
     expect(toolbarPosition({ x: 0, y: 100, w: 50, h: 50 }, toolbar, screen).x).toBe(8);
+  });
+
+  it("finds handles on the border", () => {
+    const sel = { x: 100, y: 100, w: 200, h: 100 };
+    expect(handleAt(sel, { x: 102, y: 98 })).toBe("nw");
+    expect(handleAt(sel, { x: 200, y: 200 })).toBe("s");
+    expect(handleAt(sel, { x: 305, y: 150 })).toBe("e");
+    expect(handleAt(sel, { x: 200, y: 150 })).toBeNull();
+  });
+
+  it("resizes from a handle and flips past the opposite edge", () => {
+    const sel = { x: 100, y: 100, w: 200, h: 100 };
+    const bounds = { w: 1000, h: 1000 };
+    const corner = beginDrag(sel, { x: 300, y: 200 });
+    expect(corner.kind).toBe("resize");
+    expect(updateDrag(corner, { x: 400, y: 250 }, bounds)).toEqual({ x: 100, y: 100, w: 300, h: 150 });
+    expect(updateDrag(corner, { x: 50, y: 150 }, bounds)).toEqual({ x: 50, y: 100, w: 50, h: 50 });
+    const edge = beginDrag(sel, { x: 200, y: 100 });
+    expect(updateDrag(edge, { x: 999, y: 20 }, bounds)).toEqual({ x: 100, y: 20, w: 200, h: 180 });
   });
 });

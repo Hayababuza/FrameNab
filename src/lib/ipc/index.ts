@@ -45,9 +45,12 @@ export const copySelection = (selection: Selection, annotations: Annotation[]) =
 export const cancelCapture = () => invoke<void>("cancel_capture");
 
 /** Loads the pixels of the current capture through the `framenab://` protocol. */
-export async function loadCapture(info: CaptureInfo): Promise<ImageBitmap> {
+export async function loadCapture(
+  info: CaptureInfo,
+): Promise<{ bitmap: ImageBitmap; pixels: Uint8ClampedArray }> {
   const response = await fetch(convertFileSrc(String(info.id), "framenab"));
   if (!response.ok) throw new Error(`capture ${info.id}: HTTP ${response.status}`);
   const pixels = new Uint8ClampedArray(await response.arrayBuffer());
-  return createImageBitmap(new ImageData(pixels, info.width, info.height));
+  const bitmap = await createImageBitmap(new ImageData(pixels, info.width, info.height));
+  return { bitmap, pixels };
 }
