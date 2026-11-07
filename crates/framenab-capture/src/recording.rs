@@ -332,6 +332,16 @@ mod tests {
     }
 
     #[test]
+    fn elapsed_time_is_reported_while_recording() {
+        let stream = FakeStream::start(5);
+        let rec = record(Box::new(stream), None, 15, Collect::default());
+        thread::sleep(Duration::from_millis(400));
+        let elapsed = rec.elapsed_ms();
+        let _ = rec.stop();
+        assert!(elapsed >= 250, "elapsed should grow while recording, got {elapsed}");
+    }
+
+    #[test]
     fn pause_is_not_counted() {
         let stream = FakeStream::start(5);
         let rec = record(Box::new(stream), None, 30, Collect::default());
