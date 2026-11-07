@@ -348,3 +348,92 @@ fn poll_click_through(window: WebviewWindow, interactive: Arc<Mutex<Vec<InputRec
         }
     });
 }
+
+// ---- locating the window on Wayland --------------------------------------------------------------
+
+/// Colors of the calibration marker the recorder page draws in its top-left corner, as blocks of
+/// `MARKER_BLOCK` logical pixels side by side. Keep in sync with `src/routes/recorder`.
+const MARKER: [[u8; 3]; 4] = [[255, 0, 255], [0, 255, 0], [0, 0, 255], [255, 255, 0]];
+const MARKER_BLOCK: f64 = 6.0;
+
+fn close_to(pixel: &[u8], color: [u8; 3]) -> bool {
+    pixel.iter().zip(color).map(|(&a, b)| a.abs_diff(b) as u32).sum::<u32>() <= 60
+}
+
+/// Finds the calibration marker in a screenshot and returns its top-left corner in pixels.
+/// `scale` is the monitor's scale factor (screen pixels per logical pixel).
+pub fn find_marker(image: &RgbaImage, scale: f64) -> Option<(i32, i32)> {
+    let block = MARKER_BLOCK * scale;
+    let (w, h) = (image.width() as i64, image.height() as i64);
+    let at = |x: f64, y: f64| -> Option<&[u8]> {
+        let (x, y) = (x.round() as i64, y.round() as i64);
+        (x >= 0 && y >= 0 && x < w && y < h).then(|| &image.get_pixel(x as u32, y as u32).0[..3])
+    };
+    for y in 0..h {
+        for x in 0..w {
+            if !close_to(&image.get_pixel(x as u32, y as u32).0[..3], MARKER[0]) {
+                continue;
+            }
+            // Check the center of every block of the pattern.
+            let matches = MARKER.iter().enumerate().all(|(i, &color)| {
+                at(x as f64 + block * (i as f64 + 0.5), y as f64 + block / 2.0).is_some_and(|p| close_to(p, color))
+            });
+            if matches {
+                return Some((x as i32, y as i32));
+            }
+        }
+    }
+    None
+}
+
+/// Wayland: where is the (maximized) recorder window? Takes a screenshot through the portal and
+/// looks for the marker the page shows at its top-left corner. Returns screen pixels.
+#[tauri::command]
+pub async fn locate_marker(scale: f64) -> Result<Option<(i32, i32)>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let image = framenab_capture::backend().screenshot(&CaptureTarget::AllMonitors).map_err(|e| e.to_string())?;
+        let found = find_marker(&image, scale.max(0.5));
+        tracing::debug!(?found, scale, "recorder window marker");
+        Ok(found)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn draw_marker(image: &mut RgbaImage, x: u32, y: u32, scale: f64) {
+        let block = (MARKER_BLOCK * scale).round() as u32;
+        for (i, color) in MARKER.iter().enumerate() {
+            for dy in 0..block {
+                for dx in 0..block {
+                    let [r, g, b] = *color;
+                    image.put_pixel(x + i as u32 * block + dx, y + dy, image::Rgba([r, g, b, 255]));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn finds_the_marker_and_ignores_decoys() {
+        for scale in [1.0, 1.25, 2.0] {
+            let mut image = RgbaImage::from_pixel(400, 300, image::Rgba([30, 30, 40, 255]));
+            // A lone magenta block (an icon, say) must not match.
+            for dy in 0..10 {
+                for dx in 0..10 {
+                    image.put_pixel(20 + dx, 10 + dy, image::Rgba([255, 0, 255, 255]));
+                }
+            }
+            draw_marker(&mut image, 57, 33, scale);
+            assert_eq!(find_marker(&image, scale), Some((57, 33)), "scale {scale}");
+        }
+    }
+
+    #[test]
+    fn no_marker_no_match() {
+        let image = RgbaImage::from_pixel(100, 100, image::Rgba([255, 0, 255, 255]));
+        assert_eq!(find_marker(&image, 1.0), None);
+    }
+}

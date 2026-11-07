@@ -22,6 +22,7 @@
     recorderPrepare,
     recorderStart,
     recorderStatus,
+    locateMarker,
     recorderStop,
     setInputRegion,
     type RecorderSetup,
@@ -42,6 +43,14 @@
   let phase = $state<Phase>("setup");
   /** The window is a small bar instead of covering the screen (Wayland while recording). */
   let compact = $state(false);
+  /**
+   * Wayland while recording: the window is maximized (transparent works there, unlike fullscreen)
+   * and knows where it is on screen from the calibration marker, so it can draw the frame.
+   */
+  let live = $state(false);
+  let calibrating = $state(false);
+  /** Top-left corner of the maximized window on screen, in CSS pixels. */
+  let offset = $state({ x: 0, y: 0 });
   let paused = $state(false);
   let elapsedMs = $state(0);
   let countdown = $state(0);
@@ -61,9 +70,12 @@
   /** Recorded area in CSS pixels (null = a window chosen in the system dialog). */
   const area = $derived.by((): Rect | null => {
     if (!setup?.region) return null;
-    const scale = setup.imageWidth / view.w;
+    // Image pixels per CSS pixel of the monitor (the window may be smaller when maximized).
+    const scale = setup.imageWidth / (window.screen.width || view.w);
     const r = setup.region;
-    return { x: r.x / scale, y: r.y / scale, w: r.w / scale, h: r.h / scale };
+    // When maximized on Wayland, the window does not start at the screen's corner.
+    const o = live ? offset : { x: 0, y: 0 };
+    return { x: r.x / scale - o.x, y: r.y / scale - o.y, w: r.w / scale, h: r.h / scale };
   });
 
   const frame = $derived(
@@ -139,9 +151,12 @@
    * Which parts of the window take mouse input: only the bar over the live screen (transparent
    * mode), everything when the window shows the frozen image or is just the compact bar.
    */
+  /** The frozen screen image is shown only before recording (Wayland). */
+  const showBackground = $derived(!!setup?.background && !compact && !live && !calibrating);
+
   async function updateInputRegion() {
     await tick();
-    if (compact || (setup?.background && !compact)) {
+    if (compact || showBackground) {
       await setInputRegion([{ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }]);
       return;
     }
@@ -154,6 +169,31 @@
     updateInputRegion();
     if (compact) fitWindowToBar();
   });
+
+  /**
+   * Wayland: switch from the fullscreen setup view to a maximized transparent window and find out
+   * where it is (GNOME does not tell): show a color marker, take a screenshot, locate it. Falls
+   * back to the compact bar if that fails.
+   */
+  async function enterLive() {
+    calibrating = true;
+    try {
+      await win.setFullscreen(false);
+      await win.maximize();
+      // Let the compositor apply the new size and draw the marker.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      const scale = setup ? setup.imageWidth / (window.screen.width || view.w) : 1;
+      const found = await locateMarker(scale);
+      if (!found) throw new Error("marker not found");
+      offset = { x: found[0] / scale, y: found[1] / scale };
+      live = true;
+    } catch (e) {
+      console.warn("falling back to the compact bar:", e);
+      await enterCompact();
+    } finally {
+      calibrating = false;
+    }
+  }
 
   async function enterCompact() {
     compact = true;
@@ -191,7 +231,7 @@
     }
     // Wayland: show the live screen; the countdown runs in the bar, so there is time to drag the
     // bar out of the recorded area.
-    if (setup?.compact && !compact) await enterCompact();
+    if (setup?.compact && !compact && !live) await enterLive();
     phase = "countdown";
     for (countdown = delay; countdown > 0; countdown--) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -245,11 +285,20 @@
 
 <svelte:window {onkeydown} onresize={() => (view = { w: window.innerWidth, h: window.innerHeight })} />
 
-{#if setup?.background && !compact}
+{#if calibrating}
+  <!-- Calibration marker: keep in sync with MARKER in src-tauri/src/recorder.rs -->
+  <div class="marker" aria-hidden="true">
+    <i style:background="rgb(255, 0, 255)"></i><i style:background="rgb(0, 255, 0)"></i><i
+      style:background="rgb(0, 0, 255)"
+    ></i><i style:background="rgb(255, 255, 0)"></i>
+  </div>
+{/if}
+
+{#if showBackground}
   <canvas class="background" bind:this={canvas}></canvas>
 {/if}
 
-{#if frame && !compact}
+{#if frame && !compact && !calibrating}
   <div
     class="frame"
     class:live={phase === "recording" && !paused}
@@ -367,6 +416,16 @@
     margin: 0;
     overflow: hidden;
     background: transparent;
+  }
+  .marker {
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: flex;
+  }
+  .marker i {
+    width: 6px;
+    height: 6px;
   }
   .background {
     position: fixed;

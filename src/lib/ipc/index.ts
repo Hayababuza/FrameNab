@@ -165,3 +165,5 @@ export const thumbUrl = (frameId: string) => convertFileSrc(`thumb/${frameId}`, 
 export const previewUrl = (frameId: string) => convertFileSrc(`preview/${frameId}`, "framenab");
 export const openProject = (path: string) => invoke<void>("open_project", { path });
 export const recordingsDirectory = () => invoke<string>("recordings_directory");
+/** Wayland: screen position (pixels) of the recorder's calibration marker, or null if not found. */
+export const locateMarker = (scale: number) => invoke<[number, number] | null>("locate_marker", { scale });

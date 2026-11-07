@@ -62,6 +62,7 @@ pub fn run() {
             recorder::recorder_status,
             recorder::recorder_stop,
             recorder::set_input_region,
+            recorder::locate_marker,
             editor::editor_view,
             editor::editor_delete,
             editor::editor_undo,
