@@ -551,7 +551,15 @@
   const sameColor = (a: Rgba, b: Rgba) => a.r === b.r && a.g === b.g && a.b === b.b;
 </script>
 
-<svelte:window {onkeydown} {onresize} oncontextmenu={(e) => e.preventDefault()} />
+<!-- Track the cursor on the window, not only the canvas: some compositors deliver motion only to
+     the surface, and the loupe must follow the mouse everywhere. -->
+<svelte:window
+  {onkeydown}
+  {onresize}
+  oncontextmenu={(e) => e.preventDefault()}
+  onpointermove={(e) => (pointer = point(e))}
+  onmousemove={(e) => (pointer = point(e))}
+/>
 
 <canvas
   bind:this={canvas}
