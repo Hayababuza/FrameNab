@@ -6,7 +6,7 @@
    */
   import { getCurrentWindow, LogicalSize, type Window } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import { type Handle, handlePoint, handles } from "$lib/annotations/selection";
+  import { type Handle, handlePoint } from "$lib/annotations/selection";
   import { t } from "$lib/i18n/index.svelte";
   import { copyPin, loadPin, pinInfo, runAction, type PinInfo } from "$lib/ipc";
 
@@ -15,6 +15,9 @@
   /** Transparent space around the image; keep in sync with `MARGIN` in `src-tauri/src/pin.rs`. */
   const MARGIN = 7;
   const MIN_IMAGE = 32;
+
+  /** Only corner handles: with a fixed aspect ratio, edge handles would change both sides anyway. */
+  const corners: Handle[] = ["nw", "ne", "se", "sw"];
 
   const directions: Record<Handle, ResizeDirection> = {
     nw: "NorthWest",
@@ -163,7 +166,7 @@
 ></canvas>
 
 {#if !capturing}
-  {#each handles as h (h)}
+  {#each corners as h (h)}
     {@const c = handlePoint(rect, h)}
     <span
       class="handle"

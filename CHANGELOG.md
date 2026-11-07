@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
-- Resize handles on pin windows, always visible and centered on the image frame like on the overlay selection; the aspect ratio is kept while resizing (GTK geometry hints on Linux, snapping elsewhere)
+- Corner resize handles on pin windows, always visible and centered on the image frame like on the overlay selection; the aspect ratio is kept while resizing (GTK geometry hints on Linux, snapping elsewhere)
 - Close button (✕) and New screenshot button (Ctrl+N) in pin windows, shown on hover; open pins stay on screen and appear in the new screenshot, so several pins can be combined into one picture
 - Screenshot mode (stage 1a): capture the screen, select an area in a fullscreen overlay and copy it to the clipboard (Enter, Ctrl+C or double-click; Esc or right-click cancels)
 - Stage 1c: resize handles on the selection; pixel loupe with coordinates and color; save to file (Ctrl+S) and Save as (Ctrl+Shift+S) with folder, file name template and format in the settings; pin a screenshot as a floating window; window snapping on Windows, macOS and X11 (hover highlights a window, a click selects it)
