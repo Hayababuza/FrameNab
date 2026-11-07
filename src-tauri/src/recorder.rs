@@ -9,7 +9,6 @@
 //! `recorder_stop` (writes `project.json`, returns a summary).
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use framenab_capture::{CaptureTarget, Crop, FrameStream, Recording, StreamOptions, record};
@@ -61,7 +60,7 @@ pub struct RecorderState {
     inner: Mutex<Inner>,
     background: Mutex<Option<Arc<RgbaImage>>>,
     /// The main window was hidden for the capture; show it again when the recorder closes.
-    restore_main: AtomicBool,
+    restore: windows::Restore,
     /// Click-through: only these rects (logical pixels) take mouse input (non-Linux).
     #[cfg_attr(target_os = "linux", allow(dead_code))]
     interactive: Arc<Mutex<Vec<InputRect>>>,
@@ -85,10 +84,11 @@ pub fn open(
     region: Option<Region>,
     (image_width, image_height): (u32, u32),
     background: Option<Arc<RgbaImage>>,
-    restore_main: bool,
+    restore: Option<String>,
 ) {
     let state = app.state::<RecorderState>();
-    let compact = framenab_capture::Platform::detect().requires_portal();
+    // Native Wayland windows cannot be transparent in fullscreen nor stay on top.
+    let compact = crate::display::native_wayland();
     let background = background.filter(|_| compact);
     {
         let mut inner = state.lock();
@@ -96,9 +96,7 @@ pub fn open(
         inner.setup = Some(Setup { region, image_width, image_height, background: background.is_some(), compact });
     }
     *state.background.lock().expect("background lock") = background;
-    if restore_main {
-        state.restore_main.store(true, Ordering::SeqCst);
-    }
+    state.restore.set(restore);
     if let Err(err) = windows::open_recorder(app) {
         tracing::error!(%err, "failed to open the recorder window");
     }
@@ -134,9 +132,7 @@ pub fn cleanup(app: &AppHandle) {
         }
     }
     state.background.lock().expect("background lock").take();
-    if state.restore_main.swap(false, Ordering::SeqCst) {
-        windows::show_main(app);
-    }
+    state.restore.restore(app);
 }
 
 #[tauri::command]
@@ -247,8 +243,8 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
     .map_err(|e| e.to_string())?;
     tracing::info!(path = %dir.display(), frames = stats.frames, dropped = stats.dropped, "recording finished");
     // Continue in the editor; it takes over bringing the main window back.
-    let restore_main = app.state::<RecorderState>().restore_main.swap(false, Ordering::SeqCst);
-    crate::editor::open(&app, dir.clone(), restore_main)?;
+    let restore = app.state::<RecorderState>().restore.take();
+    crate::editor::open(&app, dir.clone(), restore)?;
     Ok(Summary {
         path: dir.display().to_string(),
         frames: project.frames.len(),

@@ -5,6 +5,7 @@ mod capture;
 mod cli;
 mod clipboard;
 mod commands;
+mod display;
 mod editor;
 mod hotkeys;
 mod i18n;
@@ -21,6 +22,7 @@ pub use cli::Action;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    display::choose_backend();
     let initial = cli::parse(std::env::args().skip(1));
 
     tauri::Builder::default()
@@ -79,7 +81,12 @@ pub fn run() {
         .setup(move |app| {
             let log_dir = app.path().app_log_dir()?;
             app.manage(logging::init(&log_dir));
-            tracing::info!(version = env!("CARGO_PKG_VERSION"), platform = %framenab_capture::Platform::detect(), "FrameNab starting");
+            tracing::info!(
+                version = env!("CARGO_PKG_VERSION"),
+                platform = %framenab_capture::Platform::detect(),
+                xwayland = display::xwayland(),
+                "FrameNab starting"
+            );
 
             // Loading the system fonts takes a moment; do it now instead of on the first text.
             std::thread::spawn(framenab_render::text::warm_up);
@@ -120,7 +127,7 @@ pub fn run() {
 
 /// Opens a recording folder in the editor, reporting failures in the log.
 fn open_project(app: &tauri::AppHandle, path: std::path::PathBuf) {
-    if let Err(err) = editor::open(app, path, false) {
+    if let Err(err) = editor::open(app, path, None) {
         tracing::error!(%err, "could not open the project");
     }
 }

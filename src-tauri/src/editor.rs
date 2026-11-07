@@ -35,7 +35,7 @@ pub struct EditorState {
     thumbs: Mutex<std::collections::HashMap<String, std::sync::Arc<Vec<u8>>>>,
     export: Mutex<Option<ExportControl>>,
     /// The main window was hidden for the capture; show it again when the editor closes.
-    restore_main: std::sync::atomic::AtomicBool,
+    restore: windows::Restore,
 }
 
 impl EditorState {
@@ -45,15 +45,14 @@ impl EditorState {
 }
 
 /// Opens the project folder `root` in the editor window.
-pub fn open(app: &AppHandle, root: PathBuf, restore_main: bool) -> Result<(), String> {
+pub fn open(app: &AppHandle, root: PathBuf, restore: Option<String>) -> Result<(), String> {
     let store = FrameStore::create(&root).map_err(|e| e.to_string())?;
     let project = store.load_project().map_err(|e| e.to_string())?;
     let state = app.state::<EditorState>();
     *state.lock() = Some(Open { store, project, history: History::new(200) });
     state.thumbs.lock().expect("thumb lock").clear();
-    if restore_main {
-        state.restore_main.store(true, Ordering::SeqCst);
-    }
+    // Opening the editor shows it anyway; remember other windows (the main window).
+    state.restore.set(restore.filter(|label| label != LABEL));
 
     if let Some(w) = app.get_webview_window(LABEL) {
         let _ = w.emit("editor-reload", ());
@@ -82,9 +81,7 @@ pub fn cleanup(app: &AppHandle) {
     {
         tracing::warn!(%err, "could not remove unused frames");
     }
-    if state.restore_main.swap(false, Ordering::SeqCst) {
-        windows::show_main(app);
-    }
+    state.restore.restore(app);
 }
 
 #[derive(Serialize)]
@@ -330,7 +327,7 @@ pub fn recording_formats() -> Vec<ExportFormat> {
 /// "Open project" in the main window.
 #[tauri::command]
 pub fn open_project(app: AppHandle, path: PathBuf) -> Result<(), String> {
-    open(&app, path, false)
+    open(&app, path, None)
 }
 
 /// Where recordings are kept, as the start folder for "Open project".

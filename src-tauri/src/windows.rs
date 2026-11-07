@@ -9,14 +9,53 @@ pub const OVERLAY: &str = "overlay";
 pub const RECORDER: &str = "recorder";
 const SETTINGS: &str = "settings";
 
+/// A window that was hidden for a capture (so it is not in the picture) and should come back
+/// afterwards. The duty is handed along: overlay → recorder/pin → editor.
+#[derive(Default)]
+pub struct Restore(std::sync::Mutex<Option<String>>);
+
+impl Restore {
+    pub fn set(&self, label: Option<String>) {
+        if label.is_some() {
+            *self.0.lock().expect("restore lock") = label;
+        }
+    }
+
+    pub fn take(&self) -> Option<String> {
+        self.0.lock().expect("restore lock").take()
+    }
+
+    /// Shows the remembered window, if any.
+    pub fn restore(&self, app: &AppHandle) {
+        if let Some(label) = self.take() {
+            show_window(app, &label);
+        }
+    }
+}
+
+pub fn show_window(app: &AppHandle, label: &str) {
+    if label == MAIN {
+        return show_main(app);
+    }
+    if let Some(w) = app.get_webview_window(label) {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+/// Hides `label` if it is visible; returns whether it was.
+pub fn hide_window(app: &AppHandle, label: &str) -> bool {
+    app.get_webview_window(label).is_some_and(|w| w.is_visible().unwrap_or(false) && w.hide().is_ok())
+}
+
 pub fn dispatch(app: &AppHandle, action: Action) {
     let result = match action {
         Action::Screenshot => {
-            crate::capture::start(app, false, crate::capture::CaptureMode::Screenshot);
+            crate::capture::start(app, None, crate::capture::CaptureMode::Screenshot);
             Ok(())
         }
         Action::Record => {
-            record(app, false);
+            record(app, None);
             Ok(())
         }
         Action::RecordScreen => {
@@ -36,13 +75,14 @@ pub fn dispatch(app: &AppHandle, action: Action) {
 
 /// "Record" from the tray, a shortcut or the CLI: stops a running recording, brings an open
 /// recorder to the front, or starts choosing the area of a new one.
-pub fn record(app: &AppHandle, hide_main: bool) {
+/// `hide`: the window the request came from; it is hidden during the capture and restored.
+pub fn record(app: &AppHandle, hide: Option<String>) {
     if crate::recorder::is_recording(app) {
         crate::recorder::request_stop(app);
     } else if let Some(w) = app.get_webview_window(RECORDER) {
         let _ = w.set_focus();
     } else {
-        crate::capture::start(app, hide_main, crate::capture::CaptureMode::Record);
+        crate::capture::start(app, hide, crate::capture::CaptureMode::Record);
     }
 }
 
@@ -55,7 +95,7 @@ fn record_screen(app: &AppHandle) {
     let Some(monitor) = monitor else { return };
     let size = monitor.size();
     let region = crate::recorder::Region { x: 0, y: 0, w: size.width, h: size.height };
-    crate::recorder::open(app, Some(region), (size.width, size.height), None, false);
+    crate::recorder::open(app, Some(region), (size.width, size.height), None, None);
 }
 
 pub fn show_main(app: &AppHandle) {
@@ -70,10 +110,6 @@ pub fn hide_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(MAIN) {
         let _ = w.hide();
     }
-}
-
-pub fn main_visible(app: &AppHandle) -> bool {
-    app.get_webview_window(MAIN).and_then(|w| w.is_visible().ok()).unwrap_or(false)
 }
 
 pub fn overlay(app: &AppHandle) -> Option<WebviewWindow> {

@@ -2,7 +2,7 @@
 //! (Wayland compositors may ignore "always on top" for normal windows.)
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use image::RgbaImage;
@@ -23,7 +23,7 @@ pub struct PinState {
     images: Mutex<HashMap<u64, Arc<RgbaImage>>>,
     next_id: AtomicU64,
     /// The main window was hidden for the screenshot; show it again when the last pin closes.
-    restore_main: AtomicBool,
+    restore: windows::Restore,
 }
 
 impl PinState {
@@ -47,12 +47,10 @@ fn id_from_label(label: &str) -> Option<u64> {
 }
 
 /// Opens a pin window for `image`. `scale` = image pixels per logical pixel (the overlay's scale).
-/// `restore_main`: show the main window again once all pins are closed.
-pub fn open(app: &AppHandle, image: RgbaImage, scale: f64, restore_main: bool) -> tauri::Result<()> {
+/// `restore`: a window to show again once all pins are closed.
+pub fn open(app: &AppHandle, image: RgbaImage, scale: f64, restore: Option<String>) -> tauri::Result<()> {
     let state = app.state::<PinState>();
-    if restore_main {
-        state.restore_main.store(true, Ordering::SeqCst);
-    }
+    state.restore.set(restore);
     let id = state.next_id.fetch_add(1, Ordering::SeqCst) + 1;
     let (w, h) = (f64::from(image.width()) / scale + 2.0 * MARGIN, f64::from(image.height()) / scale + 2.0 * MARGIN);
     state.images.lock().expect("pin lock").insert(id, Arc::new(image));
@@ -105,8 +103,8 @@ pub fn forget(app: &AppHandle, label: &str) {
         images.remove(&id);
         images.len()
     };
-    if remaining == 0 && state.restore_main.swap(false, Ordering::SeqCst) {
-        windows::show_main(app);
+    if remaining == 0 {
+        state.restore.restore(app);
     }
 }
 

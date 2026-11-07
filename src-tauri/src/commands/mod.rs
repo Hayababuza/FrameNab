@@ -15,6 +15,8 @@ pub struct AppInfo {
     platform: Platform,
     requires_portal: bool,
     ffmpeg_available: bool,
+    /// Wayland session, FrameNab windows running on XWayland.
+    xwayland: bool,
     export_formats: Vec<ExportFormat>,
 }
 
@@ -26,6 +28,7 @@ pub fn app_info() -> AppInfo {
         platform,
         requires_portal: platform.requires_portal(),
         ffmpeg_available: framenab_export::find_ffmpeg().is_some(),
+        xwayland: crate::display::xwayland(),
         export_formats: framenab_export::available_formats(),
     }
 }
@@ -33,10 +36,13 @@ pub fn app_info() -> AppInfo {
 #[tauri::command]
 pub fn run_action(app: AppHandle, window: WebviewWindow, action: Action) {
     // Triggered from the main window: hide it so it is not part of the screenshot.
-    if window.label() == windows::MAIN {
+    // From the main window or the editor: hide it so it is not in the picture, restore it after.
+    let label = window.label();
+    if label == windows::MAIN || label == crate::editor::LABEL {
+        let hide = Some(label.to_owned());
         match action {
-            Action::Screenshot => return crate::capture::start(&app, true, crate::capture::CaptureMode::Screenshot),
-            Action::Record => return windows::record(&app, true),
+            Action::Screenshot => return crate::capture::start(&app, hide, crate::capture::CaptureMode::Screenshot),
+            Action::Record => return windows::record(&app, hide),
             _ => {}
         }
     }

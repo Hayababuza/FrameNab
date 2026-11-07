@@ -237,6 +237,11 @@
       await new Promise((resolve) => setTimeout(resolve, 1000));
       if (phase !== "countdown") return; // closed meanwhile
     }
+    // The countdown number sits inside the recorded area: make sure it is gone from the screen
+    // (rendered and composited) before the first frame is taken.
+    countdown = 0;
+    await tick();
+    await new Promise((resolve) => setTimeout(resolve, 250));
     try {
       await recorderStart(fps);
     } catch (e) {

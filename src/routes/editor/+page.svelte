@@ -14,6 +14,7 @@
     editorUndo,
     editorView,
     previewUrl,
+    runAction,
     thumbUrl,
     type EditorView,
   } from "$lib/ipc";
@@ -316,6 +317,14 @@
         })}
       </span>
       <span class="spacer"></span>
+      <button
+        title={t("editor.newRecording")}
+        onclick={() => (stop(), runAction("record"))}
+        disabled={!!progress}
+      >
+        <span class="rec-dot"></span>
+        {t("editor.newRecording")}
+      </button>
       {#if progress}
         <span class="progress">
           <span class="bar"
@@ -466,6 +475,12 @@
     margin-left: auto;
     color: var(--text-muted);
     font-size: 0.8rem;
+  }
+  .rec-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
   }
   .spacer {
     flex: 1;

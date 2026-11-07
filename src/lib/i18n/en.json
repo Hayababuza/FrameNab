@@ -101,5 +101,10 @@
   "editor.next": "Next frame (→)",
   "editor.frame": "Frame {i} / {n}",
   "editor.hint": "Click a frame to select it · Shift/Ctrl+click for several · Del deletes · Ctrl+A selects all",
-  "editor.saveAs": "Save as… (Ctrl+Shift+S)"
+  "editor.saveAs": "Save as… (Ctrl+Shift+S)",
+  "editor.newRecording": "New recording",
+  "settings.system": "System",
+  "settings.xwayland": "Use XWayland for FrameNab's windows (recommended)",
+  "settings.xwaylandHelp": "Keeps the recording frame and pins on top and places them exactly. Native Wayland cannot do that; the app may look slightly blurry with fractional scaling (125 %, 150 %).",
+  "settings.restartNeeded": "Takes effect after restarting FrameNab."
 }

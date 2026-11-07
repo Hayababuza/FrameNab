@@ -19,6 +19,8 @@ export interface Settings {
   recorderCursor: boolean;
   /** Format for saving recordings from the editor. */
   recordingFormat: RecordingFormat;
+  /** Wayland session: use native Wayland windows instead of XWayland (applies after a restart). */
+  nativeWayland: boolean;
 }
 
 export const DEFAULT_TEMPLATE = "FrameNab_{yyyy-MM-dd_HH-mm-ss}";
@@ -32,6 +34,7 @@ const defaults: Settings = {
   recorderCountdown: 3,
   recorderCursor: true,
   recordingFormat: "gif",
+  nativeWayland: false,
 };
 
 let store: Promise<Store> | undefined;

@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
+- Wayland sessions: FrameNab's windows run on XWayland by default, so the recording frame, its control bar and pins stay on top (also when clicking into other apps) and are placed exactly; capture still uses the portal; Settings → System switches back to native Wayland (after a restart)
+- Editor: "New recording" button; the editor hides during the capture and comes back afterwards (also when the selection is cancelled)
 - Wayland recorder shows the frame around the area while recording: the window switches from fullscreen to maximized (which can be transparent on GNOME), finds its position on screen by locating a color marker in a portal screenshot, and draws the frame and the control bar next to the area; if the marker is not found it falls back to the compact bar
 - Editor: "Save as…" (Ctrl+Shift+S) picks location and format (GIF, MP4, WebM); the filmstrip only renders visible frames, images are served off the main thread and thumbnails are cached (no more stutter while scrolling); drag over frames to select several (auto-scrolls at the edges); the mouse wheel scrolls the filmstrip
 - Editor for recordings (first version): opens automatically after a recording stops; preview with playback (Space, ←/→), a filmstrip of all frames with their durations, select frames (click, Shift/Ctrl+click, Ctrl+A) and delete them (Del) with undo/redo; "Save" writes the result into the save folder with the file name template, in the format chosen in the settings ("Format for recordings": GIF via gifski, MP4/WebM via FFmpeg), with progress and cancel
@@ -39,6 +41,7 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - CI for Linux, Windows and macOS
 
 ### Fixed
+- The countdown number was recorded in the first frames; recording now starts once it is gone from the screen
 - Dev mode: windows sometimes opened without their component CSS ("failed to load virtual css module"), e.g. the loupe stuck in the top-left corner; component CSS is now injected through JavaScript
 - Pinned screenshots showed a black window: the frontend percent-encodes the protocol path (`pin%2F3`), which the backend did not decode
 - Pinning no longer brings back the main window on top of the new pin; the pin gets focus. The main window comes back once the last pin is closed (if it was hidden for the screenshot)

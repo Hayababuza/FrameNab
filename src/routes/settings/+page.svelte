@@ -3,7 +3,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { i18n, locales, t, type Locale } from "$lib/i18n/index.svelte";
-  import { defaultSaveDirectory, recordingFormats, type ExportFormat } from "$lib/ipc";
+  import { appInfo, defaultSaveDirectory, recordingFormats, type ExportFormat } from "$lib/ipc";
   import {
     DEFAULT_TEMPLATE,
     getSetting,
@@ -37,7 +37,13 @@
     `${expandTemplate(template, new Date())}.${formats.find((f) => f.value === imageFormat)?.ext}`,
   );
 
+  let waylandSession = $state(false);
+  let useXwayland = $state(true);
+  let restartNeeded = $state(false);
+
   onMount(async () => {
+    waylandSession = (await appInfo()).platform === "linuxWayland";
+    useXwayland = !(await getSetting("nativeWayland"));
     locale = (await getSetting("locale")) ?? "system";
     saveDirectory = await getSetting("saveDirectory");
     template = await getSetting("filenameTemplate");
@@ -84,6 +90,29 @@
       </select>
     </label>
   </section>
+
+  {#if waylandSession}
+    <h2>{t("settings.system")}</h2>
+    <section>
+      <label class="row">
+        <span>
+          {t("settings.xwayland")}
+          <small class="help-inline">{t("settings.xwaylandHelp")}</small>
+        </span>
+        <input
+          type="checkbox"
+          bind:checked={useXwayland}
+          onchange={async () => {
+            await setSetting("nativeWayland", !useXwayland);
+            restartNeeded = true;
+          }}
+        />
+      </label>
+      {#if restartNeeded}
+        <p class="help">{t("settings.restartNeeded")}</p>
+      {/if}
+    </section>
+  {/if}
 
   <h2>{t("settings.saving")}</h2>
   <section>
@@ -178,6 +207,15 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 280px;
+  }
+  .help-inline {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+  input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
   }
   .help {
     margin: 0;

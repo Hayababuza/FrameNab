@@ -38,7 +38,7 @@ pub struct CaptureState {
     /// A capture is in progress or the overlay is open.
     busy: AtomicBool,
     /// The main window was hidden for the capture and should come back afterwards.
-    restore_main: AtomicBool,
+    restore: windows::Restore,
 }
 
 struct Capture {
@@ -80,9 +80,9 @@ pub struct Selection {
     height: u32,
 }
 
-/// Starts a screenshot (or the area selection of a recording). `hide_main` hides the main
-/// window first so it is not in the picture.
-pub fn start(app: &AppHandle, hide_main: bool, mode: CaptureMode) {
+/// Starts a screenshot (or the area selection of a recording). `hide` is the window the request
+/// came from: it is hidden so it is not in the picture, and restored afterwards.
+pub fn start(app: &AppHandle, hide: Option<String>, mode: CaptureMode) {
     let state = app.state::<CaptureState>();
     if state.busy.swap(true, Ordering::SeqCst) {
         tracing::debug!("screenshot already in progress");
@@ -93,13 +93,9 @@ pub fn start(app: &AppHandle, hide_main: bool, mode: CaptureMode) {
 
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let main_visible = windows::main_visible(&app);
-        if hide_main && main_visible {
-            windows::hide_main(&app);
-            app.state::<CaptureState>().restore_main.store(true, Ordering::SeqCst);
-        }
-
-        let delay = hide_main && main_visible;
+        let hidden = hide.filter(|label| windows::hide_window(&app, label));
+        let delay = hidden.is_some();
+        app.state::<CaptureState>().restore.set(hidden);
         let result = tauri::async_runtime::spawn_blocking(move || {
             if delay {
                 // Give the compositor time to actually remove the window from the screen.
@@ -157,9 +153,7 @@ pub fn finish(app: &AppHandle) {
     let state = app.state::<CaptureState>();
     state.current.lock().expect("capture lock").take();
     state.busy.store(false, Ordering::SeqCst);
-    if state.restore_main.swap(false, Ordering::SeqCst) {
-        windows::show_main(app);
-    }
+    state.restore.restore(app);
 }
 
 fn show_error(app: &AppHandle, detail: &str) {
@@ -250,9 +244,9 @@ fn open_recorder(app: &AppHandle, region: Option<recorder::Region>) {
     };
     let size = image.as_ref().map_or((1, 1), |i| (i.width(), i.height()));
     // The recorder takes over bringing the main window back.
-    let restore_main = app.state::<CaptureState>().restore_main.swap(false, Ordering::SeqCst);
+    let restore = app.state::<CaptureState>().restore.take();
     windows::close_overlay(app);
-    recorder::open(app, region, size, image, restore_main);
+    recorder::open(app, region, size, image, restore);
 }
 
 /// Crops the current capture to `selection` and renders the annotations into it.
@@ -377,8 +371,8 @@ pub async fn pin_selection(
     let result = render_selection(&app, selection, annotations).await?;
     // Don't bring the main window back now (it would cover the new pin); hand that over to the
     // pin, which restores it when the last pin closes.
-    let restore_main = app.state::<CaptureState>().restore_main.swap(false, Ordering::SeqCst);
-    pin::open(&app, result, scale.max(0.1), restore_main).map_err(|e| e.to_string())?;
+    let restore = app.state::<CaptureState>().restore.take();
+    pin::open(&app, result, scale.max(0.1), restore).map_err(|e| e.to_string())?;
     windows::close_overlay(&app);
     Ok(())
 }
