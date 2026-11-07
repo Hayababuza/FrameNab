@@ -100,6 +100,17 @@ pub struct MonitorInfo {
     pub is_primary: bool,
 }
 
+/// A top-level window on screen, in physical pixels within the virtual desktop.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowInfo {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub title: String,
+}
+
 /// What to capture. Coordinates are in physical pixels.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CaptureTarget {
@@ -131,6 +142,11 @@ pub trait CaptureBackend: Send + Sync {
     fn platform(&self) -> Platform;
     fn monitors(&self) -> Result<Vec<MonitorInfo>>;
     fn screenshot(&self, target: &CaptureTarget) -> Result<RgbaImage>;
+    /// Visible top-level windows, topmost first, for window snapping in the overlay. Platforms
+    /// that do not expose other apps' windows (Wayland) return an empty list.
+    fn windows(&self) -> Result<Vec<WindowInfo>> {
+        Ok(Vec::new())
+    }
     fn start_recording(
         &self,
         target: &CaptureTarget,

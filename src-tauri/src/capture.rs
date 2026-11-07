@@ -34,8 +34,19 @@ pub struct CaptureState {
 struct Capture {
     id: u64,
     image: Arc<RgbaImage>,
+    /// Other apps' windows in image pixels, topmost first (empty where unsupported).
+    windows: Vec<WindowRect>,
     /// Already cropped to the overlay's monitor.
     fitted: bool,
+}
+
+/// A window's frame in image pixels, for snapping the selection to it.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct WindowRect {
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
 }
 
 #[derive(Serialize)]
@@ -44,6 +55,7 @@ pub struct CaptureInfo {
     id: u64,
     width: u32,
     height: u32,
+    windows: Vec<WindowRect>,
 }
 
 /// Selection in image pixels.
@@ -78,17 +90,31 @@ pub fn start(app: &AppHandle, hide_main: bool) {
                 // Give the compositor time to actually remove the window from the screen.
                 std::thread::sleep(Duration::from_millis(300));
             }
-            framenab_capture::backend().screenshot(&CaptureTarget::AllMonitors)
+            let backend = framenab_capture::backend();
+            let image = backend.screenshot(&CaptureTarget::AllMonitors)?;
+            // Window frames are in desktop coordinates; the image starts at the desktop's top-left.
+            let (min_x, min_y, _, _) =
+                framenab_capture::bounds(&backend.monitors().unwrap_or_default()).unwrap_or_default();
+            let windows = backend
+                .windows()
+                .unwrap_or_else(|err| {
+                    tracing::debug!(%err, "window list unavailable");
+                    Vec::new()
+                })
+                .into_iter()
+                .map(|w| WindowRect { x: w.x - min_x, y: w.y - min_y, w: w.width, h: w.height })
+                .collect::<Vec<_>>();
+            Ok::<_, CaptureError>((image, windows))
         })
         .await;
 
         let state = app.state::<CaptureState>();
         match result {
-            Ok(Ok(image)) => {
+            Ok(Ok((image, windows))) => {
                 let id = state.next_id.fetch_add(1, Ordering::SeqCst) + 1;
                 tracing::info!(id, width = image.width(), height = image.height(), "screenshot captured");
                 *state.current.lock().expect("capture lock") =
-                    Some(Capture { id, image: Arc::new(image), fitted: false });
+                    Some(Capture { id, image: Arc::new(image), windows, fitted: false });
                 if let Err(err) = windows::open_overlay(&app) {
                     tracing::error!(%err, "failed to open overlay");
                     finish(&app);
@@ -130,7 +156,8 @@ fn show_error(app: &AppHandle, detail: &str) {
 }
 
 /// Crops a screenshot of the whole virtual desktop to the monitor the overlay is shown on.
-fn fit_to_monitor(app: &AppHandle, image: &RgbaImage) -> Option<RgbaImage> {
+/// Returns the cropped image and the offset of the crop within the original.
+fn fit_to_monitor(app: &AppHandle, image: &RgbaImage) -> Option<(RgbaImage, i32, i32)> {
     let overlay = windows::overlay(app)?;
     let monitor = overlay.current_monitor().ok().flatten()?;
     let monitors = app.available_monitors().ok()?;
@@ -147,7 +174,8 @@ fn fit_to_monitor(app: &AppHandle, image: &RgbaImage) -> Option<RgbaImage> {
     }
     let pos = monitor.position();
     let size = monitor.size();
-    Some(framenab_capture::crop(image, pos.x - min_x, pos.y - min_y, size.width, size.height))
+    let (ox, oy) = (pos.x - min_x, pos.y - min_y);
+    Some((framenab_capture::crop(image, ox, oy, size.width, size.height), ox, oy))
 }
 
 #[tauri::command]
@@ -157,11 +185,20 @@ pub fn capture_info(app: AppHandle) -> Option<CaptureInfo> {
     let capture = guard.as_mut()?;
     if !capture.fitted {
         capture.fitted = true;
-        if let Some(fitted) = fit_to_monitor(&app, &capture.image) {
+        if let Some((fitted, ox, oy)) = fit_to_monitor(&app, &capture.image) {
             capture.image = Arc::new(fitted);
+            for w in &mut capture.windows {
+                w.x -= ox;
+                w.y -= oy;
+            }
         }
     }
-    Some(CaptureInfo { id: capture.id, width: capture.image.width(), height: capture.image.height() })
+    Some(CaptureInfo {
+        id: capture.id,
+        width: capture.image.width(),
+        height: capture.image.height(),
+        windows: capture.windows.clone(),
+    })
 }
 
 /// Crops the current capture to `selection` and renders the annotations into it.

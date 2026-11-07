@@ -89,7 +89,7 @@ trait CaptureBackend {
 - **Still open:** capture spikes per OS (1 screenshot + 3 s recording) to confirm the crate choice; moves into phase 1
 - **Acceptance:** `pnpm tauri dev` starts a window on all 3 OSes; CI is green.
 
-### Phase 1 – Screenshot mode (the Flameshot part) → **v0.1**
+### Phase 1 – Screenshot mode (the Flameshot part) → **v0.1** ✅ (implemented; acceptance on Windows/macOS still open)
 - Tray icon with menu: *Screenshot*, *Record*, *Open editor*, *Settings*, *Quit*
 - Global shortcuts (default `Print` for screenshot, `Shift+Print` for recording)
 - Overlay: frozen image, dimmed background, drag to select a region, handles to adjust it, pixel magnifier with coordinates and color value, size display (W×H)

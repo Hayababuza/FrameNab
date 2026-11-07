@@ -29,6 +29,8 @@ export interface CaptureInfo {
   id: number;
   width: number;
   height: number;
+  /** Other apps' windows in image pixels, topmost first (empty on Wayland). */
+  windows: { x: number; y: number; w: number; h: number }[];
 }
 
 /** Selection in image pixels. */

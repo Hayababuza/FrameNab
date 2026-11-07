@@ -119,3 +119,22 @@ export function toolbarPosition(
   else y = selection.y + selection.h - toolbar.h - gap;
   return { x, y: Math.max(gap, y) };
 }
+
+/**
+ * Topmost window under `p` (image pixels), converted to a CSS-pixel rect clamped to the screen.
+ * `windows` is ordered topmost first.
+ */
+export function windowAt(
+  windows: Rect[],
+  p: Point,
+  scale: number,
+  screen: { w: number; h: number },
+): Rect | null {
+  const hit = windows.find((w) => contains(w, p));
+  if (!hit) return null;
+  const x0 = Math.max(0, hit.x / scale);
+  const y0 = Math.max(0, hit.y / scale);
+  const x1 = Math.min(screen.w, (hit.x + hit.w) / scale);
+  const y1 = Math.min(screen.h, (hit.y + hit.h) / scale);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}

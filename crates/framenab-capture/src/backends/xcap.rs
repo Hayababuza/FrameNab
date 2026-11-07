@@ -3,7 +3,8 @@
 use image::RgbaImage;
 
 use crate::{
-    CaptureBackend, CaptureError, CaptureTarget, FrameSink, MonitorInfo, Platform, RecordingHandle, Result, bounds,
+    CaptureBackend, CaptureError, CaptureTarget, FrameSink, MonitorInfo, Platform, RecordingHandle, Result, WindowInfo,
+    bounds,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -64,6 +65,28 @@ impl CaptureBackend for XcapBackend {
             }
             CaptureTarget::Window(_) => Err(CaptureError::NotImplemented(self.0)),
         }
+    }
+
+    fn windows(&self) -> Result<Vec<WindowInfo>> {
+        let own_pid = std::process::id();
+        let mut windows: Vec<(i32, WindowInfo)> = xcap::Window::all()
+            .map_err(map_err)?
+            .into_iter()
+            .filter(|w| !w.is_minimized().unwrap_or(true) && w.pid().ok() != Some(own_pid))
+            .filter_map(|w| {
+                let info = WindowInfo {
+                    x: w.x().ok()?,
+                    y: w.y().ok()?,
+                    width: w.width().ok()?,
+                    height: w.height().ok()?,
+                    title: w.title().unwrap_or_default(),
+                };
+                (info.width > 0 && info.height > 0).then(|| (w.z().unwrap_or(0), info))
+            })
+            .collect();
+        // Higher z = closer to the viewer.
+        windows.sort_by_key(|w| std::cmp::Reverse(w.0));
+        Ok(windows.into_iter().map(|(_, w)| w).collect())
     }
 
     fn start_recording(&self, _: &CaptureTarget, _: u32, _: Box<dyn FrameSink>) -> Result<Box<dyn RecordingHandle>> {

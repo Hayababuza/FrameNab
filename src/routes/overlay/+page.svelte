@@ -18,6 +18,7 @@
     toImagePixels,
     toolbarPosition,
     updateDrag,
+    windowAt,
   } from "$lib/annotations/selection";
   import {
     colors,
@@ -59,6 +60,9 @@
   /** Cursor in CSS pixels, while it is over the overlay. */
   let pointer = $state<Point | null>(null);
   let hoverHandle = $state<Handle | null>(null);
+  /** Window under the cursor when the area drag started; a click without dragging selects it. */
+  let clickedWindow: Rect | null = null;
+  let clickPending = $state(false);
 
   let size = $state({ w: window.innerWidth, h: window.innerHeight });
   /** Area to copy, in CSS pixels. */
@@ -129,6 +133,15 @@
     if (selected) drawSelectionFrame(ctx, selected, scale);
     ctx.restore();
 
+    // Window snapping: outline the window under the cursor while there is no selection yet.
+    if (!selection && hoverWindow) {
+      ctx.fillStyle = "rgb(255 99 105 / 12%)";
+      ctx.fillRect(hoverWindow.x, hoverWindow.y, hoverWindow.w, hoverWindow.h);
+      ctx.strokeStyle = "#ff6369";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hoverWindow.x + 1, hoverWindow.y + 1, hoverWindow.w - 2, hoverWindow.h - 2);
+    }
+
     // Dim everything except the selection.
     ctx.fillStyle = "rgb(0 0 0 / 50%)";
     ctx.beginPath();
@@ -151,10 +164,16 @@
     }
   }
 
+  const hoverWindow = $derived(
+    tool === "select" && !selection && pointer && info?.windows.length && (!interaction || clickPending)
+      ? windowAt(info.windows, toImage(pointer), scale, size)
+      : null,
+  );
+
   const showHandles = $derived(tool === "select" && (!interaction || interaction.kind === "area"));
 
   $effect(() => {
-    void [selection, size, annotations, draft, selectedId, showHandles];
+    void [selection, size, annotations, draft, selectedId, showHandles, hoverWindow];
     draw();
   });
 
@@ -293,6 +312,8 @@
         return;
       }
       selectedId = null;
+      clickedWindow = selection ? null : hoverWindow;
+      clickPending = clickedWindow !== null;
       interaction = { kind: "area", drag: beginDrag(selection, c) };
     } else if (tool === "text") {
       startText(p);
@@ -315,6 +336,7 @@
     switch (interaction.kind) {
       case "area":
         selection = updateDrag(interaction.drag, c, size);
+        if (selection.w >= 4 || selection.h >= 4) clickPending = false;
         break;
       case "draw": {
         interaction.points.push(p);
@@ -343,6 +365,10 @@
     if (!interaction) return;
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     if (interaction.kind === "area" && selection && (selection.w < 2 || selection.h < 2)) selection = null;
+    // A click (no drag) on a highlighted window selects that window.
+    if (interaction.kind === "area" && clickPending && clickedWindow) selection = clickedWindow;
+    clickPending = false;
+    clickedWindow = null;
     if (interaction.kind === "draw" && draft && !isTrivial(draft.shape, 3 * scale)) add(draft);
     draft = null;
     interaction = null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { beginDrag, handleAt, toImagePixels, toolbarPosition, updateDrag } from "./selection";
+import { beginDrag, handleAt, toImagePixels, toolbarPosition, updateDrag, windowAt } from "./selection";
 
 const bounds = { w: 100, h: 100 };
 
@@ -67,5 +67,16 @@ describe("selection", () => {
     expect(updateDrag(corner, { x: 50, y: 150 }, bounds)).toEqual({ x: 50, y: 100, w: 50, h: 50 });
     const edge = beginDrag(sel, { x: 200, y: 100 });
     expect(updateDrag(edge, { x: 999, y: 20 }, bounds)).toEqual({ x: 100, y: 20, w: 200, h: 180 });
+  });
+
+  it("finds the topmost window under the cursor and clamps it to the screen", () => {
+    const windows = [
+      { x: 100, y: 100, w: 200, h: 200 }, // on top
+      { x: -50, y: 0, w: 2000, h: 1000 }, // behind, partly off screen
+    ];
+    const screen = { w: 960, h: 540 };
+    expect(windowAt(windows, { x: 150, y: 150 }, 2, screen)).toEqual({ x: 50, y: 50, w: 100, h: 100 });
+    expect(windowAt(windows, { x: 10, y: 10 }, 2, screen)).toEqual({ x: 0, y: 0, w: 960, h: 500 });
+    expect(windowAt(windows, { x: 10, y: 1500 }, 2, screen)).toBeNull();
   });
 });
