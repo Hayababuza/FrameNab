@@ -1,17 +1,22 @@
 <script lang="ts">
   /**
-   * Recorder: a borderless, transparent, fullscreen window. It shows a frame around the area and
-   * the controls next to it; only the controls take mouse input, the rest is click-through so
-   * the recorded apps stay usable.
+   * Recorder window. Three looks:
+   * - Windows/macOS/X11: transparent fullscreen window with a frame around the area and the
+   *   control bar; only the bar takes mouse input, the rest is click-through.
+   * - Wayland, before recording: fullscreen with the frozen screen image (GNOME puts black behind
+   *   transparent fullscreen windows), the frame and the control bar.
+   * - Wayland, while recording: the window shrinks to a compact, draggable bar (countdown, timer,
+   *   pause, stop) so the live screen is visible and usable.
    */
   import { listen } from "@tauri-apps/api/event";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { onMount, tick } from "svelte";
   import type { Rect } from "$lib/bindings/Rect";
   import { toolbarPosition } from "$lib/annotations/selection";
   import { t } from "$lib/i18n/index.svelte";
   import {
+    loadRecorderBackground,
     recorderInfo,
     recorderPause,
     recorderPrepare,
@@ -35,6 +40,8 @@
   let setup = $state<RecorderSetup | null>(null);
   let view = $state({ w: window.innerWidth, h: window.innerHeight });
   let phase = $state<Phase>("setup");
+  /** The window is a small bar instead of covering the screen (Wayland while recording). */
+  let compact = $state(false);
   let paused = $state(false);
   let elapsedMs = $state(0);
   let countdown = $state(0);
@@ -45,6 +52,8 @@
   let delay = $state(3);
   let cursor = $state(true);
 
+  let canvas: HTMLCanvasElement | undefined = $state();
+  let background: ImageBitmap | null = null;
   let bar: HTMLDivElement | undefined = $state();
   let barSize = $state({ w: 0, h: 0 });
   let statusTimer: ReturnType<typeof setInterval> | undefined;
@@ -57,18 +66,16 @@
     return { x: r.x / scale, y: r.y / scale, w: r.w / scale, h: r.h / scale };
   });
 
+  const frame = $derived(
+    area
+      ? { x: area.x - FRAME_GAP, y: area.y - FRAME_GAP, w: area.w + 2 * FRAME_GAP, h: area.h + 2 * FRAME_GAP }
+      : null,
+  );
+
   const barStyle = $derived.by(() => {
-    if (area) {
-      const p = toolbarPosition(
-        {
-          x: area.x - FRAME_GAP,
-          y: area.y - FRAME_GAP,
-          w: area.w + 2 * FRAME_GAP,
-          h: area.h + 2 * FRAME_GAP,
-        },
-        barSize,
-        view,
-      );
+    if (compact) return "left: 0; top: 0;";
+    if (frame) {
+      const p = toolbarPosition(frame, barSize, view);
       return `left: ${p.x}px; top: ${p.y}px;`;
     }
     return `left: ${(view.w - barSize.w) / 2}px; bottom: 48px;`;
@@ -83,10 +90,19 @@
       ]);
       setup = await recorderInfo();
       if (!setup) return void win.close();
+      if (setup.background) {
+        background = await loadRecorderBackground(setup);
+        drawBackground();
+      }
       await tick();
       await win.show();
-      // Some compositors (GNOME/Wayland) ignore fullscreen requests for hidden windows.
-      await win.setFullscreen(true);
+      if (setup.compact && !setup.background) {
+        // Nothing to show behind a frame (e.g. a window chosen in the system dialog): bar only.
+        await enterCompact();
+      } else {
+        // Some compositors (GNOME/Wayland) ignore fullscreen requests for hidden windows.
+        await win.setFullscreen(true);
+      }
       await win.setFocus();
       await updateInputRegion();
     })().catch((e) => (error = String(e)));
@@ -98,17 +114,67 @@
     };
   });
 
-  /** Only the control bar takes clicks; the rest of the window lets them through. */
+  /** Wayland setup view: the frozen screen, dimmed outside the area. */
+  function drawBackground() {
+    if (!canvas || !background) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(view.w * dpr);
+    canvas.height = Math.round(view.h * dpr);
+    const ctx = canvas.getContext("2d")!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.drawImage(background, 0, 0, view.w, view.h);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.beginPath();
+    ctx.rect(0, 0, view.w, view.h);
+    if (area) ctx.rect(area.x, area.y, area.w, area.h);
+    ctx.fill("evenodd");
+  }
+
+  $effect(() => {
+    void [view, area, canvas];
+    drawBackground();
+  });
+
+  /**
+   * Which parts of the window take mouse input: only the bar over the live screen (transparent
+   * mode), everything when the window shows the frozen image or is just the compact bar.
+   */
   async function updateInputRegion() {
     await tick();
+    if (compact || (setup?.background && !compact)) {
+      await setInputRegion([{ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }]);
+      return;
+    }
     const r = bar?.getBoundingClientRect();
     await setInputRegion(r ? [{ x: r.x, y: r.y, w: r.width, h: r.height }] : []);
   }
 
   $effect(() => {
-    void [barSize.w, barSize.h, barStyle, phase];
+    void [barSize.w, barSize.h, barStyle, phase, compact];
     updateInputRegion();
+    if (compact) fitWindowToBar();
   });
+
+  async function enterCompact() {
+    compact = true;
+    await tick();
+    await win.setFullscreen(false);
+    await fitWindowToBar();
+  }
+
+  async function fitWindowToBar() {
+    await tick();
+    if (!bar) return;
+    const r = bar.getBoundingClientRect();
+    await win.setSize(new LogicalSize(Math.ceil(r.width), Math.ceil(r.height)));
+  }
+
+  /** In the compact bar, dragging the empty space moves the window. */
+  function onbarmousedown(e: MouseEvent) {
+    if (!compact || e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button, select, input, label")) return;
+    win.startDragging();
+  }
 
   // ---- recording -----------------------------------------------------------------------------
 
@@ -123,6 +189,9 @@
       phase = "setup";
       return;
     }
+    // Wayland: show the live screen; the countdown runs in the bar, so there is time to drag the
+    // bar out of the recorded area.
+    if (setup?.compact && !compact) await enterCompact();
     phase = "countdown";
     for (countdown = delay; countdown > 0; countdown--) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -175,23 +244,41 @@
 
 <svelte:window {onkeydown} onresize={() => (view = { w: window.innerWidth, h: window.innerHeight })} />
 
-{#if area}
+{#if setup?.background && !compact}
+  <canvas class="background" bind:this={canvas}></canvas>
+{/if}
+
+{#if frame && !compact}
   <div
     class="frame"
     class:live={phase === "recording" && !paused}
     class:paused={phase === "recording" && paused}
-    style="left: {area.x - FRAME_GAP}px; top: {area.y - FRAME_GAP}px; width: {area.w +
-      2 * FRAME_GAP}px; height: {area.h + 2 * FRAME_GAP}px;"
+    style="left: {frame.x}px; top: {frame.y}px; width: {frame.w}px; height: {frame.h}px;"
   ></div>
-  {#if phase === "countdown" && countdown > 0}
+  {#if area && phase === "countdown" && countdown > 0}
     <div class="countdown" style="left: {area.x + area.w / 2}px; top: {area.y + area.h / 2}px;">
       {countdown}
     </div>
   {/if}
 {/if}
 
-<div class="bar" style={barStyle} bind:this={bar} bind:clientWidth={barSize.w} bind:clientHeight={barSize.h}>
-  {#if phase === "setup" || phase === "preparing" || phase === "countdown"}
+<div
+  class="bar"
+  class:compact
+  style={barStyle}
+  bind:this={bar}
+  bind:clientWidth={barSize.w}
+  bind:clientHeight={barSize.h}
+  role="toolbar"
+  tabindex="-1"
+  onmousedown={onbarmousedown}
+>
+  {#if compact}
+    <span class="grip" aria-hidden="true">⋮⋮</span>
+  {/if}
+  {#if phase === "countdown" && compact}
+    <span class="count">{countdown}</span>
+  {:else if phase === "setup" || phase === "preparing" || phase === "countdown"}
     {#if !area}
       <span class="note">{t("recorder.windowHint")}</span>
     {/if}
@@ -280,6 +367,12 @@
     overflow: hidden;
     background: transparent;
   }
+  .background {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+  }
   .frame {
     position: fixed;
     box-sizing: border-box;
@@ -323,6 +416,27 @@
     color: #fff;
     font:
       13px system-ui,
+      sans-serif;
+    outline: none;
+  }
+  .bar.compact {
+    flex-wrap: nowrap;
+    max-width: none;
+    width: max-content;
+    box-shadow: none;
+    cursor: move;
+  }
+  .grip {
+    padding: 0 2px;
+    opacity: 0.5;
+    letter-spacing: -2px;
+    user-select: none;
+  }
+  .count {
+    min-width: 48px;
+    text-align: center;
+    font:
+      600 22px/32px system-ui,
       sans-serif;
   }
   .note {

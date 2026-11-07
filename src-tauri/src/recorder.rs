@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use framenab_capture::{CaptureTarget, Crop, FrameStream, Recording, StreamOptions, record};
 use framenab_core::recorder::ProjectRecorder;
+use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 use tauri_plugin_store::StoreExt;
@@ -39,6 +40,12 @@ pub struct Setup {
     region: Option<Region>,
     image_width: u32,
     image_height: u32,
+    /// The frozen screen image from the area selection is available as background
+    /// (`framenab://localhost/recorder-background`). Used on Wayland, where a fullscreen window
+    /// cannot be transparent: GNOME puts black behind fullscreen windows.
+    background: bool,
+    /// Wayland: the window has to shrink to a compact bar while recording.
+    compact: bool,
 }
 
 #[derive(Default)]
@@ -52,6 +59,7 @@ struct Inner {
 #[derive(Default)]
 pub struct RecorderState {
     inner: Mutex<Inner>,
+    background: Mutex<Option<Arc<RgbaImage>>>,
     /// The main window was hidden for the capture; show it again when the recorder closes.
     restore_main: AtomicBool,
     /// Click-through: only these rects (logical pixels) take mouse input (non-Linux).
@@ -63,16 +71,31 @@ impl RecorderState {
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().expect("recorder lock")
     }
+
+    /// The frozen screen image shown behind the frame before recording (Wayland).
+    pub fn background(&self) -> Option<Arc<RgbaImage>> {
+        self.background.lock().expect("background lock").clone()
+    }
 }
 
-/// Opens the recorder window for `region` (or a window chosen later, if `None`).
-pub fn open(app: &AppHandle, region: Option<Region>, image_width: u32, image_height: u32, restore_main: bool) {
+/// Opens the recorder window for `region` (or a window chosen later, if `None`). `background` is
+/// the frozen screen image of the area selection, if there was one.
+pub fn open(
+    app: &AppHandle,
+    region: Option<Region>,
+    (image_width, image_height): (u32, u32),
+    background: Option<Arc<RgbaImage>>,
+    restore_main: bool,
+) {
     let state = app.state::<RecorderState>();
+    let compact = framenab_capture::Platform::detect().requires_portal();
+    let background = background.filter(|_| compact);
     {
         let mut inner = state.lock();
         *inner = Inner::default();
-        inner.setup = Some(Setup { region, image_width, image_height });
+        inner.setup = Some(Setup { region, image_width, image_height, background: background.is_some(), compact });
     }
+    *state.background.lock().expect("background lock") = background;
     if restore_main {
         state.restore_main.store(true, Ordering::SeqCst);
     }
@@ -110,6 +133,7 @@ pub fn cleanup(app: &AppHandle) {
             tracing::info!(path = %dir.display(), "recording kept after the recorder was closed");
         }
     }
+    state.background.lock().expect("background lock").take();
     if state.restore_main.swap(false, Ordering::SeqCst) {
         windows::show_main(app);
     }

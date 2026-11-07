@@ -4,7 +4,7 @@ import type { Annotation } from "$lib/bindings/Annotation";
 
 export type Platform = "windows" | "macOs" | "linuxX11" | "linuxWayland" | "unknown";
 export type ExportFormat = "gif" | "apng" | "webp" | "pngSequence" | "mp4" | "webm";
-export type Action = "screenshot" | "record" | "editor" | "settings";
+export type Action = "screenshot" | "record" | "recordScreen" | "editor" | "settings";
 
 export interface AppInfo {
   version: string;
@@ -101,6 +101,18 @@ export interface RecorderSetup {
   region: { x: number; y: number; w: number; h: number } | null;
   imageWidth: number;
   imageHeight: number;
+  /** The frozen screen image is available via `loadRecorderBackground` (Wayland). */
+  background: boolean;
+  /** Wayland: shrink to a compact bar while recording (no transparent fullscreen there). */
+  compact: boolean;
+}
+
+/** The frozen screen image of the area selection, shown behind the frame on Wayland. */
+export async function loadRecorderBackground(setup: RecorderSetup): Promise<ImageBitmap> {
+  const response = await fetch(convertFileSrc("recorder-background", "framenab"));
+  if (!response.ok) throw new Error(`recorder background: HTTP ${response.status}`);
+  const pixels = new Uint8ClampedArray(await response.arrayBuffer());
+  return createImageBitmap(new ImageData(pixels, setup.imageWidth, setup.imageHeight));
 }
 
 export interface RecorderStatus {

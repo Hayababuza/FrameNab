@@ -19,6 +19,10 @@ pub fn dispatch(app: &AppHandle, action: Action) {
             record(app, false);
             Ok(())
         }
+        Action::RecordScreen => {
+            record_screen(app);
+            Ok(())
+        }
         Action::Editor => {
             show_main(app);
             Ok(())
@@ -40,6 +44,18 @@ pub fn record(app: &AppHandle, hide_main: bool) {
     } else {
         crate::capture::start(app, hide_main, crate::capture::CaptureMode::Record);
     }
+}
+
+/// Opens the recorder for the whole primary monitor, without choosing an area first.
+fn record_screen(app: &AppHandle) {
+    if crate::recorder::is_recording(app) {
+        return crate::recorder::request_stop(app);
+    }
+    let monitor = app.primary_monitor().ok().flatten().or_else(|| app.available_monitors().ok()?.into_iter().next());
+    let Some(monitor) = monitor else { return };
+    let size = monitor.size();
+    let region = crate::recorder::Region { x: 0, y: 0, w: size.width, h: size.height };
+    crate::recorder::open(app, Some(region), (size.width, size.height), None, false);
 }
 
 pub fn show_main(app: &AppHandle) {

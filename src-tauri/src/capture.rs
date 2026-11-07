@@ -231,28 +231,28 @@ pub fn record_selection(app: AppHandle, selection: Option<Selection>) -> Result<
         Some(s) => recorder::Region { x: s.x as i32, y: s.y as i32, w: s.width.max(2), h: s.height.max(2) },
         None => recorder::Region { x: 0, y: 0, w: width, h: height },
     };
-    open_recorder(&app, Some(region), width, height);
+    open_recorder(&app, Some(region));
     Ok(())
 }
 
 /// Record mode: records a single window chosen in the system dialog (Wayland).
 #[tauri::command]
 pub fn record_window(app: AppHandle) -> Result<(), String> {
-    let (width, height) = {
-        let state = app.state::<CaptureState>();
-        let guard = state.current.lock().expect("capture lock");
-        let capture = guard.as_ref().ok_or("no active screenshot")?;
-        (capture.image.width(), capture.image.height())
-    };
-    open_recorder(&app, None, width, height);
+    open_recorder(&app, None);
     Ok(())
 }
 
-fn open_recorder(app: &AppHandle, region: Option<recorder::Region>, width: u32, height: u32) {
+fn open_recorder(app: &AppHandle, region: Option<recorder::Region>) {
+    let image = {
+        let state = app.state::<CaptureState>();
+        let guard = state.current.lock().expect("capture lock");
+        guard.as_ref().map(|c| Arc::clone(&c.image))
+    };
+    let size = image.as_ref().map_or((1, 1), |i| (i.width(), i.height()));
     // The recorder takes over bringing the main window back.
     let restore_main = app.state::<CaptureState>().restore_main.swap(false, Ordering::SeqCst);
     windows::close_overlay(app);
-    recorder::open(app, region, width, height, restore_main);
+    recorder::open(app, region, size, image, restore_main);
 }
 
 /// Crops the current capture to `selection` and renders the annotations into it.
@@ -405,6 +405,12 @@ pub fn protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u
     let app = ctx.app_handle();
     if let Some(pin_id) = path.strip_prefix("pin/").and_then(|id| id.parse().ok()) {
         return match app.state::<pin::PinState>().image(pin_id) {
+            Some(image) => respond(StatusCode::OK, image.as_raw().clone()),
+            None => respond(StatusCode::NOT_FOUND, Vec::new()),
+        };
+    }
+    if path == "recorder-background" {
+        return match app.state::<recorder::RecorderState>().background() {
             Some(image) => respond(StatusCode::OK, image.as_raw().clone()),
             None => respond(StatusCode::NOT_FOUND, Vec::new()),
         };

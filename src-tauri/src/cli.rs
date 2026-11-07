@@ -3,7 +3,8 @@
 //!
 //! ```text
 //! framenab gui        open the screenshot overlay
-//! framenab record     open the recording frame
+//! framenab record          choose the area to record (stops a running recording)
+//! framenab record-screen   record the whole screen right away
 //! framenab editor     open the editor
 //! framenab settings   open the settings
 //! framenab --hidden   start in the tray only (autostart)
@@ -16,6 +17,7 @@ use serde::Deserialize;
 pub enum Action {
     Screenshot,
     Record,
+    RecordScreen,
     Editor,
     Settings,
 }
@@ -36,6 +38,7 @@ where
         match arg.as_ref() {
             "gui" | "screen" | "screenshot" => out.action = Some(Action::Screenshot),
             "record" => out.action = Some(Action::Record),
+            "record-screen" => out.action = Some(Action::RecordScreen),
             "editor" => out.action = Some(Action::Editor),
             "settings" | "config" => out.action = Some(Action::Settings),
             "--hidden" | "--tray" => out.hidden = true,

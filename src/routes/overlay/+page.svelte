@@ -153,7 +153,7 @@
     }
 
     // Dim everything except the selection.
-    ctx.fillStyle = "rgb(0 0 0 / 50%)";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
     ctx.beginPath();
     ctx.rect(0, 0, size.w, size.h);
     if (selection) ctx.rect(selection.x, selection.y, selection.w, selection.h);
