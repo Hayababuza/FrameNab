@@ -8,6 +8,11 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: vitePreprocess(),
+  // Inject component CSS through JavaScript instead of separate virtual CSS modules: the Vite dev
+  // server sometimes failed to deliver those when a new window opened ("failed to load virtual
+  // css module"), leaving e.g. the overlay's loupe unstyled in the top-left corner.
+  vitePlugin: { emitCss: false },
+  compilerOptions: { css: "injected" },
   kit: {
     adapter: adapter({
       fallback: "index.html",

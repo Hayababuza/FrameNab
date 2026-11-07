@@ -51,7 +51,8 @@
     const boxH = SIZE + 40;
     const left = cursor.x + OFFSET + SIZE > screen.w ? cursor.x - OFFSET - SIZE : cursor.x + OFFSET;
     const top = cursor.y + OFFSET + boxH > screen.h ? cursor.y - OFFSET - boxH : cursor.y + OFFSET;
-    return `left: ${left}px; top: ${top}px;`;
+    // position is set inline as well, so the loupe is placed correctly even without its CSS.
+    return `position: fixed; left: ${left}px; top: ${top}px;`;
   });
 
   $effect(() => {

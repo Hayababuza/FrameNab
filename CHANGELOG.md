@@ -39,6 +39,7 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - CI for Linux, Windows and macOS
 
 ### Fixed
+- Dev mode: windows sometimes opened without their component CSS ("failed to load virtual css module"), e.g. the loupe stuck in the top-left corner; component CSS is now injected through JavaScript
 - Pinned screenshots showed a black window: the frontend percent-encodes the protocol path (`pin%2F3`), which the backend did not decode
 - Pinning no longer brings back the main window on top of the new pin; the pin gets focus. The main window comes back once the last pin is closed (if it was hidden for the screenshot)
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
