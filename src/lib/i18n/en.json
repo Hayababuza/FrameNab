@@ -109,9 +109,13 @@
   "settings.restartNeeded": "Takes effect after restarting FrameNab.",
   "tool.click": "Click marker",
   "editor.annotationRange": "Annotation on frames {a}–{b}",
-  "editor.applyRange": "Use selected frames",
+  "editor.applyRange": "On selected frames",
   "editor.applyRangeTitle": "Show this annotation on the frames selected in the filmstrip",
   "editor.deleteAnnotation": "Delete annotation",
-  "editor.annotateHint": "New annotations cover frames {a}–{b} (select frames in the filmstrip)",
-  "editor.hasAnnotation": "Has annotations"
+  "editor.hasAnnotation": "Has annotations",
+  "editor.scope": "New annotations on:",
+  "editor.scopeAll": "All frames",
+  "editor.scopeSelection": "Selected frames ({a}–{b})",
+  "editor.scopeSelectionTitle": "Only on the frames selected in the filmstrip, e.g. for a click marker",
+  "editor.applyAll": "On all frames"
 }

@@ -62,12 +62,16 @@
   );
   const annotations = $derived(view?.project.annotations ?? []);
   const selectedAnnotation = $derived(annotations.find((a) => a.id === selectedId) ?? null);
-  /** Frames new annotations cover: the selected frames, or the current frame. */
-  const range = $derived.by((): [number, number] => {
+  /** Which frames new annotations cover: the whole recording (default) or the selected frames. */
+  let scope = $state<"all" | "selection">("all");
+  /** The selected frames, or the current frame if none are selected. */
+  const selectionRange = $derived.by((): [number, number] => {
     if (!selected.size) return [current, current];
     const list = [...selected];
     return [Math.min(...list), Math.max(...list)];
   });
+  const allRange = $derived<[number, number]>([0, Math.max(0, frames.length - 1)]);
+  const range = $derived(scope === "all" ? allRange : selectionRange);
 
   async function setAnnotations(list: Annotation[]) {
     view = await editorSetAnnotations(list);
@@ -98,9 +102,10 @@
   }
 
   /** Puts the selected annotation on the selected frames. */
-  function applyRange() {
+  /** Puts the selected annotation on all frames, or on the selected frames. */
+  function applyRange(to: "all" | "selection") {
     if (!selectedId) return;
-    const [frameStart, frameEnd] = range;
+    const [frameStart, frameEnd] = to === "all" ? allRange : selectionRange;
     setAnnotations(annotations.map((a) => (a.id === selectedId ? { ...a, frameStart, frameEnd } : a)));
   }
 
@@ -427,10 +432,32 @@
             b: selectedAnnotation.frameEnd + 1,
           })}
         </span>
-        <button onclick={applyRange} title={t("editor.applyRangeTitle")}>{t("editor.applyRange")}</button>
+        <button onclick={() => applyRange("all")}>{t("editor.applyAll")}</button>
+        <button onclick={() => applyRange("selection")} title={t("editor.applyRangeTitle")}>
+          {t("editor.applyRange")}
+        </button>
         <button onclick={deleteAnnotation}>{t("editor.deleteAnnotation")}</button>
       {:else}
-        <span class="range">{t("editor.annotateHint", { a: range[0] + 1, b: range[1] + 1 })}</span>
+        <span class="range">{t("editor.scope")}</span>
+        <div class="segmented" role="radiogroup" aria-label={t("editor.scope")}>
+          <button
+            role="radio"
+            aria-checked={scope === "all"}
+            class:active={scope === "all"}
+            onclick={() => (scope = "all")}
+          >
+            {t("editor.scopeAll")}
+          </button>
+          <button
+            role="radio"
+            aria-checked={scope === "selection"}
+            class:active={scope === "selection"}
+            onclick={() => (scope = "selection")}
+            title={t("editor.scopeSelectionTitle")}
+          >
+            {t("editor.scopeSelection", { a: selectionRange[0] + 1, b: selectionRange[1] + 1 })}
+          </button>
+        </div>
       {/if}
     </div>
 
@@ -689,6 +716,24 @@
   }
   .annotate button {
     white-space: nowrap;
+  }
+  .segmented {
+    display: flex;
+  }
+  .segmented button {
+    border-radius: 0;
+  }
+  .segmented button:first-child {
+    border-radius: 6px 0 0 6px;
+  }
+  .segmented button:last-child {
+    border-radius: 0 6px 6px 0;
+    border-left: none;
+  }
+  .segmented button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
   }
   .frame.in-range {
     outline: 2px dashed var(--accent);
