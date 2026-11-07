@@ -7,7 +7,7 @@ import type { Annotation } from "$lib/bindings/Annotation";
 import type { Point } from "$lib/bindings/Point";
 import type { Rect } from "$lib/bindings/Rect";
 import type { Rgba } from "$lib/bindings/Rgba";
-import { counterRadius, LINE_HEIGHT, normalizeRect, shapeBounds, textPadding } from "./geometry";
+import { clickRadius, counterRadius, LINE_HEIGHT, normalizeRect, shapeBounds, textPadding } from "./geometry";
 
 const css = (c: Rgba, opacity = 1) => `rgba(${c.r}, ${c.g}, ${c.b}, ${(c.a / 255) * opacity})`;
 export const FONT_FAMILY = "sans-serif";
@@ -146,6 +146,19 @@ export function drawAnnotation(ctx: CanvasRenderingContext2D, a: Annotation) {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(String(shape.value), shape.at.x, shape.at.y);
+      break;
+    }
+    case "click": {
+      // Mirrors framenab_render::draw_click: translucent center, ring in the stroke color.
+      const r = clickRadius(style.width);
+      ctx.fillStyle = css(style.stroke, style.opacity * 0.45);
+      ctx.beginPath();
+      ctx.arc(shape.at.x, shape.at.y, r * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, style.width * 0.75);
+      ctx.beginPath();
+      ctx.arc(shape.at.x, shape.at.y, r, 0, Math.PI * 2);
+      ctx.stroke();
       break;
     }
     case "pixelate":

@@ -68,6 +68,7 @@ pub fn run() {
             editor::editor_view,
             editor::editor_delete,
             editor::editor_undo,
+            editor::editor_set_annotations,
             editor::editor_export,
             editor::editor_cancel_export,
             editor::recording_formats,

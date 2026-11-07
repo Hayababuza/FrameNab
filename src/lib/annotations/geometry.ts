@@ -57,12 +57,16 @@ export function hitTest(shape: Shape, p: Point, tolerance = 4, width = 4): boole
       return inRect(p, shapeBounds(shape), tolerance);
     case "counter":
       return Math.hypot(p.x - shape.at.x, p.y - shape.at.y) <= counterRadius(width) + tolerance;
+    case "click":
+      return Math.hypot(p.x - shape.at.x, p.y - shape.at.y) <= clickRadius(width) + tolerance;
   }
 }
 
 /** Sizes derived from the stroke width; mirror `framenab_render::{counter_radius, text_padding}`. */
 export const LINE_HEIGHT = 1.25;
 export const counterRadius = (width: number) => 10 + width * 2;
+/** Outer radius of a click marker; mirrors `framenab_render::click_radius`. */
+export const clickRadius = (width: number) => 14 + width * 3;
 export const textPadding = (fontSize: number) => Math.round(fontSize * 0.2);
 
 /** Moves a shape by `(dx, dy)`; mirrors `Shape::translated` in Rust. */
@@ -83,6 +87,7 @@ export function translateShape(shape: Shape, dx: number, dy: number): Shape {
       return { ...shape, points: shape.points.map(p) };
     case "text":
     case "counter":
+    case "click":
       return { ...shape, at: p(shape.at) };
   }
 }
@@ -118,8 +123,9 @@ export function shapeBounds(shape: Shape, width = 0): Rect {
         h: lines.length * shape.fontSize * LINE_HEIGHT,
       };
     }
-    case "counter": {
-      const r = counterRadius(width);
+    case "counter":
+    case "click": {
+      const r = shape.type === "counter" ? counterRadius(width) : clickRadius(width);
       return { x: shape.at.x - r, y: shape.at.y - r, w: 2 * r, h: 2 * r };
     }
   }

@@ -106,5 +106,12 @@
   "settings.system": "System",
   "settings.xwayland": "FrameNab-Fenster über XWayland anzeigen (empfohlen)",
   "settings.xwaylandHelp": "Hält Aufnahmerahmen und Pins im Vordergrund und platziert sie exakt. Natives Wayland kann das nicht; bei gebrochener Skalierung (125 %, 150 %) kann die App leicht unscharf wirken.",
-  "settings.restartNeeded": "Wirkt nach einem Neustart von FrameNab."
+  "settings.restartNeeded": "Wirkt nach einem Neustart von FrameNab.",
+  "tool.click": "Klick-Markierung",
+  "editor.annotationRange": "Annotation auf Frames {a}–{b}",
+  "editor.applyRange": "Auf ausgewählte Frames",
+  "editor.applyRangeTitle": "Diese Annotation auf den im Filmstreifen ausgewählten Frames zeigen",
+  "editor.deleteAnnotation": "Annotation löschen",
+  "editor.annotateHint": "Neue Annotationen gelten für Frames {a}–{b} (Frames im Filmstreifen auswählen)",
+  "editor.hasAnnotation": "Hat Annotationen"
 }

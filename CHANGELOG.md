@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Added
 - Wayland sessions: FrameNab's windows run on XWayland by default, so the recording frame, its control bar and pins stay on top (also when clicking into other apps) and are placed exactly; capture still uses the portal; Settings → System switches back to native Wayland (after a restart)
+- Editor: annotations over frame ranges with the same tools as for screenshots (arrow, line, rectangle, ellipse, pen, highlighter, text, numbered marker, pixelate, blur); new annotations cover the frames selected in the filmstrip; select an annotation to move it, restyle it, put it on other frames or delete it; frames with annotations are marked in the filmstrip; annotations are burned into the saved GIF/video
+- New "Click marker" annotation (K): a translucent circle with a ring, to mark mouse clicks by hand — in the editor and for screenshots
 - Editor: the preview fills the available space (small recordings are enlarged), on a plain background instead of a checkerboard
 - Editor: "New recording" button; the editor hides during the capture and comes back afterwards (also when the selection is cancelled)
 - Wayland recorder shows the frame around the area while recording: the window switches from fullscreen to maximized (which can be transparent on GNOME), finds its position on screen by locating a color marker in a portal screenshot, and draws the frame and the control bar next to the area; if the marker is not found it falls back to the compact bar

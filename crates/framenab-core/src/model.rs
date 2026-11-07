@@ -96,16 +96,48 @@ impl Default for Style {
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 #[ts(export)]
 pub enum Shape {
-    Arrow { from: Point, to: Point },
-    Line { from: Point, to: Point },
-    Rect { rect: Rect },
-    Ellipse { rect: Rect },
-    Pen { points: Vec<Point> },
-    Highlighter { points: Vec<Point> },
-    Text { at: Point, text: String, font_size: f32, background: Option<Rgba> },
-    Counter { at: Point, value: u32 },
-    Blur { rect: Rect, radius: f32 },
-    Pixelate { rect: Rect, block_size: u32 },
+    Arrow {
+        from: Point,
+        to: Point,
+    },
+    Line {
+        from: Point,
+        to: Point,
+    },
+    Rect {
+        rect: Rect,
+    },
+    Ellipse {
+        rect: Rect,
+    },
+    Pen {
+        points: Vec<Point>,
+    },
+    Highlighter {
+        points: Vec<Point>,
+    },
+    Text {
+        at: Point,
+        text: String,
+        font_size: f32,
+        background: Option<Rgba>,
+    },
+    Counter {
+        at: Point,
+        value: u32,
+    },
+    /// Marks a mouse click: a filled circle with a ring around it.
+    Click {
+        at: Point,
+    },
+    Blur {
+        rect: Rect,
+        radius: f32,
+    },
+    Pixelate {
+        rect: Rect,
+        block_size: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -151,7 +183,7 @@ impl Shape {
             Self::Pen { points } | Self::Highlighter { points } => {
                 points.iter_mut().for_each(|p| *p = p.offset(dx, dy));
             }
-            Self::Text { at, .. } | Self::Counter { at, .. } => *at = at.offset(dx, dy),
+            Self::Text { at, .. } | Self::Counter { at, .. } | Self::Click { at } => *at = at.offset(dx, dy),
         }
         shape
     }

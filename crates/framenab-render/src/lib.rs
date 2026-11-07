@@ -22,6 +22,12 @@ pub fn counter_radius(width: f32) -> f32 {
     10.0 + width * 2.0
 }
 
+/// Outer radius of a click marker for a given stroke width.
+#[must_use]
+pub fn click_radius(width: f32) -> f32 {
+    14.0 + width * 3.0
+}
+
 /// Padding around text that has a background.
 #[must_use]
 pub fn text_padding(font_size: f32) -> f32 {
@@ -66,6 +72,10 @@ pub fn draw(image: &mut RgbaImage, annotation: &Annotation) -> Result<(), Render
         }
         Shape::Counter { at, value } => {
             draw_counter(image, *at, *value, style)?;
+            return Ok(());
+        }
+        Shape::Click { at } => {
+            draw_click(image, *at, style)?;
             return Ok(());
         }
         _ => {}
@@ -215,6 +225,18 @@ fn draw_counter(image: &mut RgbaImage, at: Point, value: u32, style: &Style) -> 
     Ok(())
 }
 
+/// Click marker: a translucent filled circle and a ring in the stroke color.
+fn draw_click(image: &mut RgbaImage, at: Point, style: &Style) -> Result<(), RenderError> {
+    let (w, h) = image.dimensions();
+    let mut pixmap = Pixmap::new(w, h).ok_or(RenderError::InvalidSize(w, h))?;
+    let radius = click_radius(style.width);
+    fill_path(&mut pixmap, PathBuilder::from_circle(at.x, at.y, radius * 0.6), style.stroke, style.opacity * 0.45);
+    let ring = Style { width: (style.width * 0.75).max(2.0), ..style.clone() };
+    stroke_path(&mut pixmap, PathBuilder::from_circle(at.x, at.y, radius), &ring);
+    composite(image, &pixmap);
+    Ok(())
+}
+
 /// Clamps a rect to the image and returns `(x, y, w, h)` in whole pixels.
 fn pixel_rect(image: &RgbaImage, rect: Rect) -> Option<(u32, u32, u32, u32)> {
     let r = rect.normalized();
@@ -316,6 +338,16 @@ mod tests {
         // Ring of the circle is red, far corner untouched.
         assert_eq!(img.get_pixel(60 - 15, 30).0, [0xFF, 0x3B, 0x30, 0xFF]);
         assert_eq!(img.get_pixel(0, 0).0, [255; 4]);
+    }
+
+    #[test]
+    fn click_marker_has_ring_and_translucent_center() {
+        let mut img = RgbaImage::from_pixel(100, 100, image::Rgba([255, 255, 255, 255]));
+        draw(&mut img, &annotation(Shape::Click { at: Point { x: 50.0, y: 50.0 } })).unwrap();
+        let ring = img.get_pixel(50 + click_radius(4.0) as u32, 50).0;
+        assert_eq!(ring[1], 0x3B, "ring in the stroke color: {ring:?}");
+        let center = img.get_pixel(50, 50).0;
+        assert!(center[1] > 0x3B && center[1] < 255, "center is a blend: {center:?}");
     }
 
     #[test]

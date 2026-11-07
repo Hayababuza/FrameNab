@@ -154,6 +154,8 @@ export interface EditorView {
 export const editorView = () => invoke<EditorView | null>("editor_view");
 export const editorDelete = (indices: number[]) => invoke<EditorView>("editor_delete", { indices });
 export const editorUndo = (redo = false) => invoke<EditorView>("editor_undo", { redo });
+export const editorSetAnnotations = (annotations: Annotation[]) =>
+  invoke<EditorView>("editor_set_annotations", { annotations });
 /** Saves the recording (into the save folder, or with `ask` via a "Save as" dialog); resolves to the
  * file path, or null if the dialog was cancelled. */
 export const editorExport = (ask = false) => invoke<string | null>("editor_export", { ask });

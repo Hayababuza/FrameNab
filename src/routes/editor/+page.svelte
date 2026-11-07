@@ -1,16 +1,22 @@
 <script lang="ts">
   /**
-   * Editor for recordings (first version): preview with playback, a filmstrip of all frames,
-   * deleting frames with undo/redo, and saving the result into the save folder.
+   * Editor for recordings: preview with playback, a filmstrip of all frames, deleting frames,
+   * annotations over frame ranges, undo/redo, and saving the result into the save folder.
    */
   import { listen } from "@tauri-apps/api/event";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
+  import type { Annotation } from "$lib/bindings/Annotation";
+  import type { Rgba } from "$lib/bindings/Rgba";
+  import { colors, type Tool, toolForKey, widths } from "$lib/annotations/tools";
+  import AnnotationLayer from "$lib/components/AnnotationLayer.svelte";
+  import AnnotationTools from "$lib/components/AnnotationTools.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
     editorCancelExport,
     editorDelete,
     editorExport,
+    editorSetAnnotations,
     editorUndo,
     editorView,
     previewUrl,
@@ -41,6 +47,12 @@
   let drag: { anchor: number; base: Set<number> | null; x: number } | null = null;
   let autoScroll: ReturnType<typeof setInterval> | undefined;
 
+  // Annotations
+  let tool = $state<Tool>("select");
+  let color = $state<Rgba>(colors[0]);
+  let strokeWidth = $state(widths[1]);
+  let selectedId = $state<string | null>(null);
+
   const frames = $derived(view?.project.frames ?? []);
   const duration = $derived(frames.reduce((sum, f) => sum + f.delayMs, 0));
   const thumbWidth = $derived(
@@ -48,6 +60,57 @@
       ? Math.max(1, Math.round((view.project.width * THUMB_HEIGHT) / Math.max(1, view.project.height)))
       : 160,
   );
+  const annotations = $derived(view?.project.annotations ?? []);
+  const selectedAnnotation = $derived(annotations.find((a) => a.id === selectedId) ?? null);
+  /** Frames new annotations cover: the selected frames, or the current frame. */
+  const range = $derived.by((): [number, number] => {
+    if (!selected.size) return [current, current];
+    const list = [...selected];
+    return [Math.min(...list), Math.max(...list)];
+  });
+
+  async function setAnnotations(list: Annotation[]) {
+    view = await editorSetAnnotations(list);
+    if (selectedId && !list.some((a) => a.id === selectedId)) selectedId = null;
+  }
+
+  /** Changing color or width while an annotation is selected restyles it. */
+  function restyle(change: { color?: Rgba; width?: number }) {
+    if (!selectedAnnotation) return;
+    setAnnotations(
+      annotations.map((a) =>
+        a.id === selectedId
+          ? {
+              ...a,
+              style: {
+                ...a.style,
+                ...(change.color ? { stroke: change.color } : {}),
+                ...(change.width ? { width: change.width } : {}),
+              },
+            }
+          : a,
+      ),
+    );
+  }
+
+  function deleteAnnotation() {
+    if (selectedId) setAnnotations(annotations.filter((a) => a.id !== selectedId));
+  }
+
+  /** Puts the selected annotation on the selected frames. */
+  function applyRange() {
+    if (!selectedId) return;
+    const [frameStart, frameEnd] = range;
+    setAnnotations(annotations.map((a) => (a.id === selectedId ? { ...a, frameStart, frameEnd } : a)));
+  }
+
+  /** Frames that have at least one annotation (for the filmstrip markers). */
+  const annotated = $derived.by(() => {
+    const covered: boolean[] = [];
+    for (const a of annotations) for (let i = a.frameStart; i <= a.frameEnd; i++) covered[i] = true;
+    return covered;
+  });
+
   /** Frames to delete: the selection, or the current frame if nothing is selected. */
   const toDelete = $derived(
     selected.size ? [...selected].sort((a, b) => a - b) : frames.length ? [current] : [],
@@ -250,13 +313,14 @@
       [ctrl && key === "y", () => undo(true)],
       [ctrl && key === "s", () => save(e.shiftKey)],
       [ctrl && key === "a", () => (selected = new Set(frames.map((_, i) => i)))],
-      [e.key === "Delete" || e.key === "Backspace", () => deleteFrames()],
+      [e.key === "Delete" || e.key === "Backspace", () => (selectedId ? deleteAnnotation() : deleteFrames())],
       [e.key === " ", () => play()],
       [e.key === "ArrowLeft", () => (stop(), goTo(current - 1))],
       [e.key === "ArrowRight", () => (stop(), goTo(current + 1))],
       [e.key === "Home", () => (stop(), goTo(0))],
       [e.key === "End", () => (stop(), goTo(frames.length - 1))],
-      [e.key === "Escape", () => (selected = new Set())],
+      [e.key === "Escape", () => (selectedId ? (selectedId = null) : (selected = new Set()))],
+      [!ctrl && !e.altKey && !!toolForKey(key), () => (tool = toolForKey(key)!)],
     ];
     const action = actions.find(([matches]) => matches);
     if (action) {
@@ -353,6 +417,23 @@
       {/if}
     </header>
 
+    <div class="annotate">
+      <AnnotationTools bind:tool bind:color bind:width={strokeWidth} onstyle={restyle} disabled={playing} />
+      <span class="spacer"></span>
+      {#if selectedAnnotation}
+        <span class="range">
+          {t("editor.annotationRange", {
+            a: selectedAnnotation.frameStart + 1,
+            b: selectedAnnotation.frameEnd + 1,
+          })}
+        </span>
+        <button onclick={applyRange} title={t("editor.applyRangeTitle")}>{t("editor.applyRange")}</button>
+        <button onclick={deleteAnnotation}>{t("editor.deleteAnnotation")}</button>
+      {:else}
+        <span class="range">{t("editor.annotateHint", { a: range[0] + 1, b: range[1] + 1 })}</span>
+      {/if}
+    </div>
+
     {#if saved}
       <div class="notice">
         <span>{t("editor.saved", { path: saved })}</span>
@@ -365,7 +446,20 @@
 
     <main class="preview">
       {#if frames[current]}
-        <img src={previewUrl(frames[current].id)} alt="" draggable="false" />
+        <AnnotationLayer
+          src={previewUrl(frames[current].id)}
+          width={view.project.width}
+          height={view.project.height}
+          {annotations}
+          frame={current}
+          {range}
+          {tool}
+          {color}
+          {strokeWidth}
+          bind:selectedId
+          readonly={playing}
+          onchange={setAnnotations}
+        />
       {/if}
     </main>
 
@@ -419,6 +513,9 @@
             class="frame"
             class:current={i === current}
             class:selected={selected.has(i)}
+            class:in-range={!!selectedAnnotation &&
+              i >= selectedAnnotation.frameStart &&
+              i <= selectedAnnotation.frameEnd}
             onmousedown={(e) => onframedown(i, e)}
             style:left="{PAD + i * stride}px"
             style:width="{thumbWidth}px"
@@ -430,7 +527,11 @@
               draggable="false"
               style:height="{THUMB_HEIGHT}px"
             />
-            <span class="meta"><b>{i + 1}</b>{frame.delayMs} ms</span>
+            <span class="meta"
+              ><b
+                >{i + 1}{#if annotated[i]}<i class="mark" title={t("editor.hasAnnotation")}></i>{/if}</b
+              >{frame.delayMs} ms</span
+            >
           </button>
         {/each}
       </div>
@@ -574,10 +675,33 @@
     background: var(--bg);
   }
   /* Fill the available space (also enlarging small recordings), keeping the aspect ratio. */
-  .preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
+  .annotate {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .range {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+  .annotate button {
+    white-space: nowrap;
+  }
+  .frame.in-range {
+    outline: 2px dashed var(--accent);
+    outline-offset: 1px;
+  }
+  .mark {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-left: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: middle;
   }
   .strip {
     overflow-x: auto;

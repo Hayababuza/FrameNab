@@ -15,5 +15,6 @@ export type Shape =
   | { type: "highlighter"; points: Array<Point> }
   | { type: "text"; at: Point; text: string; fontSize: number; background: Rgba | null }
   | { type: "counter"; at: Point; value: number }
+  | { type: "click"; at: Point }
   | { type: "blur"; rect: Rect; radius: number }
   | { type: "pixelate"; rect: Rect; blockSize: number };

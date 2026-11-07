@@ -130,6 +130,18 @@ pub fn editor_delete(app: AppHandle, indices: Vec<usize>) -> Result<EditorView, 
     })
 }
 
+/// Replaces all annotations (the editor sends the whole list after each change).
+#[tauri::command]
+pub fn editor_set_annotations(
+    app: AppHandle,
+    annotations: Vec<framenab_core::Annotation>,
+) -> Result<EditorView, String> {
+    edit(&app, |p| {
+        p.annotations = annotations;
+        Ok(())
+    })
+}
+
 #[tauri::command]
 pub fn editor_undo(app: AppHandle, redo: bool) -> Result<EditorView, String> {
     let state = app.state::<EditorState>();

@@ -329,6 +329,8 @@
       startText(p);
     } else if (tool === "counter") {
       add(newAnnotation({ type: "counter", at: p, value: nextCounterValue(annotations) }));
+    } else if (tool === "click") {
+      add(newAnnotation({ type: "click", at: p }));
     } else if (isDragTool(tool)) {
       interaction = { kind: "draw", start: p, points: [p] };
     }

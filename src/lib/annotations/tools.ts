@@ -15,6 +15,7 @@ export type Tool =
   | "highlighter"
   | "text"
   | "counter"
+  | "click"
   | "pixelate"
   | "blur";
 
@@ -29,6 +30,7 @@ export const tools: { id: Tool; key: string; icon: string }[] = [
   { id: "highlighter", key: "h", icon: "M9 15l-4 4h6l1.5-1.5M9 15l8-8 3 3-8 8z" },
   { id: "text", key: "t", icon: "M5 7V5h14v2M12 5v14M9 19h6" },
   { id: "counter", key: "n", icon: "M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0M10.5 9.5l2-1.5v8" },
+  { id: "click", key: "k", icon: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0" },
   { id: "pixelate", key: "x", icon: "M4 4h5v5H4zM9 9h6v6H9zM15 4h5v5h-5zM4 15h5v5H4zM15 15h5v5h-5z" },
   { id: "blur", key: "b", icon: "M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z" },
 ];
@@ -59,7 +61,7 @@ export function fromHex(hex: string): Rgba {
 }
 
 /** Tools that create a shape by dragging (all except select, text and counter). */
-export const isDragTool = (tool: Tool) => !["select", "text", "counter"].includes(tool);
+export const isDragTool = (tool: Tool) => !["select", "text", "counter", "click"].includes(tool);
 
 /** Shape created by dragging from `start` to `end` (`points` = the whole path, for pens). */
 export function shapeFromDrag(
@@ -109,6 +111,7 @@ export function isTrivial(shape: Shape, minSize = 3): boolean {
     case "text":
       return shape.text.trim() === "";
     case "counter":
+    case "click":
       return false;
   }
 }
