@@ -321,8 +321,11 @@ pub async fn pin_selection(
     scale: f64,
 ) -> Result<(), String> {
     let result = render_selection(&app, selection, annotations).await?;
+    // Don't bring the main window back: it would cover the new pin.
+    app.state::<CaptureState>().restore_main.store(false, Ordering::SeqCst);
+    pin::open(&app, result, scale.max(0.1)).map_err(|e| e.to_string())?;
     windows::close_overlay(&app);
-    pin::open(&app, result, scale.max(0.1)).map_err(|e| e.to_string())
+    Ok(())
 }
 
 #[tauri::command]
@@ -341,7 +344,9 @@ pub fn protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u
             .body(Cow::Owned(body))
             .expect("valid response")
     };
-    let path = request.uri().path().trim_matches('/');
+    // `convertFileSrc` in the frontend percent-encodes the path, so `pin/3` arrives as `pin%2F3`.
+    let decoded = request.uri().path().replace("%2F", "/").replace("%2f", "/");
+    let path = decoded.trim_matches('/');
     let app = ctx.app_handle();
     if let Some(pin_id) = path.strip_prefix("pin/").and_then(|id| id.parse().ok()) {
         return match app.state::<pin::PinState>().image(pin_id) {

@@ -40,12 +40,14 @@
     cancelCapture,
     captureInfo,
     copySelection,
+    defaultSaveDirectory,
     loadCapture,
     pinSelection,
     saveSelection,
     type CaptureInfo,
   } from "$lib/ipc";
   import { History } from "$lib/stores/history";
+  import { getSetting } from "$lib/stores/settings";
 
   type Interaction =
     | { kind: "area"; drag: Drag }
@@ -93,7 +95,13 @@
 
   const imageSelection = $derived(selection && info ? toImagePixels(selection, scale, info) : null);
 
+  /** Target folder of "Save", shown in its tooltip. */
+  let saveDirectory = $state("");
+
   onMount(async () => {
+    Promise.all([getSetting("saveDirectory"), defaultSaveDirectory()]).then(
+      ([custom, fallback]) => (saveDirectory = custom ?? fallback),
+    );
     try {
       info = await captureInfo();
       if (!info) return void cancelCapture();
@@ -645,13 +653,24 @@
         <span class="spacer"></span>
         <button
           class="icon"
-          title={t("overlay.save")}
-          aria-label={t("overlay.save")}
-          onclick={(e) => finish(e.shiftKey ? "saveAs" : "save")}
+          title={t("overlay.save", { dir: saveDirectory })}
+          aria-label={t("overlay.save", { dir: saveDirectory })}
+          onclick={() => finish("save")}
           disabled={busy}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 4v5h7V4M8 20v-6h8v6" />
+          </svg>
+        </button>
+        <button
+          class="icon"
+          title={t("overlay.saveAs")}
+          aria-label={t("overlay.saveAs")}
+          onclick={() => finish("saveAs")}
+          disabled={busy}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M11 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10l3 3v3M8 4v5h7V4M13 21l.5-3 5-5 2.5 2.5-5 5z" />
           </svg>
         </button>
         <button

@@ -1,12 +1,29 @@
 <script lang="ts">
+  import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
-  import { appInfo, platformLabel, runAction, type Action, type AppInfo } from "$lib/ipc";
+  import {
+    appInfo,
+    defaultSaveDirectory,
+    platformLabel,
+    runAction,
+    type Action,
+    type AppInfo,
+  } from "$lib/ipc";
+  import { getSetting } from "$lib/stores/settings";
 
   let info = $state<AppInfo>();
+  let saveDirectory = $state("");
 
-  onMount(async () => {
-    info = await appInfo();
+  async function loadSaveDirectory() {
+    saveDirectory = (await getSetting("saveDirectory")) ?? (await defaultSaveDirectory());
+  }
+
+  onMount(() => {
+    appInfo().then((i) => (info = i));
+    loadSaveDirectory();
+    const unlisten = listen("save-settings-changed", loadSaveDirectory);
+    return () => void unlisten.then((fn) => fn());
   });
 
   const cards: {
@@ -73,11 +90,32 @@
       <dd>{platformLabel[info.platform]}</dd>
       <dt>{t("info.ffmpeg")}</dt>
       <dd>{info.ffmpegAvailable ? t("info.ffmpegYes") : t("info.ffmpegNo")}</dd>
+      <dt>{t("info.saveDirectory")}</dt>
+      <dd class="dir">
+        <code>{saveDirectory}</code>
+        <button class="link" onclick={() => runAction("settings")}>{t("info.change")}</button>
+      </dd>
     </dl>
   {/if}
 </main>
 
 <style>
+  .dir {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+  }
+  .link:hover {
+    text-decoration: underline;
+  }
   main {
     max-width: 880px;
     margin: 0 auto;

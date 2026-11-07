@@ -50,8 +50,10 @@ pub fn open(app: &AppHandle, image: RgbaImage, scale: f64) -> tauri::Result<()> 
         .decorations(false)
         .always_on_top(true)
         .resizable(true)
+        .focused(true)
         .build()?;
     windows::fix_titlebar(&window);
+    let _ = window.set_focus();
     tracing::info!(id, "pinned screenshot");
     Ok(())
 }

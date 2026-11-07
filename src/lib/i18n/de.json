@@ -44,7 +44,7 @@
   "overlay.width": "Strichstärke",
   "overlay.delete": "Löschen (Entf)",
   "overlay.textPlaceholder": "Text eingeben · Enter bestätigt · Umschalt+Enter neue Zeile",
-  "overlay.save": "Speichern (Strg+S) · Speichern unter… (Strg+Umschalt+S)",
+  "overlay.save": "In {dir} speichern (Strg+S)",
   "overlay.pin": "Als schwebendes Fenster anheften",
   "pin.hint": "Ziehen verschiebt · Mausrad zoomt · Strg+C kopiert · Esc oder Doppelklick schließt",
   "settings.saving": "Speichern",
@@ -54,5 +54,8 @@
   "settings.filenameTemplate": "Dateiname",
   "settings.filenameHelp": "Platzhalter in geschweiften Klammern: yyyy MM dd HH mm ss – z. B. {yyyy-MM-dd}",
   "settings.imageFormat": "Format",
-  "settings.preview": "Beispiel"
+  "settings.preview": "Beispiel",
+  "overlay.saveAs": "Speichern unter… (Strg+Umschalt+S)",
+  "info.saveDirectory": "Speicherort",
+  "info.change": "Ändern"
 }

@@ -44,12 +44,14 @@
     if (typeof picked === "string") {
       saveDirectory = picked;
       await setSetting("saveDirectory", picked);
+      await emit("save-settings-changed");
     }
   }
 
   async function resetDirectory() {
     saveDirectory = null;
     await setSetting("saveDirectory", null);
+    await emit("save-settings-changed");
   }
 </script>
 

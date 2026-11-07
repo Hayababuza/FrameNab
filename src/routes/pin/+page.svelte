@@ -10,16 +10,21 @@
   let base = { w: 0, h: 0 };
   let zoom = $state(1);
   let flash = $state(false);
+  let error = $state<string | null>(null);
   const win = getCurrentWindow();
 
   onMount(async () => {
     info = await pinInfo();
     if (!info) return void win.close();
     base = { w: window.innerWidth, h: window.innerHeight };
-    const bitmap = await loadPin(info);
-    canvas.width = info.width;
-    canvas.height = info.height;
-    canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+    try {
+      const bitmap = await loadPin(info);
+      canvas.width = info.width;
+      canvas.height = info.height;
+      canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+    } catch (e) {
+      error = String(e);
+    }
   });
 
   function onmousedown(e: MouseEvent) {
@@ -57,7 +62,21 @@
   }}
 ></canvas>
 
+{#if error}
+  <p class="error">{error}</p>
+{/if}
+
 <style>
+  .error {
+    position: fixed;
+    inset: auto 8px 8px;
+    margin: 0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgb(160 30 30 / 90%);
+    color: #fff;
+    font: 12px sans-serif;
+  }
   :global(html),
   :global(body) {
     margin: 0;
