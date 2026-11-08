@@ -115,6 +115,75 @@ impl FrameStore {
         Ok(project)
     }
 
+    /// Opens the project like [`load_project`](Self::load_project), but first repairs a recording
+    /// that was interrupted (crash, power loss): frame files written after the last save of
+    /// `project.json` are appended, with durations taken from the file times. Returns the
+    /// project and whether it had to be recovered (it is saved again then).
+    pub fn recover_project(&self) -> Result<(Project, bool)> {
+        let saved = match self.load_project() {
+            Ok(project) => Some(project),
+            Err(CoreError::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => None,
+            Err(CoreError::Json(_)) => None,
+            Err(e) => return Err(e),
+        };
+        if saved.as_ref().is_some_and(|p| !p.recording) {
+            return Ok((saved.expect("checked"), false));
+        }
+        let known = saved.as_ref().map_or(0, |p| p.next_frame_id);
+        let mut extra: Vec<(u32, PathBuf, std::time::SystemTime)> = Vec::new();
+        let dir = self.root.join(FRAMES_DIR);
+        for entry in fs::read_dir(&dir).at(&dir)? {
+            let path = entry.at(&dir)?.path();
+            let number = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|n| n.strip_prefix('f')?.strip_suffix(".qoi")?.parse::<u32>().ok());
+            if let Some(number) = number.filter(|&n| n > known) {
+                let modified = fs::metadata(&path).and_then(|m| m.modified()).at(&path)?;
+                extra.push((number, path, modified));
+            }
+        }
+        extra.sort_by_key(|(n, ..)| *n);
+
+        let header = |path: &Path| -> Result<(u32, u32)> {
+            let mut head = [0u8; 14]; // QOI header size
+            std::io::Read::read_exact(&mut fs::File::open(path).at(path)?, &mut head).at(path)?;
+            let h = qoi::decode_header(head)?;
+            Ok((h.width, h.height))
+        };
+        let mut project = match saved {
+            Some(p) => p,
+            None => {
+                let Some((_, first, _)) = extra.first() else {
+                    return Err(CoreError::Io {
+                        path: self.root.join(PROJECT_FILE),
+                        source: std::io::ErrorKind::NotFound.into(),
+                    });
+                };
+                let (w, h) = header(first)?;
+                Project::new(w, h)
+            }
+        };
+        let mut previous: Option<std::time::SystemTime> = None;
+        for (number, path, modified) in extra {
+            if header(&path).ok() != Some((project.width, project.height)) {
+                continue;
+            }
+            // The previous frame lasted until this one was written.
+            if let (Some(prev), Some(last)) = (previous, project.frames.last_mut()) {
+                let ms = modified.duration_since(prev).map_or(100, |d| d.as_millis());
+                last.delay_ms = u32::try_from(ms.clamp(10, 5000)).unwrap_or(100);
+            }
+            let id = format!("f{number:06}");
+            project.frames.push(Frame { file: self.frame_file_name(&id), id, delay_ms: 100, time_ms: None });
+            project.next_frame_id = project.next_frame_id.max(number);
+            previous = Some(modified);
+        }
+        project.recording = false;
+        self.save_project(&project)?;
+        Ok((project, true))
+    }
+
     /// Saves the recorded input (`input.json`).
     pub fn save_input(&self, input: &crate::InputEvents) -> Result<()> {
         let path = self.root.join(INPUT_FILE);
@@ -165,6 +234,34 @@ mod tests {
 
         store.save_project(&project).unwrap();
         assert_eq!(store.load_project().unwrap(), project);
+    }
+
+    #[test]
+    fn recovers_an_interrupted_recording() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FrameStore::create(dir.path()).unwrap();
+        let mut project = Project::new(2, 2);
+        store.push_frame(&mut project, &RgbaImage::new(2, 2), 50).unwrap();
+        project.recording = true;
+        store.save_project(&project).unwrap();
+        // Written after the last save; one has the wrong size.
+        let mut later = project.clone();
+        store.push_frame(&mut later, &RgbaImage::new(2, 2), 1).unwrap();
+        store.write_image("frames/f000003.qoi", &RgbaImage::new(5, 5)).unwrap();
+        store.write_image("frames/f000004.qoi", &RgbaImage::new(2, 2)).unwrap();
+
+        let (recovered, changed) = store.recover_project().unwrap();
+        assert!(changed && !recovered.recording);
+        let ids: Vec<&str> = recovered.frames.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, ["f000001", "f000002", "f000004"]);
+        assert_eq!(recovered.next_frame_id, 4);
+        assert_eq!(store.recover_project().unwrap(), (recovered.clone(), false));
+
+        // Without project.json at all, the frames alone make a project.
+        fs::remove_file(dir.path().join(PROJECT_FILE)).unwrap();
+        let (rebuilt, changed) = store.recover_project().unwrap();
+        assert!(changed);
+        assert_eq!((rebuilt.width, rebuilt.height, rebuilt.frames.len()), (2, 2, 3));
     }
 
     #[test]

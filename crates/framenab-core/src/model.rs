@@ -32,6 +32,11 @@ pub struct Project {
     #[serde(default, skip_serializing_if = "crate::Transform::is_identity")]
     #[ts(as = "Option<crate::Transform>", optional)]
     pub input_transform: crate::Transform,
+    /// Set while a recording is still running (saved now and then); if it is still set when the
+    /// project is opened, the recording was interrupted and is recovered.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(skip)]
+    pub recording: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -222,6 +227,7 @@ impl Project {
             next_frame_id: 0,
             effects: crate::Effects::default(),
             input_transform: crate::Transform::IDENTITY,
+            recording: false,
         }
     }
 

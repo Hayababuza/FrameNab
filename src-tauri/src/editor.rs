@@ -47,7 +47,10 @@ impl EditorState {
 /// Opens the project folder `root` in the editor window.
 pub fn open(app: &AppHandle, root: PathBuf, restore: Option<String>) -> Result<(), String> {
     let store = FrameStore::create(&root).map_err(|e| e.to_string())?;
-    let project = store.load_project().map_err(|e| e.to_string())?;
+    let (project, recovered) = store.recover_project().map_err(|e| e.to_string())?;
+    if recovered {
+        tracing::info!(path = %root.display(), frames = project.frames.len(), "recovered an interrupted recording");
+    }
     let state = app.state::<EditorState>();
     *state.lock() = Some(Open { store, project, history: History::new(200) });
     state.thumbs.lock().expect("thumb lock").clear();
@@ -429,6 +432,73 @@ pub fn recording_formats() -> Vec<ExportFormat> {
 #[tauri::command]
 pub fn open_project(app: AppHandle, path: PathBuf) -> Result<(), String> {
     open(&app, path, None)
+}
+
+/// A recording in the recordings folder, for the list on the start page.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentProject {
+    path: String,
+    /// Last change, in ms since the Unix epoch.
+    modified_ms: u64,
+    frames: usize,
+    duration_ms: u64,
+    width: u32,
+    height: u32,
+    /// The recording did not finish (crash); opening it recovers what was written.
+    interrupted: bool,
+}
+
+/// The `limit` most recently changed recordings.
+#[tauri::command]
+pub fn recent_projects(app: AppHandle, limit: usize) -> Vec<RecentProject> {
+    let dir = crate::recorder::recordings_dir(&app);
+    let Ok(entries) = std::fs::read_dir(&dir) else { return Vec::new() };
+    let mut folders: Vec<(std::time::SystemTime, PathBuf)> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_dir() && p.extension().is_some_and(|e| e == "framenab"))
+        .filter_map(|p| {
+            // project.json changes with every edit; the folder itself when frames are added.
+            let modified = std::fs::metadata(p.join("project.json")).or_else(|_| std::fs::metadata(&p));
+            Some((modified.and_then(|m| m.modified()).ok()?, p))
+        })
+        .collect();
+    folders.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+    folders
+        .into_iter()
+        .take(limit)
+        .map(|(modified, path)| {
+            let project = FrameStore::create(&path).ok().and_then(|s| s.load_project().ok());
+            let frames_on_disk = || std::fs::read_dir(path.join("frames")).map_or(0, Iterator::count);
+            RecentProject {
+                modified_ms: modified
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(0)),
+                frames: project.as_ref().map_or_else(frames_on_disk, |p| p.frames.len()),
+                duration_ms: project.as_ref().map_or(0, Project::duration_ms),
+                width: project.as_ref().map_or(0, |p| p.width),
+                height: project.as_ref().map_or(0, |p| p.height),
+                interrupted: project.as_ref().is_none_or(|p| p.recording),
+                path: path.display().to_string(),
+            }
+        })
+        .collect()
+}
+
+/// Deletes a recording folder. Only folders inside the recordings folder can be deleted.
+#[tauri::command]
+pub fn delete_project(app: AppHandle, path: PathBuf) -> Result<(), String> {
+    let dir = crate::recorder::recordings_dir(&app).canonicalize().map_err(|e| e.to_string())?;
+    let target = path.canonicalize().map_err(|e| e.to_string())?;
+    if target.parent() != Some(dir.as_path()) || target.extension().is_none_or(|e| e != "framenab") {
+        return Err("not a recording".into());
+    }
+    let state = app.state::<EditorState>();
+    if state.lock().as_ref().is_some_and(|o| o.store.root().canonicalize().ok().as_ref() == Some(&target)) {
+        return Err("the recording is open in the editor".into());
+    }
+    std::fs::remove_dir_all(&target).map_err(|e| e.to_string())
 }
 
 /// Where recordings are kept, as the start folder for "Open project".

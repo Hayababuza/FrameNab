@@ -173,5 +173,11 @@
   "editor.dirLeft": "nach links",
   "editor.dirRight": "nach rechts",
   "editor.dirUp": "nach oben",
-  "editor.dirDown": "nach unten"
+  "editor.dirDown": "nach unten",
+  "home.recent": "Letzte Aufnahmen",
+  "home.recentInfo": "{frames} Frames · {duration} · {w}×{h}",
+  "home.interrupted": "Unterbrochen – wird beim Öffnen wiederhergestellt",
+  "home.deleteRecording": "Aufnahme löschen",
+  "home.deleteConfirm": "Diese Aufnahme endgültig löschen? Gespeicherte GIFs und Videos bleiben erhalten.",
+  "home.showAll": "Alle im Ordner zeigen"
 }

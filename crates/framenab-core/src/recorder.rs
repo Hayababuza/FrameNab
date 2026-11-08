@@ -17,6 +17,8 @@ use crate::{FrameStore, Project, Result};
 
 /// How many frames may wait for the writer (at 1080p about 8 MB each).
 const QUEUE: usize = 8;
+/// How often `project.json` is saved during a recording, so a crash loses little.
+const SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
 
 enum Message {
     Frame(RgbaImage, u64),
@@ -81,6 +83,7 @@ fn write_frames(store: &FrameStore, rx: &Receiver<Message>) -> Result<(Project, 
     let mut project: Option<Project> = None;
     let mut stats = RecordingStats::default();
     let mut last_ts = 0u64;
+    let mut last_save = std::time::Instant::now();
 
     let close_previous = |project: &mut Project, ts: u64, last_ts: u64| {
         if let Some(prev) = project.frames.last_mut() {
@@ -103,6 +106,11 @@ fn write_frames(store: &FrameStore, rx: &Receiver<Message>) -> Result<(Project, 
                 }
                 last_ts = ts;
                 stats.frames += 1;
+                if last_save.elapsed() >= SAVE_EVERY {
+                    last_save = std::time::Instant::now();
+                    p.recording = true;
+                    store.save_project(p)?;
+                }
             }
             Ok(Message::Finish(end)) => break end,
             Err(_) => break last_ts,
@@ -111,6 +119,7 @@ fn write_frames(store: &FrameStore, rx: &Receiver<Message>) -> Result<(Project, 
 
     let mut project = project.unwrap_or_else(|| Project::new(1, 1));
     close_previous(&mut project, end, last_ts);
+    project.recording = false;
     store.save_project(&project)?;
     Ok((project, stats))
 }

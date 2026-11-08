@@ -79,6 +79,8 @@ pub fn run() {
             editor::recording_formats,
             editor::open_project,
             editor::recordings_directory,
+            editor::recent_projects,
+            editor::delete_project,
             pin::pin_info,
             pin::copy_pin,
             settings::default_save_directory,

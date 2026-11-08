@@ -173,5 +173,11 @@
   "editor.dirLeft": "left",
   "editor.dirRight": "right",
   "editor.dirUp": "up",
-  "editor.dirDown": "down"
+  "editor.dirDown": "down",
+  "home.recent": "Recent recordings",
+  "home.recentInfo": "{frames} frames · {duration} · {w}×{h}",
+  "home.interrupted": "Interrupted – recovered when opened",
+  "home.deleteRecording": "Delete recording",
+  "home.deleteConfirm": "Delete this recording for good? Saved GIFs and videos are kept.",
+  "home.showAll": "Show all in folder"
 }

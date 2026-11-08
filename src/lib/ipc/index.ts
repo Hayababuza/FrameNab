@@ -180,6 +180,21 @@ const frameUrl = (kind: string, frameId: string, project: string) =>
 export const thumbUrl = (frameId: string, project: string) => frameUrl("thumb", frameId, project);
 export const previewUrl = (frameId: string, project: string) => frameUrl("preview", frameId, project);
 export const openProject = (path: string) => invoke<void>("open_project", { path });
+
+export interface RecentProject {
+  path: string;
+  modifiedMs: number;
+  frames: number;
+  durationMs: number;
+  width: number;
+  height: number;
+  /** The recording did not finish (crash); opening it recovers what was written. */
+  interrupted: boolean;
+}
+/** The most recently changed recordings. */
+export const recentProjects = (limit = 8) => invoke<RecentProject[]>("recent_projects", { limit });
+/** Deletes a recording folder (only inside the recordings folder). */
+export const deleteProject = (path: string) => invoke<void>("delete_project", { path });
 export const recordingsDirectory = () => invoke<string>("recordings_directory");
 /** Wayland: screen position (pixels) of the recorder's calibration marker, or null if not found. */
 export const locateMarker = (scale: number) => invoke<[number, number] | null>("locate_marker", { scale });

@@ -1,17 +1,21 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
-  import { open } from "@tauri-apps/plugin-dialog";
+  import { ask, open } from "@tauri-apps/plugin-dialog";
+  import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
     appInfo,
     defaultSaveDirectory,
+    deleteProject,
     openProject,
+    recentProjects,
     platformLabel,
     recordingsDirectory,
     runAction,
     type Action,
     type AppInfo,
+    type RecentProject,
   } from "$lib/ipc";
   import { getSetting } from "$lib/stores/settings";
 
@@ -28,11 +32,36 @@
     if (typeof picked === "string") await openProject(picked);
   }
 
+  let recent = $state<RecentProject[]>([]);
+  const loadRecent = () => recentProjects(6).then((list) => (recent = list));
+
+  async function removeRecording(path: string) {
+    if (!(await ask(t("home.deleteConfirm"), { kind: "warning" }))) return;
+    await deleteProject(path).catch(() => {});
+    loadRecent();
+  }
+
+  const duration = (ms: number) => {
+    const s = Math.round(ms / 100) / 10;
+    return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
+  };
+  const when = (ms: number) =>
+    new Date(ms).toLocaleString(document.documentElement.lang || undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
   onMount(() => {
     appInfo().then((i) => (info = i));
     loadSaveDirectory();
+    loadRecent();
+    // Recordings come and go while the window is hidden; refresh when it is shown again.
+    window.addEventListener("focus", loadRecent);
     const unlisten = listen("save-settings-changed", loadSaveDirectory);
-    return () => void unlisten.then((fn) => fn());
+    return () => {
+      window.removeEventListener("focus", loadRecent);
+      void unlisten.then((fn) => fn());
+    };
   });
 
   const cards: {
@@ -90,6 +119,55 @@
       </button>
     {/each}
   </section>
+
+  {#if recent.length}
+    <section class="recent">
+      <div class="recent-head">
+        <h2>{t("home.recent")}</h2>
+        <button class="link" onclick={async () => revealItemInDir(await recordingsDirectory())}
+          >{t("home.showAll")}</button
+        >
+      </div>
+      <ul>
+        {#each recent as item (item.path)}
+          <li>
+            <button class="open" onclick={() => openProject(item.path)}>
+              <strong>{when(item.modifiedMs)}</strong>
+              {#if item.interrupted}
+                <span class="badge">{t("home.interrupted")}</span>
+              {:else}
+                <span
+                  >{t("home.recentInfo", {
+                    frames: item.frames,
+                    duration: duration(item.durationMs),
+                    w: item.width,
+                    h: item.height,
+                  })}</span
+                >
+              {/if}
+            </button>
+            <button
+              class="delete"
+              title={t("home.deleteRecording")}
+              aria-label={t("home.deleteRecording")}
+              onclick={() => removeRecording(item.path)}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"
+                ><path
+                  d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              >
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
 
   {#if info}
     {#if info.requiresPortal}
@@ -200,6 +278,63 @@
   }
   .ghost:hover {
     background: var(--surface-hover);
+  }
+  .recent-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .recent h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .recent ul {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .recent li {
+    display: flex;
+    gap: 6px;
+  }
+  .recent .open {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .recent .open span {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .recent .open .badge {
+    color: #e5a000;
+  }
+  .recent .open:hover,
+  .recent .delete:hover {
+    background: var(--surface-hover);
+  }
+  .recent .delete {
+    width: 42px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
   }
   .notice {
     margin: 0;
