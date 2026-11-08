@@ -11,8 +11,8 @@ workspace = true
 
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-framenab-core = { version = "0.1.0", path = "../framenab-core" }
-framenab-render = { version = "0.1.0", path = "../framenab-render" }
+framenab-core = { version = "0.3.0", path = "../framenab-core" }
+framenab-render = { version = "0.3.0", path = "../framenab-render" }
 gifski = { version = "1.34.0", default-features = false }
 image = "0.25.9"
 imgref = "1.12.3"

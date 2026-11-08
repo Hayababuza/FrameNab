@@ -9,7 +9,7 @@ FrameNab combines two tools in one app:
 
 Both modes share the same annotation tools. Internally a screenshot is a project with exactly one frame and can be opened in the editor at any time.
 
-> **Status:** v0.1.0 – screenshot mode (phase 1) is done; next is the recorder (phase 2). See the [roadmap](docs/PROJECT-PLAN.md#4-features-by-phase).
+> **Status:** v0.3.0 – screenshot mode, recorder and frame editor (phases 1–3) are done; next are more export formats (phase 4). See the [roadmap](docs/PROJECT-PLAN.md#4-features-by-phase).
 
 ## Tech stack
 

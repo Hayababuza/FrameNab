@@ -4,7 +4,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-08
+
+Recording (phase 2) and the frame editor (phase 3): record an area, a window or the whole screen, edit the frames and save them as GIF, MP4 or WebM.
+
 ### Added
+- Editor transitions: fade into the next frame, fade to a color, or slide (left, right, up, down); inserted after the current or last selected frame with a chosen number of frames and duration; after the last frame the transition leads back to the first
+- Editor image tools ("Image"): crop with a frame drawn in the preview (move it, drag its corners, or type the numbers), resize (Lanczos, optionally keeping the aspect ratio, 50 %/75 % presets), rotate by 90° and flip; annotations and the mouse/click effects follow the image; frames are processed in parallel with progress, and undo brings the old frames back
+- Editor frame operations: duplicate (Ctrl+D), reverse (selection or everything), yo-yo, move the selected frames by dragging them in the filmstrip, set the duration or change the speed of the selected (or all) frames, remove every n-th frame, and remove similar frames by a pixel threshold (removed frames hand their time to the frame that stays, so the length is unchanged)
 - Wayland sessions: FrameNab's windows run on XWayland by default, so the recording frame, its control bar and pins stay on top (also when clicking into other apps) and are placed exactly; capture still uses the portal; Settings → System switches back to native Wayland (after a restart)
 - Editor: annotations over frame ranges with the same tools as for screenshots (arrow, line, rectangle, ellipse, pen, highlighter, text, numbered marker, pixelate, blur); new annotations cover the frames selected in the filmstrip; select an annotation to move it, restyle it, put it on other frames or delete it; frames with annotations are marked in the filmstrip; annotations are burned into the saved GIF/video
 - Input effects: recordings keep the mouse path, clicks and key presses (`input.json`); in the editor, "Highlight mouse" (a yellow circle follows the cursor), "Clicks" (ripples, colored by button) and "Keys" (captions like `Ctrl + C` at the bottom) are switched on per recording, shown in the preview and burned into the saved GIF/video. On Wayland the mouse position comes from the portal's cursor metadata (FrameNab then draws the cursor into the frames itself); clicks and keys come from the input devices on Linux (needs the `input` group) and from the system on Windows/macOS. Settings → Recording turns recording clicks and keys off
@@ -21,6 +28,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Recorder (stage 2b): "Record" opens the selection overlay in record mode (drag an area, click a window on Windows/macOS/X11, "Whole screen", or "App window…" via the system dialog on Wayland); then a borderless, transparent recorder window shows a frame around the area and a control bar (FPS, countdown, mouse cursor, record, pause/resume, stop, timer); everything except the control bar is click-through; the Wayland screen-sharing choice is remembered in the settings; recordings are saved as project folders under the app data folder, with "Open folder" afterwards; "Record" from the tray or a shortcut stops a running recording
 - Recording engine (stage 2a): streams the screen via the xdg-desktop-portal ScreenCast portal and PipeWire on Wayland (the screen choice is remembered with a restore token; cursor on/off) and via xcap on Windows, macOS and X11; a common sampler takes the latest frame at the chosen FPS, crops it to the region, excludes paused time and lets unchanged frames last longer; frames are written as QOI by a background writer with a small queue (dropped frames are counted)
 - Recording spike: `cargo run --release -p framenab-capture --example record -- <dir> [seconds] [fps] [--cursor] [--region x,y,w,h] [--token-file f]` (60 s at 15 fps in 1080p on Wayland: 0 dropped frames, 126 MB peak memory)
+
+### Fixed
+- Editor: after opening another recording, the preview and filmstrip could show the images of the previous one (cached image URLs); a failed change of the effects now shows an error, and "Highlight mouse" is on by default when the recording has mouse data
+- Recording time and the timer in the control bar come from the recording clock, so they are exact even when the machine is busy
 
 ## [0.1.0] - 2026-11-07
 
@@ -54,5 +65,6 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Hayababuza/FrameNab/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/Hayababuza/FrameNab/releases/tag/v0.1.0
