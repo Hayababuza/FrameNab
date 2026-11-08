@@ -4,6 +4,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-08
+
+Export (phase 4) and polish (phase 5): more formats with an export dialog, overlays, project archives, crash recovery, settings for appearance, autostart and shortcuts, installers for every system and automatic updates.
+
 ### Added
 - Updates: FrameNab checks the GitHub releases at startup (can be switched off) and in Settings → Updates; an available version is installed with one click (signed packages, also for `.deb`/`.rpm` and the AppImage) and the app restarts
 - Installers: release workflow (`v*` tag) that builds `.exe`/`.msi` for Windows, a universal `.dmg` for macOS and `.deb`/`.rpm`/`.AppImage` for Linux into a draft GitHub release; package metadata (publisher, license, description, PipeWire dependency, per-user Windows setup in English and German)
@@ -83,6 +87,7 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Hayababuza/FrameNab/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Hayababuza/FrameNab/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/Hayababuza/FrameNab/releases/tag/v0.1.0

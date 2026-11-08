@@ -1612,7 +1612,7 @@ dependencies = [
 
 [[package]]
 name = "framenab"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "arboard",
  "framenab-capture",
@@ -1643,7 +1643,7 @@ dependencies = [
 
 [[package]]
 name = "framenab-capture"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "ashpd",
  "device_query",
@@ -1660,7 +1660,7 @@ dependencies = [
 
 [[package]]
 name = "framenab-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "image",
  "qoi",
@@ -1675,7 +1675,7 @@ dependencies = [
 
 [[package]]
 name = "framenab-export"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "framenab-core",
@@ -1697,7 +1697,7 @@ dependencies = [
 
 [[package]]
 name = "framenab-render"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "cosmic-text",
  "framenab-core",
