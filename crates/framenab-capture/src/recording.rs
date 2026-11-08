@@ -482,7 +482,11 @@ mod tests {
         // ~10 frames in 500 ms at 20 fps (generous bounds for slow CI machines)
         assert!((5..=12).contains(&sink.0.len()), "got {} frames", sink.0.len());
         assert!(sink.0.iter().all(|&(w, h, _)| (w, h) == (2, 2)), "crop is clamped to the frame");
-        assert!(sink.0.windows(2).all(|p| p[1].2 >= p[0].2 + 40), "frames are ≥ 50 ms apart");
+        // A late tick may be followed by an on-time one, so only the average spacing is ~50 ms.
+        let times: Vec<u64> = sink.0.iter().map(|f| f.2).collect();
+        assert!(times.windows(2).all(|p| p[1] > p[0]), "timestamps increase: {times:?}");
+        let average = (times[times.len() - 1] - times[0]) / (times.len() as u64 - 1);
+        assert!(average >= 45, "frames are ~50 ms apart on average: {times:?}");
         assert!(end >= 450, "end {end}");
         assert_eq!(stats.pushed as usize, sink.0.len());
     }
