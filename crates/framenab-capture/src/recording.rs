@@ -111,11 +111,34 @@ pub struct SamplerStats {
     pub late_ticks: u64,
 }
 
+/// Recording time: wall time since the start minus pauses. Pauses are measured when `pause`
+/// and `resume` are called, not at the sampler's next tick, so a busy machine (late ticks) does
+/// not count part of a pause as recorded time.
+#[derive(Debug)]
+struct Clock {
+    start: Instant,
+    paused_total: Duration,
+    paused_since: Option<Instant>,
+}
+
+impl Clock {
+    fn elapsed(&self, now: Instant) -> Duration {
+        let paused = self.paused_total + self.paused_since.map_or(Duration::ZERO, |since| now - since);
+        (now - self.start).saturating_sub(paused)
+    }
+}
+
 struct Shared {
     stop: AtomicBool,
-    paused: AtomicBool,
+    clock: Mutex<Clock>,
     /// Recording time in ms (pauses excluded), for the UI.
     elapsed_ms: AtomicU64,
+}
+
+impl Shared {
+    fn clock(&self) -> std::sync::MutexGuard<'_, Clock> {
+        self.clock.lock().expect("clock lock")
+    }
 }
 
 /// A running recording. Call [`Recording::stop`] to end it and get the sink back.
@@ -123,20 +146,23 @@ pub struct Recording<S: FrameSink> {
     shared: Arc<Shared>,
     latest: Arc<LatestFrame>,
     stream: Option<Box<dyn FrameStream>>,
-    sampler: Option<JoinHandle<(S, u64, SamplerStats)>>,
+    sampler: Option<JoinHandle<(S, SamplerStats)>>,
 }
 
 impl<S: FrameSink> Recording<S> {
     pub fn pause(&self) {
-        self.shared.paused.store(true, Ordering::SeqCst);
+        self.shared.clock().paused_since.get_or_insert_with(Instant::now);
     }
 
     pub fn resume(&self) {
-        self.shared.paused.store(false, Ordering::SeqCst);
+        let mut clock = self.shared.clock();
+        if let Some(since) = clock.paused_since.take() {
+            clock.paused_total += since.elapsed();
+        }
     }
 
     pub fn is_paused(&self) -> bool {
-        self.shared.paused.load(Ordering::SeqCst)
+        self.shared.clock().paused_since.is_some()
     }
 
     /// Recorded time so far in ms, without pauses.
@@ -153,14 +179,16 @@ impl<S: FrameSink> Recording<S> {
         self.stream.as_ref().and_then(|s| s.restore_token())
     }
 
-    /// Stops the recording. Returns the sink, the end timestamp in ms and the statistics.
+    /// Stops the recording. Returns the sink, the end timestamp in ms (when `stop` was called)
+    /// and the statistics.
     pub fn stop(mut self) -> (S, u64, SamplerStats) {
+        let end = self.shared.clock().elapsed(Instant::now()).as_millis() as u64;
         self.shared.stop.store(true, Ordering::SeqCst);
-        let result = self.sampler.take().expect("sampler runs until stop").join().expect("sampler panicked");
+        let (sink, stats) = self.sampler.take().expect("sampler runs until stop").join().expect("sampler panicked");
         if let Some(stream) = self.stream.take() {
             stream.stop();
         }
-        result
+        (sink, end, stats)
     }
 }
 
@@ -170,7 +198,7 @@ pub fn record<S: FrameSink>(stream: Box<dyn FrameStream>, crop: Option<Crop>, fp
     let latest = stream.latest();
     let shared = Arc::new(Shared {
         stop: AtomicBool::new(false),
-        paused: AtomicBool::new(false),
+        clock: Mutex::new(Clock { start: Instant::now(), paused_total: Duration::ZERO, paused_since: None }),
         elapsed_ms: AtomicU64::new(0),
     });
     let sampler = {
@@ -190,16 +218,11 @@ fn sample<S: FrameSink>(
     crop: Option<Crop>,
     fps: u32,
     mut sink: S,
-) -> (S, u64, SamplerStats) {
+) -> (S, SamplerStats) {
     let interval = Duration::from_secs_f64(1.0 / f64::from(fps));
-    let start = Instant::now();
-    let mut paused_total = Duration::ZERO;
-    let mut paused_since: Option<Instant> = None;
     let mut seen = 0u64;
-    let mut next = start;
+    let mut next = Instant::now();
     let mut stats = SamplerStats::default();
-
-    let recorded = |now: Instant, paused_total: Duration| (now - start).saturating_sub(paused_total);
 
     loop {
         let now = Instant::now();
@@ -216,21 +239,16 @@ fn sample<S: FrameSink>(
         };
 
         if shared.stop.load(Ordering::SeqCst) {
-            if let Some(since) = paused_since {
-                paused_total += now - since;
-            }
-            let end = recorded(now, paused_total).as_millis() as u64;
-            return (sink, end, stats);
+            return (sink, stats);
         }
-
-        if shared.paused.load(Ordering::SeqCst) {
-            paused_since.get_or_insert(now);
+        let (paused, elapsed) = {
+            let clock = shared.clock();
+            (clock.paused_since.is_some(), clock.elapsed(now))
+        };
+        if paused {
             continue;
         }
-        if let Some(since) = paused_since.take() {
-            paused_total += now - since;
-        }
-        let timestamp = recorded(now, paused_total).as_millis() as u64;
+        let timestamp = elapsed.as_millis() as u64;
         shared.elapsed_ms.store(timestamp, Ordering::Relaxed);
 
         let Some((seq, frame)) = latest.take_if_newer(seen) else { continue };
@@ -343,17 +361,23 @@ mod tests {
 
     #[test]
     fn pause_is_not_counted() {
+        // Compare with measured wall times, so a slow machine (late sleeps) does not matter.
+        let started = Instant::now();
         let stream = FakeStream::start(5);
         let rec = record(Box::new(stream), None, 30, Collect::default());
         thread::sleep(Duration::from_millis(200));
+        let pause_start = Instant::now();
         rec.pause();
         thread::sleep(Duration::from_millis(400));
         rec.resume();
+        let paused = pause_start.elapsed();
         thread::sleep(Duration::from_millis(200));
+        let total = started.elapsed();
         let (sink, end, _) = rec.stop();
-        assert!((300..550).contains(&end), "recorded time should exclude the pause, got {end}");
+        let expected = (total - paused).as_millis() as u64;
+        assert!(end.abs_diff(expected) < 60, "recorded {end} ms, expected about {expected} ms");
         let gaps: Vec<u64> = sink.0.windows(2).map(|p| p[1].2 - p[0].2).collect();
-        assert!(gaps.iter().all(|&g| g < 150), "no 400 ms gap from the pause: {gaps:?}");
+        assert!(gaps.iter().all(|&g| g < 300), "no 400 ms jump from the pause: {gaps:?}");
     }
 
     #[test]

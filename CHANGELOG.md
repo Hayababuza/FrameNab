@@ -45,6 +45,7 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - CI for Linux, Windows and macOS
 
 ### Fixed
+- Recording time no longer counts part of a pause when the machine is busy: pauses are measured when Pause/Resume are clicked, and the end when Stop is clicked
 - The countdown number was recorded in the first frames; recording now starts once it is gone from the screen
 - Dev mode: windows sometimes opened without their component CSS ("failed to load virtual css module"), e.g. the loupe stuck in the top-left corner; component CSS is now injected through JavaScript
 - Pinned screenshots showed a black window: the frontend percent-encodes the protocol path (`pin%2F3`), which the backend did not decode

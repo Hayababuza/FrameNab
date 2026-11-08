@@ -2,18 +2,12 @@
 import type { Annotation } from "./Annotation";
 import type { Frame } from "./Frame";
 
-export type Project = {
-  version: number;
-  width: number;
-  height: number;
-  frames: Array<Frame>;
-  annotations: Array<Annotation>;
-  /**
-   * Number of repetitions on export; 0 = infinite.
-   */
-  loop: number;
-  /**
-   * Counter for unique frame IDs.
-   */
-  nextFrameId: number;
-};
+export type Project = { version: number, width: number, height: number, frames: Array<Frame>, annotations: Array<Annotation>, 
+/**
+ * Number of repetitions on export; 0 = infinite.
+ */
+loop: number, 
+/**
+ * Counter for unique frame IDs.
+ */
+nextFrameId: number, };
