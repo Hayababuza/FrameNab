@@ -13,7 +13,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bindings": "cargo test -p framenab-core --lib export_bindings && prettier --write src/lib/bindings",
+    "bindings": "cargo test -p framenab-core --lib export_bindings",
     "tauri": "tauri"
   },
   "license": "MIT",

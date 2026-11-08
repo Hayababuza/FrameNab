@@ -5,3 +5,5 @@ src-tauri/gen/
 src-tauri/target/
 pnpm-lock.yaml
 *.md
+# Generated from Rust by ts-rs (`cargo test`); kept exactly as generated
+src/lib/bindings/

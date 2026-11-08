@@ -6,15 +6,4 @@ import type { Rgba } from "./Rgba";
 /**
  * Geometry of an annotation. Serialized as `{ "type": "arrow", ... }`.
  */
-export type Shape =
-  | { type: "arrow"; from: Point; to: Point }
-  | { type: "line"; from: Point; to: Point }
-  | { type: "rect"; rect: Rect }
-  | { type: "ellipse"; rect: Rect }
-  | { type: "pen"; points: Array<Point> }
-  | { type: "highlighter"; points: Array<Point> }
-  | { type: "text"; at: Point; text: string; fontSize: number; background: Rgba | null }
-  | { type: "counter"; at: Point; value: number }
-  | { type: "click"; at: Point }
-  | { type: "blur"; rect: Rect; radius: number }
-  | { type: "pixelate"; rect: Rect; blockSize: number };
+export type Shape = { "type": "arrow", from: Point, to: Point, } | { "type": "line", from: Point, to: Point, } | { "type": "rect", rect: Rect, } | { "type": "ellipse", rect: Rect, } | { "type": "pen", points: Array<Point>, } | { "type": "highlighter", points: Array<Point>, } | { "type": "text", at: Point, text: string, fontSize: number, background: Rgba | null, } | { "type": "counter", at: Point, value: number, } | { "type": "click", at: Point, } | { "type": "blur", rect: Rect, radius: number, } | { "type": "pixelate", rect: Rect, blockSize: number, };

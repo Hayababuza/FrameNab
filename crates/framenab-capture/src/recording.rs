@@ -178,8 +178,6 @@ struct Shared {
     stop: AtomicBool,
     clock: Mutex<Clock>,
     input: Mutex<InputEvents>,
-    /// Recording time in ms (pauses excluded), for the UI.
-    elapsed_ms: AtomicU64,
 }
 
 impl Shared {
@@ -213,9 +211,10 @@ impl<S: FrameSink> Recording<S> {
         self.shared.clock().paused_since.is_some()
     }
 
-    /// Recorded time so far in ms, without pauses.
+    /// Recorded time so far in ms, without pauses (from the recording clock, so it is exact
+    /// even when the sampler runs late).
     pub fn elapsed_ms(&self) -> u64 {
-        self.shared.elapsed_ms.load(Ordering::Relaxed)
+        self.shared.clock().elapsed(Instant::now()).as_millis() as u64
     }
 
     /// An error reported by the source (e.g. an unsupported pixel format), if any.
@@ -254,7 +253,6 @@ pub fn record<S: FrameSink>(stream: Box<dyn FrameStream>, crop: Option<Crop>, fp
         stop: AtomicBool::new(false),
         clock: Mutex::new(Clock { start: Instant::now(), paused_total: Duration::ZERO, paused_since: None }),
         input: Mutex::new(InputEvents::default()),
-        elapsed_ms: AtomicU64::new(0),
     });
     let sampler = {
         let shared = Arc::clone(&shared);
@@ -304,7 +302,6 @@ fn sample<S: FrameSink>(
             continue;
         }
         let timestamp = elapsed.as_millis() as u64;
-        shared.elapsed_ms.store(timestamp, Ordering::Relaxed);
 
         let cursor = latest.cursor();
         if let Some(position) = cursor.position {
@@ -492,12 +489,14 @@ mod tests {
 
     #[test]
     fn elapsed_time_is_reported_while_recording() {
+        let started = Instant::now();
         let stream = FakeStream::start(5);
         let rec = record(Box::new(stream), None, 15, Collect::default());
         thread::sleep(Duration::from_millis(400));
         let elapsed = rec.elapsed_ms();
+        let wall = started.elapsed().as_millis() as u64;
         let _ = rec.stop();
-        assert!(elapsed >= 250, "elapsed should grow while recording, got {elapsed}");
+        assert!(elapsed >= 380 && elapsed <= wall, "elapsed {elapsed} ms, wall time {wall} ms");
     }
 
     #[test]

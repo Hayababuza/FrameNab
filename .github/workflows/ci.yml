@@ -69,4 +69,4 @@ jobs:
       - run: cargo test --workspace
       - name: Generated TS types up to date?
         if: runner.os == 'Linux'
-        run: pnpm prettier --write src/lib/bindings && git diff --exit-code src/lib/bindings
+        run: git diff --exit-code src/lib/bindings

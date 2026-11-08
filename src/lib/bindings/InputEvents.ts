@@ -3,4 +3,4 @@ import type { ClickEvent } from "./ClickEvent";
 import type { CursorSample } from "./CursorSample";
 import type { KeyEvent } from "./KeyEvent";
 
-export type InputEvents = { cursor: Array<CursorSample>; clicks: Array<ClickEvent>; keys: Array<KeyEvent> };
+export type InputEvents = { cursor: Array<CursorSample>, clicks: Array<ClickEvent>, keys: Array<KeyEvent>, };

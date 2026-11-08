@@ -3,4 +3,4 @@
 /**
  * Which input effects are burned into the recording.
  */
-export type Effects = { cursor: boolean; clicks: boolean; keys: boolean };
+export type Effects = { cursor: boolean, clicks: boolean, keys: boolean, };

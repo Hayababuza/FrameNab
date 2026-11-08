@@ -3,4 +3,4 @@
 /**
  * Mouse position at a recording time, in pixels of the recording.
  */
-export type CursorSample = { t: number; x: number; y: number };
+export type CursorSample = { t: number, x: number, y: number, };
