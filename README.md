@@ -11,6 +11,20 @@ Both modes share the same annotation tools. Internally a screenshot is a project
 
 > **Status:** v0.3.0 – screenshot mode, recorder and frame editor (phases 1–3) are done; next are more export formats (phase 4). See the [roadmap](docs/PROJECT-PLAN.md#4-features-by-phase).
 
+## Installation
+
+Download the installer for your system from the [releases](https://github.com/Hayababuza/FrameNab/releases):
+
+| System | File |
+|---|---|
+| Windows 10/11 | `FrameNab_…_x64-setup.exe` (or `.msi`) |
+| macOS 11+ (Apple Silicon and Intel) | `FrameNab_…_universal.dmg` – not notarized yet: right-click → *Open* the first time |
+| Debian, Ubuntu | `FrameNab_…_amd64.deb` |
+| Fedora, openSUSE | `FrameNab-…-1.x86_64.rpm` |
+| Other Linux | `FrameNab_…_amd64.AppImage` |
+
+[FFmpeg](https://ffmpeg.org) is optional: with it, recordings can also be saved as MP4, WebM and lossy WebP.
+
 ## Tech stack
 
 [Tauri 2](https://tauri.app) · Rust · SvelteKit (Svelte 5) · TypeScript · tiny-skia · gifski
@@ -32,7 +46,17 @@ sudo apt install build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev \
   libgbm-dev libegl-dev
 ```
 
-FFmpeg is optional and only needed for MP4/WebM export.
+FFmpeg is optional and only needed for MP4/WebM export and lossy WebP.
+
+### Releases
+
+Raise the version in `package.json`, `src-tauri/tauri.conf.json` and `Cargo.toml` (and the path dependencies), add the release to `CHANGELOG.md`, then push a tag:
+
+```bash
+git tag -a v0.4.0 -m "FrameNab 0.4.0" && git push && git push --tags
+```
+
+The [release workflow](.github/workflows/release.yml) builds the installers for all three systems and attaches them to a **draft** release; check it on GitHub and publish it.
 
 ### Commands
 
@@ -51,6 +75,7 @@ FFmpeg is optional and only needed for MP4/WebM export.
 ```bash
 framenab gui        # screenshot overlay
 framenab record     # recording
+framenab edit <file> # open a recording folder, its project.json or a .framenab.zip
 framenab editor     # editor
 framenab settings   # settings
 framenab --hidden   # start in the tray only

@@ -5,7 +5,8 @@
   --border: #dde1e7;
   --text: #1b1f24;
   --text-muted: #5d6673;
-  --accent: #e5484d;
+  /* Contrast ≥ 4.5 : 1 (WCAG AA) for white text on the accent and for accent text. */
+  --accent: #d13438;
   --accent-text: #ffffff;
   --info-bg: #e8f1ff;
   --info-text: #1e4f9c;
@@ -35,6 +36,7 @@
     --text: #e8eaed;
     --text-muted: #9aa3ad;
     --accent: #ff6369;
+    --accent-text: #15171b;
     --info-bg: #1a2a42;
     --info-text: #9cc2ff;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%);
@@ -49,6 +51,7 @@
   --text: #e8eaed;
   --text-muted: #9aa3ad;
   --accent: #ff6369;
+  --accent-text: #15171b;
   --info-bg: #1a2a42;
   --info-text: #9cc2ff;
   --shadow: 0 1px 2px rgb(0 0 0 / 40%);

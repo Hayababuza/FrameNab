@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
+- Installers: release workflow (`v*` tag) that builds `.exe`/`.msi` for Windows, a universal `.dmg` for macOS and `.deb`/`.rpm`/`.AppImage` for Linux into a draft GitHub release; package metadata (publisher, license, description, PipeWire dependency, per-user Windows setup in English and German)
+- App icon: viewfinder corners with a red record dot (replaces the Tauri default icon)
 - Settings: appearance (system, light, dark) for all windows including the title bars; start with the system (in the tray, via the autostart plugin); configurable global shortcuts for screenshot and recording (click and press the keys, Del switches off, shortcuts taken by other programs are reported); on Wayland the page shows the commands to bind in the system settings instead
 - Export (phase 4): new formats APNG, animated WebP (lossless built in; lossy through FFmpeg) and PNG sequence (ZIP), next to GIF, MP4 and WebM. "Save as…" (Ctrl+Shift+S) opens an export dialog with the format, quality, lossy compression (smaller GIFs via gifski, lossy WebP), repetitions, output size (10–100 %) and an estimate of the file size; the choice is remembered for the quick "Save". After saving, the path can be copied
 - Editor overlays: a progress bar along the top or bottom edge (height, color) that fills up over the animation, and a watermark image (PNG, JPEG, WebP …) in a corner or the center with size and opacity; shown in the preview and burned into the saved GIF/video; the image is kept in the project folder
@@ -13,6 +15,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Start page: the latest recordings with date, frames, length and size; open them with a click, delete them, or show the recordings folder
 
 ### Changed
+- Better contrast (WCAG AA) of buttons and links in the accent color, in light and dark mode
 - Tauri 2.12 (Rust crates now match the JavaScript packages; minimum Rust version 1.90)
 
 ## [0.3.0] - 2026-11-08
