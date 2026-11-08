@@ -5,7 +5,7 @@
   "home.record": "Record",
   "home.recordHint": "Record your screen as GIF or video",
   "home.open": "Open project",
-  "home.openHint": "Edit a recording and save it as GIF or video",
+  "home.openHint": "Edit a recording or project (ZIP) and save it as GIF or video",
   "home.comingSoon": "Coming in phase {phase}",
   "home.settings": "Settings",
   "info.platform": "Platform",
@@ -179,5 +179,7 @@
   "home.interrupted": "Interrupted – recovered when opened",
   "home.deleteRecording": "Delete recording",
   "home.deleteConfirm": "Delete this recording for good? Saved GIFs and videos are kept.",
-  "home.showAll": "Show all in folder"
+  "home.showAll": "Show all in folder",
+  "editor.exportProject": "Export as project (ZIP) – to pass it on or keep editing later; “Open project” reads it back",
+  "home.openFilter": "FrameNab project"
 }

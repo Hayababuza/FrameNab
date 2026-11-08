@@ -44,8 +44,18 @@ impl EditorState {
     }
 }
 
-/// Opens the project folder `root` in the editor window.
-pub fn open(app: &AppHandle, root: PathBuf, restore: Option<String>) -> Result<(), String> {
+/// Opens a project in the editor window: a project folder, its `project.json`, or a project
+/// archive (`*.framenab.zip`, extracted into the recordings folder first).
+pub fn open(app: &AppHandle, path: PathBuf, restore: Option<String>) -> Result<(), String> {
+    let root = if path.is_file() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
+        let dir = crate::recorder::recordings_dir(app);
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        framenab_core::archive::import_zip(&path, &dir).map_err(|e| e.to_string())?
+    } else if path.is_file() && path.file_name().is_some_and(|n| n == "project.json") {
+        path.parent().map(PathBuf::from).ok_or("invalid path")?
+    } else {
+        path
+    };
     let store = FrameStore::create(&root).map_err(|e| e.to_string())?;
     let (project, recovered) = store.recover_project().map_err(|e| e.to_string())?;
     if recovered {
@@ -363,6 +373,52 @@ async fn ask_path(
     let picked =
         tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file()).await.map_err(|e| e.to_string())?;
     picked.map(|p| p.into_path().map_err(|e| e.to_string())).transpose()
+}
+
+/// Exports the open project as a `*.framenab.zip` archive (to pass it on or keep it).
+/// Resolves to the path, or `None` if the dialog was cancelled.
+#[tauri::command]
+pub async fn editor_export_project(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (store, project) = {
+        let state = app.state::<EditorState>();
+        let guard = state.lock();
+        let open = guard.as_ref().ok_or("no project open")?;
+        (open.store.clone(), open.project.clone())
+    };
+    let config = settings::save_settings(&app);
+    let name = store
+        .root()
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map_or_else(|| framenab_export::still::file_name_now(&config.template), String::from);
+    let _ = std::fs::create_dir_all(&config.directory);
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_title(t("save.projectTitle"))
+        .set_directory(&config.directory)
+        .set_file_name(format!("{name}.{}", framenab_core::archive::EXTENSION))
+        .add_filter(t("save.projectFilter"), &["zip"]);
+    if let Some(window) = app.get_webview_window(LABEL) {
+        dialog = dialog.set_parent(&window);
+    }
+    let picked =
+        tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file()).await.map_err(|e| e.to_string())?;
+    let Some(path) = picked.map(|p| p.into_path().map_err(|e| e.to_string())).transpose()? else { return Ok(None) };
+    let path = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
+        path
+    } else {
+        path.with_extension(framenab_core::archive::EXTENSION)
+    };
+    let target = path.clone();
+    tauri::async_runtime::spawn_blocking(move || framenab_core::archive::export_zip(&store, &project, &target))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    tracing::info!(path = %path.display(), "project exported");
+    Ok(Some(path.display().to_string()))
 }
 
 #[tauri::command]

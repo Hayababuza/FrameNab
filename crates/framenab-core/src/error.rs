@@ -22,6 +22,8 @@ pub enum CoreError {
     Busy,
     #[error("Invalid image operation (outside the image or size out of range)")]
     InvalidImageOp,
+    #[error("Project archive: {0}")]
+    Archive(String),
 }
 
 pub type Result<T, E = CoreError> = std::result::Result<T, E>;

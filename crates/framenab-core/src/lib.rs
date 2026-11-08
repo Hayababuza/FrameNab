@@ -2,6 +2,7 @@
 //!
 //! This crate is deliberately independent of Tauri and any GUI so it stays fully testable.
 
+pub mod archive;
 pub mod error;
 pub mod history;
 pub mod image_ops;

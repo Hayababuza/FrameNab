@@ -33,6 +33,20 @@ pub fn t(key: &str) -> &'static str {
                 "Save recording"
             }
         }
+        "save.projectTitle" => {
+            if de {
+                "Projekt exportieren"
+            } else {
+                "Export project"
+            }
+        }
+        "save.projectFilter" => {
+            if de {
+                "FrameNab-Projekt"
+            } else {
+                "FrameNab project"
+            }
+        }
         "save.title" => {
             if de {
                 "Screenshot speichern"

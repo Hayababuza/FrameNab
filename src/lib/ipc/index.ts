@@ -180,6 +180,8 @@ const frameUrl = (kind: string, frameId: string, project: string) =>
 export const thumbUrl = (frameId: string, project: string) => frameUrl("thumb", frameId, project);
 export const previewUrl = (frameId: string, project: string) => frameUrl("preview", frameId, project);
 export const openProject = (path: string) => invoke<void>("open_project", { path });
+/** Exports the open project as `*.framenab.zip`; `null` if the dialog was cancelled. */
+export const editorExportProject = () => invoke<string | null>("editor_export_project");
 
 export interface RecentProject {
   path: string;

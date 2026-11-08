@@ -5,7 +5,7 @@
   "home.record": "Aufnahme",
   "home.recordHint": "Bildschirm als GIF oder Video aufnehmen",
   "home.open": "Projekt öffnen",
-  "home.openHint": "Aufnahme bearbeiten und als GIF oder Video speichern",
+  "home.openHint": "Aufnahme oder Projekt (ZIP) bearbeiten und als GIF oder Video speichern",
   "home.comingSoon": "Folgt in Phase {phase}",
   "home.settings": "Einstellungen",
   "info.platform": "Plattform",
@@ -179,5 +179,7 @@
   "home.interrupted": "Unterbrochen – wird beim Öffnen wiederhergestellt",
   "home.deleteRecording": "Aufnahme löschen",
   "home.deleteConfirm": "Diese Aufnahme endgültig löschen? Gespeicherte GIFs und Videos bleiben erhalten.",
-  "home.showAll": "Alle im Ordner zeigen"
+  "home.showAll": "Alle im Ordner zeigen",
+  "editor.exportProject": "Als Projekt exportieren (ZIP) – zum Weitergeben oder später Weiterbearbeiten; „Projekt öffnen“ liest es wieder ein",
+  "home.openFilter": "FrameNab-Projekt"
 }

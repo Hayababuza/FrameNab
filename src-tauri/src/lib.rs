@@ -76,6 +76,7 @@ pub fn run() {
             recorder::input_support,
             editor::editor_export,
             editor::editor_cancel_export,
+            editor::editor_export_project,
             editor::recording_formats,
             editor::open_project,
             editor::recordings_directory,

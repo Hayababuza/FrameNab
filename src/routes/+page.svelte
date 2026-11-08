@@ -26,9 +26,15 @@
     saveDirectory = (await getSetting("saveDirectory")) ?? (await defaultSaveDirectory());
   }
 
-  /** "Open project": choose a recording folder (*.framenab) and open it in the editor. */
+  /**
+   * "Open project": a project archive (*.framenab.zip) or the project.json of a recording folder
+   * (*.framenab), opened in the editor.
+   */
   async function pickProject() {
-    const picked = await open({ directory: true, defaultPath: await recordingsDirectory() });
+    const picked = await open({
+      defaultPath: await recordingsDirectory(),
+      filters: [{ name: t("home.openFilter"), extensions: ["zip", "json"] }],
+    });
     if (typeof picked === "string") await openProject(picked);
   }
 

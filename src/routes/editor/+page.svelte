@@ -15,6 +15,7 @@
   import {
     editorCancelExport,
     editorExport,
+    editorExportProject,
     editorFrames,
     editorImage,
     editorTransition,
@@ -571,6 +572,22 @@
     }
   }
 
+  async function exportProject() {
+    if (progress || busy) return;
+    stop();
+    error = null;
+    saved = null;
+    busy = true;
+    try {
+      const path = await editorExportProject();
+      if (path) saved = path;
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if ((e.target as HTMLElement).closest("input, select, textarea")) return;
     const ctrl = e.ctrlKey || e.metaKey;
@@ -741,6 +758,15 @@
           </span>
           <button onclick={() => editorCancelExport()}>{t("editor.cancel")}</button>
         {:else}
+          <button
+            class="icon"
+            title={t("editor.exportProject")}
+            aria-label={t("editor.exportProject")}
+            onclick={exportProject}
+            disabled={busy}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v12H4zM3 4h18v4H3zM10 12h4" /></svg>
+          </button>
           <button title={t("editor.saveAs")} onclick={() => save(true)}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
