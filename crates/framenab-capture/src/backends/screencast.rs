@@ -12,6 +12,7 @@ use std::thread::{self, JoinHandle};
 use ashpd::desktop::screencast::{CursorMode, Screencast, SelectSourcesOptions, SourceType};
 use ashpd::desktop::{PersistMode, Session};
 use pipewire as pw;
+use pw::spa::buffer::meta::{MetaBitmap, MetaCursor};
 use pw::spa::param::format::{FormatProperties, MediaSubtype, MediaType};
 use pw::spa::param::video::{VideoFormat, VideoInfoRaw};
 use pw::spa::param::{ParamType, format_utils};
@@ -20,7 +21,7 @@ use pw::spa::pod::{self, Pod};
 use pw::spa::utils::{Direction, Fraction, Rectangle, SpaTypes};
 use pw::stream::{StreamFlags, StreamRc};
 
-use crate::recording::{FrameStream, LatestFrame, SourceFrame, StreamOptions};
+use crate::recording::{CursorImage, FrameStream, LatestFrame, SourceFrame, StreamOptions};
 use crate::{CaptureError, Result};
 
 use super::portal::{map_err, runtime};
@@ -38,15 +39,25 @@ impl PortalStream {
     /// Opens a screen cast of a monitor, or with `window` of a single window (the user picks it
     /// in the portal dialog; window choices are not remembered).
     pub fn open(options: &StreamOptions, window: bool) -> Result<Self> {
-        let cursor = if options.cursor { CursorMode::EMBEDDED } else { CursorMode::HIDDEN };
+        let wants_cursor = options.cursor;
         let token = if window { None } else { options.restore_token.clone() };
         let (sources, persist) = if window {
             (SourceType::WINDOW, PersistMode::DoNot)
         } else {
             (SourceType::MONITOR, PersistMode::ExplicitlyRevoked)
         };
-        let (session, node_id, position, fd, restore_token) = runtime()?.block_on(async move {
+        let (session, node_id, position, fd, restore_token, metadata) = runtime()?.block_on(async move {
             let proxy = Screencast::new().await.map_err(map_err)?;
+            // Prefer cursor metadata: it tells us where the mouse is (for the cursor highlight and
+            // click positions); the cursor is then drawn into the frames by the sampler.
+            let metadata = proxy.available_cursor_modes().await.is_ok_and(|modes| modes.contains(CursorMode::METADATA));
+            let cursor = if metadata {
+                CursorMode::METADATA
+            } else if wants_cursor {
+                CursorMode::EMBEDDED
+            } else {
+                CursorMode::HIDDEN
+            };
             let session = proxy.create_session(Default::default()).await.map_err(map_err)?;
             proxy
                 .select_sources(
@@ -68,18 +79,19 @@ impl PortalStream {
             let position = stream.position().unwrap_or((0, 0));
             let restore_token = streams.restore_token().map(str::to_owned);
             let fd = proxy.open_pipe_wire_remote(&session, Default::default()).await.map_err(map_err)?;
-            Ok::<_, CaptureError>((session, node_id, position, fd, restore_token))
+            Ok::<_, CaptureError>((session, node_id, position, fd, restore_token, metadata))
         })?;
-        tracing::info!(node_id, ?position, has_token = restore_token.is_some(), "screen cast started");
+        tracing::info!(node_id, ?position, has_token = restore_token.is_some(), metadata, "screen cast started");
 
         let latest = Arc::new(LatestFrame::default());
+        latest.set_draw_cursor(metadata && wants_cursor);
         let (quit, quit_rx) = pw::channel::channel::<()>();
         let thread = {
             let latest = Arc::clone(&latest);
             thread::Builder::new()
                 .name("framenab-pipewire".into())
                 .spawn(move || {
-                    if let Err(err) = run_pipewire(fd, node_id, &latest, quit_rx) {
+                    if let Err(err) = run_pipewire(fd, node_id, metadata, &latest, quit_rx) {
                         tracing::error!(%err, "pipewire stream failed");
                         latest.set_error(err);
                     }
@@ -122,6 +134,7 @@ impl FrameStream for PortalStream {
 fn run_pipewire(
     fd: OwnedFd,
     node_id: u32,
+    cursor_metadata: bool,
     latest: &Arc<LatestFrame>,
     quit: pw::channel::Receiver<()>,
 ) -> std::result::Result<(), String> {
@@ -147,7 +160,7 @@ fn run_pipewire(
     let sink = Arc::clone(latest);
     let _listener = stream
         .add_local_listener_with_user_data(VideoInfoRaw::default())
-        .param_changed(|_, format, id, param| {
+        .param_changed(move |stream, format, id, param| {
             let Some(param) = param else { return };
             if id != ParamType::Format.as_raw() {
                 return;
@@ -159,12 +172,32 @@ fn run_pipewire(
                     tracing::debug!(format = ?format.format(), size = ?format.size(), "stream format");
                 }
             }
+            // Ask for cursor metadata (position and image) in every buffer.
+            if cursor_metadata
+                && let Some(meta) = cursor_meta_param()
+                && let Some(pod) = Pod::from_bytes(&meta)
+                && let Err(e) = stream.update_params(&mut [pod])
+            {
+                tracing::warn!(?e, "could not request cursor metadata");
+            }
         })
         .process(move |stream, format| {
             let Some(mut buffer) = stream.dequeue_buffer() else { return };
+            if cursor_metadata
+                && let Some(cursor) = buffer.find_meta::<MetaCursor>()
+                && cursor.is_valid()
+            {
+                let position = cursor.position();
+                let image = cursor.bitmap().and_then(|bitmap| cursor_image(bitmap, cursor.hotspot()));
+                sink.publish_cursor(Some((position.x as f32, position.y as f32)), image.map(Arc::new));
+            }
             let datas = buffer.datas_mut();
             let Some(data) = datas.first_mut() else { return };
             let chunk = data.chunk();
+            // With cursor metadata the compositor also sends buffers that only move the cursor.
+            if chunk.size() == 0 {
+                return;
+            }
             let (offset, stride) = (chunk.offset() as usize, chunk.stride());
             let size = format.size();
             let Some(bytes) = data.data() else {
@@ -233,6 +266,45 @@ fn run_pipewire(
 
     main_loop.run();
     Ok(())
+}
+
+/// The `SPA_PARAM_Meta` pod asking for cursor metadata. The size is a range (like OBS does): it
+/// has to overlap with what the compositor offers, otherwise no cursor metadata arrives.
+fn cursor_meta_param() -> Option<Vec<u8>> {
+    use pw::spa::sys;
+    use pw::spa::utils::{Choice, ChoiceEnum, ChoiceFlags};
+    let size = |side: usize| {
+        let bytes =
+            std::mem::size_of::<sys::spa_meta_cursor>() + std::mem::size_of::<sys::spa_meta_bitmap>() + side * side * 4;
+        i32::try_from(bytes).unwrap_or(i32::MAX)
+    };
+    let object = pod::Object {
+        type_: sys::SPA_TYPE_OBJECT_ParamMeta,
+        id: sys::SPA_PARAM_Meta,
+        properties: vec![
+            pod::Property::new(sys::SPA_PARAM_META_type, pod::Value::Id(pw::spa::utils::Id(sys::SPA_META_Cursor))),
+            pod::Property::new(
+                sys::SPA_PARAM_META_size,
+                pod::Value::Choice(pod::ChoiceValue::Int(Choice(
+                    ChoiceFlags::empty(),
+                    ChoiceEnum::Range { default: size(64), min: size(1), max: size(1024) },
+                ))),
+            ),
+        ],
+    };
+    PodSerializer::serialize(Cursor::new(Vec::new()), &pod::Value::Object(object)).ok().map(|(c, _)| c.into_inner())
+}
+
+/// Converts a cursor bitmap from the metadata to straight-alpha RGBA. `None` if there is no new
+/// image in this buffer (the previous one stays in use).
+fn cursor_image(bitmap: &MetaBitmap, hotspot: pw::spa::utils::Point) -> Option<CursorImage> {
+    let size = bitmap.size();
+    if size.width == 0 || size.height == 0 {
+        return None;
+    }
+    let data = bitmap.bitmap_data()?;
+    let rgba = convert(data, size.width, size.height, bitmap.stride(), bitmap.format())?;
+    Some(CursorImage { rgba, width: size.width, height: size.height, hotspot: (hotspot.x, hotspot.y) })
 }
 
 /// Converts one frame to tightly packed RGBA, honoring the row stride.

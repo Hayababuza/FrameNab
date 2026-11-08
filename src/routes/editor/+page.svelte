@@ -16,7 +16,10 @@
     editorCancelExport,
     editorDelete,
     editorExport,
+    editorInput,
     editorSetAnnotations,
+    editorSetEffects,
+    inputSupport,
     editorUndo,
     editorView,
     previewUrl,
@@ -24,6 +27,9 @@
     thumbUrl,
     type EditorView,
   } from "$lib/ipc";
+  import type { Effects } from "$lib/bindings/Effects";
+  import type { InputEvents } from "$lib/bindings/InputEvents";
+  import { effectAnnotations } from "$lib/annotations/effects";
   import { getSetting, type RecordingFormat } from "$lib/stores/settings";
 
   const THUMB_HEIGHT = 90;
@@ -121,8 +127,33 @@
     selected.size ? [...selected].sort((a, b) => a - b) : frames.length ? [current] : [],
   );
 
+  // Input effects (cursor highlight, clicks, keys) from the recorded input.
+  let input = $state<InputEvents>({ cursor: [], clicks: [], keys: [] });
+  let clicksAndKeysBlocked = $state(false);
+
+  async function setEffects(change: Partial<Effects>) {
+    if (view) view = await editorSetEffects({ ...view.project.effects, ...change });
+  }
+
+  /** Recording time of frame `i` (frames keep it even after others were deleted). */
+  const frameTime = (i: number) => frames[i]?.timeMs ?? startOf(i);
+
+  const fx = $derived(
+    view && frames[current]
+      ? effectAnnotations(
+          input,
+          view.project.effects,
+          frameTime(current),
+          view.project.width,
+          view.project.height,
+        )
+      : [],
+  );
+
   async function load() {
     view = await editorView();
+    input = await editorInput().catch(() => ({ cursor: [], clicks: [], keys: [] }));
+    clicksAndKeysBlocked = (await inputSupport()) === "noPermission";
     current = Math.min(current, Math.max(0, frames.length - 1));
   }
 
@@ -486,6 +517,7 @@
           bind:selectedId
           readonly={playing}
           onchange={setAnnotations}
+          extra={fx}
         />
       {/if}
     </main>
@@ -524,7 +556,43 @@
           duration,
         )}
       </span>
-      <span class="hint">{t("editor.hint")}</span>
+      {#if input.cursor.length || input.clicks.length || input.keys.length}
+        <span class="effects">
+          <span class="label">{t("editor.effects")}</span>
+          <label title={t("editor.fxCursorTitle")}>
+            <input
+              type="checkbox"
+              checked={view.project.effects.cursor}
+              disabled={!input.cursor.length}
+              onchange={(e) => setEffects({ cursor: e.currentTarget.checked })}
+            />
+            {t("editor.fxCursor")}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={view.project.effects.clicks}
+              disabled={!input.clicks.length}
+              onchange={(e) => setEffects({ clicks: e.currentTarget.checked })}
+            />
+            {t("editor.fxClicks", { n: input.clicks.length })}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={view.project.effects.keys}
+              disabled={!input.keys.length}
+              onchange={(e) => setEffects({ keys: e.currentTarget.checked })}
+            />
+            {t("editor.fxKeys", { n: input.keys.length })}
+          </label>
+          {#if clicksAndKeysBlocked && !input.clicks.length && !input.keys.length}
+            <span class="blocked" title={t("editor.fxBlockedTitle")}>{t("editor.fxBlocked")}</span>
+          {/if}
+        </span>
+      {:else}
+        <span class="hint">{t("editor.hint")}</span>
+      {/if}
     </div>
 
     <div
@@ -598,6 +666,27 @@
     color: var(--text-muted);
     font-size: 0.9rem;
     font-variant-numeric: tabular-nums;
+  }
+  .effects {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+    font-size: 0.85rem;
+  }
+  .effects .label {
+    color: var(--text-muted);
+  }
+  .effects label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .blocked {
+    color: var(--text-muted);
+    text-decoration: underline dotted;
+    cursor: help;
   }
   .hint {
     margin-left: auto;

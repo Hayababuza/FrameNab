@@ -12,6 +12,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use framenab_core::InputEvents;
+use framenab_core::input::{ClickEvent, CursorSample, KeyEvent};
 use image::RgbaImage;
 
 /// A full frame from the source, tightly packed RGBA.
@@ -22,19 +24,63 @@ pub struct SourceFrame {
     pub rgba: Vec<u8>,
 }
 
+/// A mouse cursor image (straight-alpha RGBA) and its hotspot.
+#[derive(Debug)]
+pub struct CursorImage {
+    pub rgba: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub hotspot: (i32, i32),
+}
+
+/// Where the mouse is on the stream, and how it looks, when the source reports it separately
+/// from the frames (Wayland portal metadata). Positions are in stream pixels.
+#[derive(Debug, Clone, Default)]
+pub struct CursorState {
+    pub position: Option<(f32, f32)>,
+    pub image: Option<Arc<CursorImage>>,
+    /// Draw the cursor image into the sampled frames.
+    pub draw: bool,
+}
+
 /// The most recent frame of a stream, shared between the source and the sampler.
 #[derive(Debug, Default)]
 pub struct LatestFrame {
     slot: Mutex<Option<Arc<SourceFrame>>>,
-    /// Incremented for every new frame.
+    /// Incremented for every new frame and every cursor change.
     seq: AtomicU64,
     error: Mutex<Option<String>>,
+    cursor: Mutex<CursorState>,
 }
 
 impl LatestFrame {
     pub fn publish(&self, frame: SourceFrame) {
         *self.slot.lock().expect("frame lock") = Some(Arc::new(frame));
         self.seq.fetch_add(1, Ordering::Release);
+    }
+
+    /// Updates the cursor; a move or a new image counts as a change (the next sampled frame
+    /// shows it).
+    pub fn publish_cursor(&self, position: Option<(f32, f32)>, image: Option<Arc<CursorImage>>) {
+        let mut cursor = self.cursor.lock().expect("cursor lock");
+        let changed = position != cursor.position || image.is_some();
+        cursor.position = position;
+        if image.is_some() {
+            cursor.image = image;
+        }
+        // Only a drawn cursor changes the picture; otherwise the position is just recorded.
+        if changed && cursor.draw {
+            self.seq.fetch_add(1, Ordering::Release);
+        }
+    }
+
+    /// Whether the sampler draws the cursor image into the frames.
+    pub fn set_draw_cursor(&self, draw: bool) {
+        self.cursor.lock().expect("cursor lock").draw = draw;
+    }
+
+    fn cursor(&self) -> CursorState {
+        self.cursor.lock().expect("cursor lock").clone()
     }
 
     pub fn set_error(&self, error: impl Into<String>) {
@@ -131,6 +177,7 @@ impl Clock {
 struct Shared {
     stop: AtomicBool,
     clock: Mutex<Clock>,
+    input: Mutex<InputEvents>,
     /// Recording time in ms (pauses excluded), for the UI.
     elapsed_ms: AtomicU64,
 }
@@ -145,6 +192,7 @@ impl Shared {
 pub struct Recording<S: FrameSink> {
     shared: Arc<Shared>,
     latest: Arc<LatestFrame>,
+    crop: Option<Crop>,
     stream: Option<Box<dyn FrameStream>>,
     sampler: Option<JoinHandle<(S, SamplerStats)>>,
 }
@@ -179,16 +227,22 @@ impl<S: FrameSink> Recording<S> {
         self.stream.as_ref().and_then(|s| s.restore_token())
     }
 
-    /// Stops the recording. Returns the sink, the end timestamp in ms (when `stop` was called)
-    /// and the statistics.
-    pub fn stop(mut self) -> (S, u64, SamplerStats) {
+    /// Records clicks and key presses into this recording (from any thread).
+    pub fn input_recorder(&self) -> InputRecorder {
+        InputRecorder { shared: Arc::clone(&self.shared), latest: Arc::clone(&self.latest), crop: self.crop }
+    }
+
+    /// Stops the recording. Returns the sink, the end timestamp in ms (when `stop` was called),
+    /// the statistics and the recorded input.
+    pub fn stop(mut self) -> (S, u64, SamplerStats, InputEvents) {
         let end = self.shared.clock().elapsed(Instant::now()).as_millis() as u64;
         self.shared.stop.store(true, Ordering::SeqCst);
         let (sink, stats) = self.sampler.take().expect("sampler runs until stop").join().expect("sampler panicked");
         if let Some(stream) = self.stream.take() {
             stream.stop();
         }
-        (sink, end, stats)
+        let input = std::mem::take(&mut *self.shared.input.lock().expect("input lock"));
+        (sink, end, stats, input)
     }
 }
 
@@ -199,6 +253,7 @@ pub fn record<S: FrameSink>(stream: Box<dyn FrameStream>, crop: Option<Crop>, fp
     let shared = Arc::new(Shared {
         stop: AtomicBool::new(false),
         clock: Mutex::new(Clock { start: Instant::now(), paused_total: Duration::ZERO, paused_since: None }),
+        input: Mutex::new(InputEvents::default()),
         elapsed_ms: AtomicU64::new(0),
     });
     let sampler = {
@@ -209,7 +264,7 @@ pub fn record<S: FrameSink>(stream: Box<dyn FrameStream>, crop: Option<Crop>, fp
             .spawn(move || sample(&shared, &latest, crop, fps, sink))
             .expect("spawn sampler thread")
     };
-    Recording { shared, latest, stream: Some(stream), sampler: Some(sampler) }
+    Recording { shared, latest, crop, stream: Some(stream), sampler: Some(sampler) }
 }
 
 fn sample<S: FrameSink>(
@@ -251,14 +306,100 @@ fn sample<S: FrameSink>(
         let timestamp = elapsed.as_millis() as u64;
         shared.elapsed_ms.store(timestamp, Ordering::Relaxed);
 
+        let cursor = latest.cursor();
+        if let Some(position) = cursor.position {
+            record_cursor(shared, crop, timestamp, position);
+        }
+
         let Some((seq, frame)) = latest.take_if_newer(seen) else { continue };
         seen = seq;
-        let Some(image) = to_image(&frame, crop) else { continue };
+        let Some(mut image) = to_image(&frame, crop) else { continue };
+        if cursor.draw
+            && let (Some((x, y)), Some(cursor_image)) = (cursor.position, cursor.image.as_deref())
+        {
+            let (cx, cy) = crop.map_or((0, 0), |c| (c.x, c.y));
+            let left = x.round() as i32 - cursor_image.hotspot.0 - cx;
+            let top = y.round() as i32 - cursor_image.hotspot.1 - cy;
+            draw_cursor(&mut image, cursor_image, left, top);
+        }
         if sink.push(image, timestamp) {
             stats.pushed += 1;
         } else {
             stats.dropped += 1;
         }
+    }
+}
+
+/// Appends a cursor sample (in recording pixels) if the mouse moved.
+fn record_cursor(shared: &Shared, crop: Option<Crop>, t: u64, (x, y): (f32, f32)) {
+    let (cx, cy) = crop.map_or((0.0, 0.0), |c| (c.x as f32, c.y as f32));
+    let sample = CursorSample { t, x: x - cx, y: y - cy };
+    let mut input = shared.input.lock().expect("input lock");
+    if input.cursor.last().is_none_or(|last| (last.x, last.y) != (sample.x, sample.y)) {
+        input.cursor.push(sample);
+    }
+}
+
+/// Alpha-blends the cursor image into `image` with its top-left corner at `(left, top)`.
+fn draw_cursor(image: &mut RgbaImage, cursor: &CursorImage, left: i32, top: i32) {
+    for cy in 0..cursor.height as i32 {
+        for cx in 0..cursor.width as i32 {
+            let (x, y) = (left + cx, top + cy);
+            if x < 0 || y < 0 || x >= image.width() as i32 || y >= image.height() as i32 {
+                continue;
+            }
+            let i = ((cy as u32 * cursor.width + cx as u32) * 4) as usize;
+            let Some(src) = cursor.rgba.get(i..i + 4) else { continue };
+            let a = u32::from(src[3]);
+            if a == 0 {
+                continue;
+            }
+            let dst = image.get_pixel_mut(x as u32, y as u32);
+            for (d, &s) in dst.0.iter_mut().zip(src).take(3) {
+                *d = ((u32::from(s) * a + u32::from(*d) * (255 - a)) / 255) as u8;
+            }
+        }
+    }
+}
+
+/// Records clicks and key presses into a running recording, with the recording time and (for
+/// clicks) the current mouse position. Ignored while paused.
+#[derive(Clone)]
+pub struct InputRecorder {
+    shared: Arc<Shared>,
+    latest: Arc<LatestFrame>,
+    crop: Option<Crop>,
+}
+
+impl InputRecorder {
+    fn now(&self) -> Option<u64> {
+        let clock = self.shared.clock();
+        clock.paused_since.is_none().then(|| clock.elapsed(Instant::now()).as_millis() as u64)
+    }
+
+    /// A mouse button was pressed (0 = left, 1 = right, 2 = middle). Needs a known cursor
+    /// position; without one the click is dropped.
+    pub fn click(&self, button: u8) {
+        let Some(t) = self.now() else { return };
+        let Some((x, y)) = self.latest.cursor().position else { return };
+        let (cx, cy) = self.crop.map_or((0.0, 0.0), |c| (c.x as f32, c.y as f32));
+        self.shared.input.lock().expect("input lock").clicks.push(ClickEvent { t, x: x - cx, y: y - cy, button });
+    }
+
+    /// A key (combination) was pressed, e.g. `Ctrl + C`.
+    pub fn key(&self, label: impl Into<String>) {
+        let Some(t) = self.now() else { return };
+        self.shared.input.lock().expect("input lock").keys.push(KeyEvent { t, label: label.into() });
+    }
+
+    /// The stream reports the cursor position itself (no global position needed).
+    pub fn has_cursor(&self) -> bool {
+        self.latest.cursor().position.is_some()
+    }
+
+    /// Sets the cursor position (stream pixels) from a global mouse position source.
+    pub fn set_cursor(&self, position: (f32, f32)) {
+        self.latest.publish_cursor(Some(position), None);
     }
 }
 
@@ -340,7 +481,7 @@ mod tests {
         let crop = Crop { x: 1, y: 1, width: 2, height: 5 };
         let rec = record(Box::new(stream), Some(crop), 20, Collect::default());
         thread::sleep(Duration::from_millis(500));
-        let (sink, end, stats) = rec.stop();
+        let (sink, end, stats, _) = rec.stop();
         // ~10 frames in 500 ms at 20 fps (generous bounds for slow CI machines)
         assert!((5..=12).contains(&sink.0.len()), "got {} frames", sink.0.len());
         assert!(sink.0.iter().all(|&(w, h, _)| (w, h) == (2, 2)), "crop is clamped to the frame");
@@ -373,11 +514,62 @@ mod tests {
         let paused = pause_start.elapsed();
         thread::sleep(Duration::from_millis(200));
         let total = started.elapsed();
-        let (sink, end, _) = rec.stop();
+        let (sink, end, _, _) = rec.stop();
         let expected = (total - paused).as_millis() as u64;
         assert!(end.abs_diff(expected) < 60, "recorded {end} ms, expected about {expected} ms");
         let gaps: Vec<u64> = sink.0.windows(2).map(|p| p[1].2 - p[0].2).collect();
         assert!(gaps.iter().all(|&g| g < 300), "no 400 ms jump from the pause: {gaps:?}");
+    }
+
+    #[test]
+    fn records_cursor_clicks_and_keys_relative_to_the_crop() {
+        let stream = FakeStream::start(5);
+        let latest = stream.latest();
+        let crop = Crop { x: 10, y: 20, width: 2, height: 2 };
+        let rec = record(Box::new(stream), Some(crop), 30, Collect::default());
+        let input = rec.input_recorder();
+        latest.publish_cursor(Some((15.0, 25.0)), None);
+        thread::sleep(Duration::from_millis(100));
+        input.click(0);
+        input.key("Ctrl + C");
+        rec.pause();
+        input.key("ignored while paused");
+        rec.resume();
+        let (_, _, _, events) = rec.stop();
+        assert_eq!(events.cursor.first().map(|s| (s.x, s.y)), Some((5.0, 5.0)));
+        assert_eq!(events.clicks.len(), 1);
+        assert_eq!((events.clicks[0].x, events.clicks[0].y), (5.0, 5.0));
+        assert_eq!(events.keys.iter().map(|k| k.label.as_str()).collect::<Vec<_>>(), ["Ctrl + C"]);
+    }
+
+    #[test]
+    fn draws_the_cursor_into_frames_when_asked() {
+        let latest = Arc::new(LatestFrame::default());
+        latest.publish(SourceFrame { width: 4, height: 4, rgba: vec![0; 64] });
+        latest.set_draw_cursor(true);
+        let white = Arc::new(CursorImage { rgba: vec![255; 4], width: 1, height: 1, hotspot: (0, 0) });
+        latest.publish_cursor(Some((2.0, 1.0)), Some(white));
+        struct Static(Arc<LatestFrame>);
+        impl FrameStream for Static {
+            fn latest(&self) -> Arc<LatestFrame> {
+                Arc::clone(&self.0)
+            }
+            fn stop(self: Box<Self>) {}
+        }
+        #[derive(Default)]
+        struct Keep(Vec<RgbaImage>);
+        impl FrameSink for Keep {
+            fn push(&mut self, image: RgbaImage, _: u64) -> bool {
+                self.0.push(image);
+                true
+            }
+        }
+        let rec = record(Box::new(Static(latest)), None, 30, Keep::default());
+        thread::sleep(Duration::from_millis(150));
+        let (sink, _, _, _) = rec.stop();
+        let frame = &sink.0[0];
+        assert_eq!(frame.get_pixel(2, 1).0, [255, 255, 255, 0]);
+        assert_eq!(frame.get_pixel(0, 0).0, [0, 0, 0, 0]);
     }
 
     #[test]
@@ -393,7 +585,7 @@ mod tests {
         }
         let rec = record(Box::new(Static(latest)), None, 30, Collect::default());
         thread::sleep(Duration::from_millis(300));
-        let (sink, end, _) = rec.stop();
+        let (sink, end, _, _) = rec.stop();
         assert_eq!(sink.0.len(), 1, "one frame that lasts the whole recording");
         assert!(end >= 250);
     }

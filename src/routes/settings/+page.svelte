@@ -3,7 +3,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { i18n, locales, t, type Locale } from "$lib/i18n/index.svelte";
-  import { appInfo, defaultSaveDirectory, recordingFormats, type ExportFormat } from "$lib/ipc";
+  import { appInfo, defaultSaveDirectory, inputSupport, recordingFormats, type ExportFormat } from "$lib/ipc";
   import {
     DEFAULT_TEMPLATE,
     getSetting,
@@ -38,11 +38,15 @@
   );
 
   let waylandSession = $state(false);
+  let recordInput = $state(true);
+  let inputBlocked = $state(false);
   let useXwayland = $state(true);
   let restartNeeded = $state(false);
 
   onMount(async () => {
     waylandSession = (await appInfo()).platform === "linuxWayland";
+    recordInput = await getSetting("recordInput");
+    inputBlocked = (await inputSupport()) === "noPermission";
     useXwayland = !(await getSetting("nativeWayland"));
     locale = (await getSetting("locale")) ?? "system";
     saveDirectory = await getSetting("saveDirectory");
@@ -113,6 +117,27 @@
       {/if}
     </section>
   {/if}
+
+  <h2>{t("recorder.title")}</h2>
+  <section>
+    <label class="row">
+      <span>
+        {t("settings.recordInput")}
+        <small class="help-inline">{t("settings.recordInputHelp")}</small>
+      </span>
+      <input
+        type="checkbox"
+        bind:checked={recordInput}
+        onchange={() => setSetting("recordInput", recordInput)}
+      />
+    </label>
+    {#if recordInput && inputBlocked}
+      <p class="help">
+        {t("settings.inputPermission")}<br />
+        <code>sudo usermod -aG input $USER</code>
+      </p>
+    {/if}
+  </section>
 
   <h2>{t("settings.saving")}</h2>
   <section>

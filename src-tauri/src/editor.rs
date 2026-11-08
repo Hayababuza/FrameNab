@@ -130,6 +130,23 @@ pub fn editor_delete(app: AppHandle, indices: Vec<usize>) -> Result<EditorView, 
     })
 }
 
+/// The input recorded with the open project (mouse, clicks, keys) for the effect preview.
+#[tauri::command]
+pub fn editor_input(app: AppHandle) -> Result<framenab_core::InputEvents, String> {
+    let state = app.state::<EditorState>();
+    let guard = state.lock();
+    let open = guard.as_ref().ok_or("no project open")?;
+    open.store.load_input().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn editor_set_effects(app: AppHandle, effects: framenab_core::Effects) -> Result<EditorView, String> {
+    edit(&app, |p| {
+        p.effects = effects;
+        Ok(())
+    })
+}
+
 /// Replaces all annotations (the editor sends the whole list after each change).
 #[tauri::command]
 pub fn editor_set_annotations(

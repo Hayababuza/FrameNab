@@ -53,6 +53,8 @@ struct Inner {
     stream: Option<Box<dyn FrameStream>>,
     recording: Option<Recording<ProjectRecorder>>,
     project_dir: Option<PathBuf>,
+    /// Records clicks and keys while recording (dropping it stops it).
+    input: Option<framenab_capture::input::InputListener>,
 }
 
 #[derive(Default)]
@@ -122,13 +124,19 @@ pub fn cleanup(app: &AppHandle) {
     if let Some(stream) = stream {
         stream.stop();
     }
+    state.lock().input.take();
     if let Some(recording) = recording {
         // Closed while recording: keep what was recorded.
-        let (sink, end, _) = recording.stop();
-        if let Err(err) = sink.finish(end) {
-            tracing::warn!(%err, "could not finish the recording");
-        } else if let Some(dir) = dir {
-            tracing::info!(path = %dir.display(), "recording kept after the recorder was closed");
+        let (sink, end, _, input) = recording.stop();
+        match (sink.finish(end), dir) {
+            (Err(err), _) => tracing::warn!(%err, "could not finish the recording"),
+            (Ok((project, _)), Some(dir)) => {
+                if let Err(err) = save_input(&dir, project, &input) {
+                    tracing::warn!(%err, "could not save the recorded input");
+                }
+                tracing::info!(path = %dir.display(), "recording kept after the recorder was closed");
+            }
+            (Ok(_), None) => {}
         }
     }
     state.background.lock().expect("background lock").take();
@@ -177,16 +185,23 @@ pub fn recorder_start(app: AppHandle, fps: u32) -> Result<(), String> {
     let state = app.state::<RecorderState>();
     let mut inner = state.lock();
     let stream = inner.stream.take().ok_or("the stream is not prepared")?;
-    let crop = inner.setup.as_ref().and_then(|s| s.region).map(|r| {
-        let (ox, oy) = stream.origin();
-        Crop { x: r.x - ox, y: r.y - oy, width: r.w, height: r.h }
+    let origin = stream.origin();
+    let crop = inner.setup.as_ref().and_then(|s| s.region).map(|r| Crop {
+        x: r.x - origin.0,
+        y: r.y - origin.1,
+        width: r.w,
+        height: r.h,
     });
     let dir = recordings_dir(&app)
         .join(format!("{}.framenab", framenab_export::still::file_name_now(framenab_export::still::DEFAULT_TEMPLATE)));
     let sink = ProjectRecorder::create(&dir).map_err(|e| e.to_string())?;
-    inner.recording = Some(record(stream, crop, fps, sink));
+    let recording = record(stream, crop, fps, sink);
+    let record_input =
+        app.store("settings.json").ok().and_then(|s| s.get(INPUT_KEY)).and_then(|v| v.as_bool()).unwrap_or(true);
+    inner.input = if record_input { framenab_capture::input::listen(recording.input_recorder(), origin) } else { None };
+    inner.recording = Some(recording);
     inner.project_dir = Some(dir.clone());
-    tracing::info!(path = %dir.display(), fps, ?crop, "recording started");
+    tracing::info!(path = %dir.display(), fps, ?crop, clicks_and_keys = inner.input.is_some(), "recording started");
     Ok(())
 }
 
@@ -232,15 +247,18 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
     let (recording, dir) = {
         let state = app.state::<RecorderState>();
         let mut inner = state.lock();
+        inner.input.take();
         (inner.recording.take().ok_or("not recording")?, inner.project_dir.clone().ok_or("no project folder")?)
     };
+    let target = dir.clone();
     let (project, stats) = tauri::async_runtime::spawn_blocking(move || {
-        let (sink, end, _) = recording.stop();
-        sink.finish(end)
+        let (sink, end, _, input) = recording.stop();
+        let (project, stats) = sink.finish(end).map_err(|e| e.to_string())?;
+        let project = save_input(&target, project, &input)?;
+        Ok::<_, String>((project, stats))
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())??;
     tracing::info!(path = %dir.display(), frames = stats.frames, dropped = stats.dropped, "recording finished");
     // Continue in the editor; it takes over bringing the main window back.
     let restore = app.state::<RecorderState>().restore.take();
@@ -253,6 +271,30 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
         height: project.height,
         dropped: stats.dropped,
     })
+}
+
+/// Settings key: record clicks and keys (default on).
+const INPUT_KEY: &str = "recordInput";
+
+/// Saves the recorded input next to the frames and turns on the effects that have data
+/// (clicks, keys); the cursor highlight stays off until chosen in the editor.
+fn save_input(
+    dir: &std::path::Path,
+    mut project: framenab_core::Project,
+    input: &framenab_core::InputEvents,
+) -> Result<framenab_core::Project, String> {
+    let store = framenab_core::FrameStore::create(dir).map_err(|e| e.to_string())?;
+    store.save_input(input).map_err(|e| e.to_string())?;
+    project.effects.clicks = !input.clicks.is_empty();
+    project.effects.keys = !input.keys.is_empty();
+    store.save_project(&project).map_err(|e| e.to_string())?;
+    Ok(project)
+}
+
+/// Whether clicks and keys can be recorded here (Linux needs the `input` group).
+#[tauri::command]
+pub fn input_support() -> framenab_capture::input::InputSupport {
+    framenab_capture::input::support()
 }
 
 /// `<app data>/recordings`

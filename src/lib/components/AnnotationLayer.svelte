@@ -36,6 +36,8 @@
     selectedId: string | null;
     /** Editing is off (e.g. while playing). */
     readonly?: boolean;
+    /** Drawn on top, not editable (input effects). */
+    extra?: Annotation[];
     onchange: (annotations: Annotation[]) => void;
   }
 
@@ -51,6 +53,7 @@
     strokeWidth,
     selectedId = $bindable(),
     readonly = false,
+    extra = [],
     onchange,
   }: Props = $props();
 
@@ -84,7 +87,7 @@
   });
 
   $effect(() => {
-    void [image, shown, draft, selectedId, fit, box];
+    void [image, shown, draft, selectedId, fit, box, extra];
     draw();
   });
 
@@ -103,6 +106,7 @@
     ctx.save();
     ctx.setTransform(dpr * fit.k, 0, 0, dpr * fit.k, dpr * fit.x, dpr * fit.y);
     for (const a of shown) drawAnnotation(ctx, a);
+    for (const a of extra) drawAnnotation(ctx, a);
     if (draft) drawAnnotation(ctx, draft);
     const selected = shown.find((a) => a.id === selectedId);
     if (selected) drawSelectionFrame(ctx, selected, 1 / fit.k);

@@ -98,6 +98,9 @@ fn write_frames(store: &FrameStore, rx: &Receiver<Message>) -> Result<(Project, 
                 }
                 close_previous(p, ts, last_ts);
                 store.push_frame(p, &image, 1)?;
+                if let Some(frame) = p.frames.last_mut() {
+                    frame.time_ms = Some(ts);
+                }
                 last_ts = ts;
                 stats.frames += 1;
             }

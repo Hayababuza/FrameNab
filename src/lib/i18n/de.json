@@ -117,5 +117,16 @@
   "editor.scopeAll": "Alle Frames",
   "editor.scopeSelection": "Ausgewählte Frames ({a}–{b})",
   "editor.scopeSelectionTitle": "Nur auf den im Filmstreifen ausgewählten Frames, z. B. für eine Klick-Markierung",
-  "editor.applyAll": "Auf alle Frames"
+  "editor.applyAll": "Auf alle Frames",
+  "editor.effects": "Effekte:",
+  "editor.fxCursor": "Maus hervorheben",
+  "editor.fxCursorTitle": "Ein gelber Kreis folgt der Maus",
+  "editor.fxClicks": "Klicks ({n})",
+  "editor.fxKeys": "Tasten ({n})",
+  "editor.fxBlocked": "Klicks/Tasten nicht erfasst",
+  "editor.fxBlockedTitle": "Unter Linux braucht FrameNab Lesezugriff auf die Eingabegeräte:  sudo usermod -aG input $USER  ausführen und neu anmelden (siehe Einstellungen).",
+  "settings.recordInput": "Klicks und Tasten während der Aufnahme erfassen",
+  "settings.recordInputHelp": "Für die Klick- und Tasten-Effekte im Editor. Gespeichert werden nur Tastennamen, im Ordner der Aufnahme.",
+  "settings.inputPermission": "Im Moment nicht möglich: Unter Linux braucht FrameNab Lesezugriff auf die Eingabegeräte. Einmal im Terminal ausführen, dann ab- und wieder anmelden:",
+  "recorder.title": "Aufnahme"
 }

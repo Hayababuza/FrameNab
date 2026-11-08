@@ -21,6 +21,8 @@ export interface Settings {
   recordingFormat: RecordingFormat;
   /** Wayland session: use native Wayland windows instead of XWayland (applies after a restart). */
   nativeWayland: boolean;
+  /** Record clicks and key presses during recordings (for the click and key effects). */
+  recordInput: boolean;
 }
 
 export const DEFAULT_TEMPLATE = "FrameNab_{yyyy-MM-dd_HH-mm-ss}";
@@ -35,6 +37,7 @@ const defaults: Settings = {
   recorderCursor: true,
   recordingFormat: "gif",
   nativeWayland: false,
+  recordInput: true,
 };
 
 let store: Promise<Store> | undefined;

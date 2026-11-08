@@ -1,6 +1,8 @@
 /** Type-safe wrappers around the Rust commands (`src-tauri/src/commands`). */
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Annotation } from "$lib/bindings/Annotation";
+import type { Effects } from "$lib/bindings/Effects";
+import type { InputEvents } from "$lib/bindings/InputEvents";
 import type { Project } from "$lib/bindings/Project";
 
 export type Platform = "windows" | "macOs" | "linuxX11" | "linuxWayland" | "unknown";
@@ -169,3 +171,7 @@ export const openProject = (path: string) => invoke<void>("open_project", { path
 export const recordingsDirectory = () => invoke<string>("recordings_directory");
 /** Wayland: screen position (pixels) of the recorder's calibration marker, or null if not found. */
 export const locateMarker = (scale: number) => invoke<[number, number] | null>("locate_marker", { scale });
+export const editorInput = () => invoke<InputEvents>("editor_input");
+export const editorSetEffects = (effects: Effects) => invoke<EditorView>("editor_set_effects", { effects });
+/** Whether clicks and keys can be recorded (Linux needs the `input` group). */
+export const inputSupport = () => invoke<"available" | "noPermission" | "unsupported">("input_support");

@@ -117,5 +117,16 @@
   "editor.scopeAll": "All frames",
   "editor.scopeSelection": "Selected frames ({a}–{b})",
   "editor.scopeSelectionTitle": "Only on the frames selected in the filmstrip, e.g. for a click marker",
-  "editor.applyAll": "On all frames"
+  "editor.applyAll": "On all frames",
+  "editor.effects": "Effects:",
+  "editor.fxCursor": "Highlight mouse",
+  "editor.fxCursorTitle": "A yellow circle follows the mouse",
+  "editor.fxClicks": "Clicks ({n})",
+  "editor.fxKeys": "Keys ({n})",
+  "editor.fxBlocked": "Clicks/keys not recorded",
+  "editor.fxBlockedTitle": "Linux needs read access to the input devices: run  sudo usermod -aG input $USER  and log out and in again (see Settings).",
+  "settings.recordInput": "Record clicks and keys during recordings",
+  "settings.recordInputHelp": "For the click and key effects in the editor. Only key names are kept, in the recording's folder.",
+  "settings.inputPermission": "Not possible right now: Linux needs read access to the input devices. Run this once in a terminal, then log out and in again:",
+  "recorder.title": "Recording"
 }

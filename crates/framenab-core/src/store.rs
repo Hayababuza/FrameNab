@@ -22,6 +22,7 @@ use crate::model::PROJECT_VERSION;
 use crate::{CoreError, Frame, Project, Result};
 
 const PROJECT_FILE: &str = "project.json";
+const INPUT_FILE: &str = "input.json";
 const FRAMES_DIR: &str = "frames";
 
 #[derive(Debug, Clone)]
@@ -64,7 +65,7 @@ impl FrameStore {
         let path = self.root.join(&file);
         let bytes = qoi::encode_to_vec(image.as_raw(), image.width(), image.height())?;
         fs::write(&path, bytes).at(&path)?;
-        project.frames.push(Frame { id, file, delay_ms: delay_ms.max(1) });
+        project.frames.push(Frame { id, file, delay_ms: delay_ms.max(1), time_ms: None });
         Ok(project.frames.last().expect("just pushed"))
     }
 
@@ -101,6 +102,22 @@ impl FrameStore {
             return Err(CoreError::UnsupportedVersion(project.version));
         }
         Ok(project)
+    }
+
+    /// Saves the recorded input (`input.json`).
+    pub fn save_input(&self, input: &crate::InputEvents) -> Result<()> {
+        let path = self.root.join(INPUT_FILE);
+        fs::write(&path, serde_json::to_vec(input)?).at(&path)
+    }
+
+    /// Loads the recorded input; empty if the recording has none.
+    pub fn load_input(&self) -> Result<crate::InputEvents> {
+        let path = self.root.join(INPUT_FILE);
+        match fs::read(&path) {
+            Ok(bytes) => Ok(serde_json::from_slice(&bytes)?),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(crate::InputEvents::default()),
+            Err(e) => Err(e).at(&path),
+        }
     }
 
     /// Deletes frame files that are no longer referenced by the project.

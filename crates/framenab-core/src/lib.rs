@@ -4,6 +4,7 @@
 
 pub mod error;
 pub mod history;
+pub mod input;
 pub mod model;
 pub mod ops;
 pub mod recorder;
@@ -11,5 +12,6 @@ pub mod store;
 
 pub use error::{CoreError, Result};
 pub use history::History;
+pub use input::{Effects, InputEvents};
 pub use model::*;
 pub use store::FrameStore;

@@ -131,7 +131,7 @@ mod tests {
         let mut p = Project::new(4, 4);
         for _ in 0..n {
             let id = p.allocate_frame_id();
-            p.frames.push(Frame { file: format!("frames/{id}.qoi"), id, delay_ms: 100 });
+            p.frames.push(Frame { file: format!("frames/{id}.qoi"), id, delay_ms: 100, time_ms: None });
         }
         p
     }

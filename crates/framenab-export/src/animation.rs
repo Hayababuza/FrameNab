@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use framenab_core::{FrameStore, Project};
+use framenab_core::{FrameStore, InputEvents, Project, input::effect_annotations};
 use image::RgbaImage;
 use rgb::FromSlice;
 
@@ -52,14 +52,26 @@ impl ExportControl {
     }
 }
 
-/// Loads frame `index` and renders the annotations that cover it.
-fn rendered_frame(store: &FrameStore, project: &Project, index: usize) -> Result<RgbaImage, ExportError> {
+/// Loads frame `index` and renders the annotations that cover it and the input effects.
+fn rendered_frame(
+    store: &FrameStore,
+    project: &Project,
+    input: &InputEvents,
+    index: usize,
+) -> Result<RgbaImage, ExportError> {
     let base = store.load_frame(&project.frames[index])?;
-    let index = u32::try_from(index).unwrap_or(u32::MAX);
-    if project.annotations_on(index).next().is_none() {
-        return Ok(base);
+    let frame = u32::try_from(index).unwrap_or(u32::MAX);
+    let render_err = |e: framenab_render::RenderError| ExportError::Gif(e.to_string());
+    let mut image = if project.annotations_on(frame).next().is_none() {
+        base
+    } else {
+        framenab_render::render_frame(project, frame, &base).map_err(render_err)?
+    };
+    if project.effects.any() {
+        let fx = effect_annotations(input, project.effects, project.frame_time(index), project.width, project.height);
+        framenab_render::render_annotations(&mut image, &fx).map_err(render_err)?;
     }
-    framenab_render::render_frame(project, index, &base).map_err(|e| ExportError::Gif(e.to_string()))
+    Ok(image)
 }
 
 /// Exports `project` to `path` in `format`. Blocks until done; call it off the UI thread.
@@ -73,12 +85,13 @@ pub fn export_animation(
     if project.frames.is_empty() {
         return Err(ExportError::Empty);
     }
+    let input = if project.effects.any() { store.load_input()? } else { InputEvents::default() };
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|source| ExportError::Io { path: parent.to_owned(), source })?;
     }
     let result = match format {
-        ExportFormat::Gif => export_gif(store, project, path, control),
-        ExportFormat::Mp4 | ExportFormat::Webm => export_video(store, project, path, format, control),
+        ExportFormat::Gif => export_gif(store, project, &input, path, control),
+        ExportFormat::Mp4 | ExportFormat::Webm => export_video(store, project, &input, path, format, control),
         other => Err(ExportError::Unsupported(other)),
     };
     if result.is_err() {
@@ -88,7 +101,13 @@ pub fn export_animation(
     result
 }
 
-fn export_gif(store: &FrameStore, project: &Project, path: &Path, control: &ExportControl) -> Result<(), ExportError> {
+fn export_gif(
+    store: &FrameStore,
+    project: &Project,
+    input: &InputEvents,
+    path: &Path,
+    control: &ExportControl,
+) -> Result<(), ExportError> {
     let repeat =
         if project.loop_count == 0 { gifski::Repeat::Infinite } else { gifski::Repeat::Finite(project.loop_count) };
     let settings = gifski::Settings { width: None, height: None, quality: 90, fast: false, repeat };
@@ -107,7 +126,7 @@ fn export_gif(store: &FrameStore, project: &Project, path: &Path, control: &Expo
             if control.cancelled() {
                 return Err(ExportError::Cancelled);
             }
-            let image = rendered_frame(store, project, i)?;
+            let image = rendered_frame(store, project, input, i)?;
             let (w, h) = (image.width() as usize, image.height() as usize);
             let pixels = image.as_raw().as_rgba().to_vec();
             collector
@@ -145,6 +164,7 @@ const VIDEO_FPS: u32 = 30;
 fn export_video(
     store: &FrameStore,
     project: &Project,
+    input: &InputEvents,
     path: &Path,
     format: ExportFormat,
     control: &ExportControl,
@@ -176,7 +196,7 @@ fn export_video(
             if control.cancelled() {
                 return Err(ExportError::Cancelled);
             }
-            let image = rendered_frame(store, project, i)?;
+            let image = rendered_frame(store, project, input, i)?;
             let exact = f64::from(frame.delay_ms) / frame_ms + carry;
             let repeats = exact.round().max(if i == 0 { 1.0 } else { 0.0 }) as usize;
             carry = exact - repeats as f64;

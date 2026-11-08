@@ -65,8 +65,9 @@ fn main() {
     if let Some(err) = recording.error() {
         eprintln!("stream error: {err}");
     }
-    let (sink, end, sampler) = recording.stop();
+    let (sink, end, sampler, input) = recording.stop();
     let (project, stats) = sink.finish(end).expect("finish project");
+    framenab_core::FrameStore::create(&out).and_then(|s| s.save_input(&input)).expect("save input");
 
     let expected = (end as f64 / 1000.0 * f64::from(fps)).round() as u64;
     let bytes: u64 = std::fs::read_dir(format!("{out}/frames"))
@@ -78,6 +79,13 @@ fn main() {
         stats.frames, stats.dropped, stats.mismatched, sampler.late_ticks
     );
     println!("disk: {:.1} MB", bytes as f64 / 1e6);
+    println!(
+        "input: {} cursor samples, {} clicks, {} keys (first cursor sample: {:?})",
+        input.cursor.len(),
+        input.clicks.len(),
+        input.keys.len(),
+        input.cursor.first()
+    );
     if let Ok(status) = std::fs::read_to_string("/proc/self/status")
         && let Some(line) = status.lines().find(|l| l.starts_with("VmHWM"))
     {

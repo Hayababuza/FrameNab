@@ -24,6 +24,9 @@ pub struct Project {
     /// Counter for unique frame IDs.
     #[serde(default)]
     pub next_frame_id: u32,
+    /// Input effects burned into the result (recordings only).
+    #[serde(default)]
+    pub effects: crate::Effects,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -34,6 +37,11 @@ pub struct Frame {
     /// Path relative to the project folder, e.g. `frames/f000001.qoi`.
     pub file: String,
     pub delay_ms: u32,
+    /// When the frame was captured (recording time, pauses excluded), to match it with the
+    /// recorded input even after frames were deleted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub time_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, TS)]
@@ -207,6 +215,7 @@ impl Project {
             annotations: Vec::new(),
             loop_count: 0,
             next_frame_id: 0,
+            effects: crate::Effects::default(),
         }
     }
 

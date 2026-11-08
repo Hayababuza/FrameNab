@@ -10,9 +10,12 @@
 //! Screenshots and recording work on every platform (see [`recording`]).
 
 pub mod backends;
+pub mod input;
 pub mod recording;
 
-pub use recording::{Crop, FrameSink, FrameStream, Recording, SamplerStats, StreamOptions, record};
+pub use recording::{
+    Crop, CursorImage, FrameSink, FrameStream, InputRecorder, Recording, SamplerStats, StreamOptions, record,
+};
 
 use image::RgbaImage;
 use serde::Serialize;
