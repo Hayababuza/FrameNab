@@ -1,15 +1,31 @@
 <script lang="ts">
   import { emit } from "@tauri-apps/api/event";
+  import {
+    disable as disableAutostart,
+    enable as enableAutostart,
+    isEnabled as autostartEnabled,
+  } from "@tauri-apps/plugin-autostart";
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { i18n, locales, t, type Locale } from "$lib/i18n/index.svelte";
-  import { appInfo, defaultSaveDirectory, inputSupport, recordingFormats, type ExportFormat } from "$lib/ipc";
   import {
+    appInfo,
+    applyHotkeys,
+    defaultSaveDirectory,
+    inputSupport,
+    recordingFormats,
+    type ExportFormat,
+    type HotkeyProblem,
+  } from "$lib/ipc";
+  import ShortcutField from "$lib/components/ShortcutField.svelte";
+  import {
+    DEFAULT_HOTKEYS,
     DEFAULT_TEMPLATE,
     getSetting,
     type ImageFormat,
     type RecordingFormat,
     setSetting,
+    type Theme,
   } from "$lib/stores/settings";
   import { expandTemplate } from "$lib/util/filename";
 
@@ -21,6 +37,10 @@
   ];
 
   let locale = $state<Locale | "system">("system");
+  let theme = $state<Theme>("system");
+  let hotkeys = $state({ ...DEFAULT_HOTKEYS } as { screenshot: string | null; record: string | null });
+  let hotkeyProblems = $state<HotkeyProblem[]>([]);
+  let autostart = $state(false);
   let saveDirectory = $state<string | null>(null);
   let defaultDirectory = $state("");
   let template = $state(DEFAULT_TEMPLATE);
@@ -52,6 +72,9 @@
     inputBlocked = (await inputSupport()) === "noPermission";
     useXwayland = !(await getSetting("nativeWayland"));
     locale = (await getSetting("locale")) ?? "system";
+    theme = await getSetting("theme");
+    hotkeys = await getSetting("hotkeys");
+    autostart = await autostartEnabled().catch(() => false);
     saveDirectory = await getSetting("saveDirectory");
     template = await getSetting("filenameTemplate");
     imageFormat = await getSetting("imageFormat");
@@ -65,6 +88,25 @@
     await setSetting("locale", value);
     i18n.set(value);
     await emit("settings-changed", { locale: value });
+  }
+
+  async function setHotkey(action: "screenshot" | "record", value: string | null) {
+    hotkeys = { ...hotkeys, [action]: value };
+    await setSetting("hotkeys", hotkeys);
+    hotkeyProblems = await applyHotkeys();
+  }
+
+  async function changeTheme() {
+    await setSetting("theme", theme);
+    await emit("settings-changed");
+  }
+
+  async function toggleAutostart() {
+    try {
+      await (autostart ? enableAutostart() : disableAutostart());
+    } finally {
+      autostart = await autostartEnabled().catch(() => false);
+    }
   }
 
   async function chooseDirectory() {
@@ -96,6 +138,21 @@
         {/each}
       </select>
     </label>
+    <label class="row">
+      <span>{t("settings.theme")}</span>
+      <select bind:value={theme} onchange={changeTheme}>
+        <option value="system">{t("settings.themeSystem")}</option>
+        <option value="light">{t("settings.themeLight")}</option>
+        <option value="dark">{t("settings.themeDark")}</option>
+      </select>
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.autostart")}
+        <small class="help-inline">{t("settings.autostartHelp")}</small>
+      </span>
+      <input type="checkbox" bind:checked={autostart} onchange={toggleAutostart} />
+    </label>
   </section>
 
   {#if waylandSession}
@@ -120,6 +177,41 @@
       {/if}
     </section>
   {/if}
+
+  <h2>{t("settings.hotkeys")}</h2>
+  <section>
+    {#if waylandSession}
+      <p class="help">{t("settings.hotkeysWayland")}</p>
+      <div class="row">
+        <span>{t("settings.hotkeyScreenshot")}</span>
+        <code>framenab gui</code>
+      </div>
+      <div class="row">
+        <span>{t("settings.hotkeyRecord")}</span>
+        <code>framenab record</code>
+      </div>
+    {:else}
+      {#each [["screenshot", "settings.hotkeyScreenshot"], ["record", "settings.hotkeyRecord"]] as const as [action, title] (action)}
+        <div class="row">
+          <span>{t(title)}</span>
+          <div class="dir">
+            <ShortcutField value={hotkeys[action]} onchange={(v) => setHotkey(action, v)} />
+            {#if hotkeys[action] !== DEFAULT_HOTKEYS[action]}
+              <button onclick={() => setHotkey(action, DEFAULT_HOTKEYS[action])}
+                >{t("settings.hotkeyReset")}</button
+              >
+            {/if}
+          </div>
+        </div>
+      {/each}
+      <p class="help">{t("settings.hotkeyHelp")}</p>
+      {#each hotkeyProblems as problem (problem.action)}
+        <p class="help warn">
+          {t("settings.hotkeyTaken", { shortcut: problem.shortcut, error: problem.error })}
+        </p>
+      {/each}
+    {/if}
+  </section>
 
   <h2>{t("recorder.title")}</h2>
   <section>
@@ -250,6 +342,9 @@
     padding: 0 16px 12px;
     font-size: 0.85rem;
     color: var(--text-muted);
+  }
+  .help.warn {
+    color: #e5484d;
   }
   input,
   select,

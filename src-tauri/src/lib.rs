@@ -40,6 +40,11 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(hotkeys::plugin())
+        // Settings → Start with the system: starts in the tray, without the main window.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         .register_asynchronous_uri_scheme_protocol("framenab", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             tauri::async_runtime::spawn_blocking(move || responder.respond(capture::protocol(&app, &request)));
@@ -48,9 +53,11 @@ pub fn run() {
         .manage(pin::PinState::default())
         .manage(recorder::RecorderState::default())
         .manage(editor::EditorState::default())
+        .manage(hotkeys::HotkeyState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::run_action,
+            hotkeys::apply_hotkeys,
             capture::capture_info,
             capture::copy_selection,
             capture::save_selection,
@@ -107,7 +114,7 @@ pub fn run() {
                 windows::fix_titlebar(&main);
             }
             tray::create(app.handle())?;
-            hotkeys::register_defaults(app.handle());
+            hotkeys::register(app.handle());
 
             if initial.hidden {
                 windows::hide_main(app.handle());

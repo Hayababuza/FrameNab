@@ -3,6 +3,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import type { Locale } from "$lib/i18n/translate";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
+export type Theme = "system" | "light" | "dark";
 export type RecordingFormat = "gif" | "apng" | "webp" | "pngSequence" | "mp4" | "webm";
 
 /** Settings of an animation export (mirrors `framenab_export::ExportOptions`). */
@@ -20,6 +21,7 @@ export interface ExportOptions {
 export interface Settings {
   /** `null` = system language */
   locale: Locale | null;
+  theme: Theme;
   /** Folder for Ctrl+S; `null` = `<Pictures>/FrameNab`. */
   saveDirectory: string | null;
   /** File name with `{…}` date tokens: yyyy, yy, MM, dd, HH, mm, ss. */
@@ -37,12 +39,17 @@ export interface Settings {
   recordInput: boolean;
   /** Last used export settings (also used by the quick "Save"). */
   exportOptions: ExportOptions;
+  /** Global shortcuts as accelerators (`Shift+PrintScreen`); `null` = off. Not on Wayland. */
+  hotkeys: { screenshot: string | null; record: string | null };
 }
+
+export const DEFAULT_HOTKEYS = { screenshot: "PrintScreen", record: "Shift+PrintScreen" };
 
 export const DEFAULT_TEMPLATE = "FrameNab_{yyyy-MM-dd_HH-mm-ss}";
 
 const defaults: Settings = {
   locale: null,
+  theme: "system",
   saveDirectory: null,
   filenameTemplate: DEFAULT_TEMPLATE,
   imageFormat: "png",
@@ -53,6 +60,7 @@ const defaults: Settings = {
   nativeWayland: false,
   recordInput: true,
   exportOptions: { quality: 90, lossy: false, loopCount: null, scale: 1 },
+  hotkeys: { ...DEFAULT_HOTKEYS },
 };
 
 let store: Promise<Store> | undefined;

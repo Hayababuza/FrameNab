@@ -217,3 +217,11 @@ export const editorInput = () => invoke<InputEvents>("editor_input");
 export const editorSetEffects = (effects: Effects) => invoke<EditorView>("editor_set_effects", { effects });
 /** Whether clicks and keys can be recorded (Linux needs the `input` group). */
 export const inputSupport = () => invoke<"available" | "noPermission" | "unsupported">("input_support");
+
+export interface HotkeyProblem {
+  action: "screenshot" | "record";
+  shortcut: string;
+  error: string;
+}
+/** Registers the shortcuts saved in the settings; returns the ones that did not work. */
+export const applyHotkeys = () => invoke<HotkeyProblem[]>("apply_hotkeys");

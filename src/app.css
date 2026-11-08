@@ -25,8 +25,9 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* Theme: the system's choice, unless Settings → Theme forces light or dark (data-theme). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #15171b;
     --surface: #1e2126;
     --surface-hover: #272b31;
@@ -38,6 +39,24 @@
     --info-text: #9cc2ff;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%);
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #15171b;
+  --surface: #1e2126;
+  --surface-hover: #272b31;
+  --border: #2f343b;
+  --text: #e8eaed;
+  --text-muted: #9aa3ad;
+  --accent: #ff6369;
+  --info-bg: #1a2a42;
+  --info-text: #9cc2ff;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 *,
