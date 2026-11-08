@@ -2,6 +2,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Annotation } from "$lib/bindings/Annotation";
 import type { Effects } from "$lib/bindings/Effects";
+import type { FrameOp } from "$lib/bindings/FrameOp";
 import type { InputEvents } from "$lib/bindings/InputEvents";
 import type { Project } from "$lib/bindings/Project";
 
@@ -154,7 +155,8 @@ export interface EditorView {
 }
 
 export const editorView = () => invoke<EditorView | null>("editor_view");
-export const editorDelete = (indices: number[]) => invoke<EditorView>("editor_delete", { indices });
+/** Applies a frame operation (delete, duplicate, reverse, timing …). */
+export const editorFrames = (op: FrameOp) => invoke<EditorView>("editor_frames", { op });
 export const editorUndo = (redo = false) => invoke<EditorView>("editor_undo", { redo });
 export const editorSetAnnotations = (annotations: Annotation[]) =>
   invoke<EditorView>("editor_set_annotations", { annotations });

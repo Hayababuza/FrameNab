@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use framenab_core::{FrameStore, History, Project, ops};
+use framenab_core::{FrameOp, FrameStore, History, Project, ops};
 use framenab_export::ExportFormat;
 use framenab_export::animation::{ExportControl, export_animation};
 use image::codecs::jpeg::JpegEncoder;
@@ -119,14 +119,37 @@ pub fn editor_view(app: AppHandle) -> Option<EditorView> {
     app.state::<EditorState>().lock().as_ref().map(view)
 }
 
+/// Applies a frame operation (delete, duplicate, reverse, timing …). Runs off the main thread:
+/// removing similar frames loads and compares every image.
 #[tauri::command]
-pub fn editor_delete(app: AppHandle, indices: Vec<usize>) -> Result<EditorView, String> {
-    edit(&app, |p| {
-        if indices.len() >= p.frames.len() {
-            // Keep at least one frame.
-            return Ok(());
+pub async fn editor_frames(app: AppHandle, op: FrameOp) -> Result<EditorView, String> {
+    if let FrameOp::Delete { frames } = &op {
+        let len = app.state::<EditorState>().lock().as_ref().map_or(0, |o| o.project.frames.len());
+        if frames.len() >= len {
+            return Err("at least one frame has to stay".into());
         }
-        ops::delete_frames(p, &indices)
+    }
+    let (store, before) = {
+        let state = app.state::<EditorState>();
+        let guard = state.lock();
+        let open = guard.as_ref().ok_or("no project open")?;
+        (open.store.clone(), open.project.clone())
+    };
+    let changed = tauri::async_runtime::spawn_blocking(move || {
+        let mut project = before.clone();
+        ops::apply(&mut project, &op, |frame| store.load_frame(frame)).map(|()| (before, project))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    let (before, project) = changed;
+    edit(&app, move |p| {
+        // Only if nothing else changed the project meanwhile.
+        if *p != before {
+            return Err(framenab_core::CoreError::Busy);
+        }
+        *p = project;
+        Ok(())
     })
 }
 

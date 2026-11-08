@@ -14,8 +14,8 @@
   import { t } from "$lib/i18n/index.svelte";
   import {
     editorCancelExport,
-    editorDelete,
     editorExport,
+    editorFrames,
     editorInput,
     editorSetAnnotations,
     editorSetEffects,
@@ -28,6 +28,7 @@
     type EditorView,
   } from "$lib/ipc";
   import type { Effects } from "$lib/bindings/Effects";
+  import type { FrameOp } from "$lib/bindings/FrameOp";
   import type { InputEvents } from "$lib/bindings/InputEvents";
   import { effectAnnotations } from "$lib/annotations/effects";
   import { getSetting, type RecordingFormat } from "$lib/stores/settings";
@@ -51,6 +52,17 @@
   let stripWidth = $state(0);
   /** Selecting by dragging over the filmstrip. */
   let drag: { anchor: number; base: Set<number> | null; x: number } | null = null;
+  /** Moving the selected frames by dragging one of them; `active` once the mouse really moved. */
+  let moveDrag = $state<{ from: number; startX: number; x: number; active: boolean } | null>(null);
+  /** Open tool panel below the toolbar. */
+  let panel = $state<"timing" | "cleanup" | null>(null);
+  /** A frame operation is running (removing similar frames can take a while). */
+  let busy = $state(false);
+  let info = $state<string | null>(null);
+  let delayInput = $state(100);
+  let speedInput = $state(200);
+  let similarInput = $state(100);
+  let nthInput = $state(2);
   let autoScroll: ReturnType<typeof setInterval> | undefined;
 
   // Annotations
@@ -121,6 +133,9 @@
     for (const a of annotations) for (let i = a.frameStart; i <= a.frameEnd; i++) covered[i] = true;
     return covered;
   });
+
+  /** Frames timing changes apply to: the selection, or all frames. */
+  const targets = $derived(selected.size ? [...selected].sort((a, b) => a - b) : frames.map((_, i) => i));
 
   /** Frames to delete: the selection, or the current frame if nothing is selected. */
   const toDelete = $derived(
@@ -245,6 +260,11 @@
   function onframedown(i: number, e: MouseEvent) {
     if (e.button !== 0) return;
     e.preventDefault();
+    if (!e.shiftKey && !e.ctrlKey && !e.metaKey && selected.has(i)) {
+      // Dragging a selected frame moves the selection (a plain click selects only this one).
+      moveDrag = { from: i, startX: e.clientX, x: e.clientX, active: false };
+      return;
+    }
     select(i, e);
     drag = {
       anchor: e.shiftKey ? anchor : i,
@@ -273,6 +293,11 @@
   }
 
   function ondragmove(e: MouseEvent) {
+    if (moveDrag) {
+      moveDrag.x = e.clientX;
+      if (Math.abs(e.clientX - moveDrag.startX) > 5) moveDrag.active = true;
+      return;
+    }
     if (!drag) return;
     drag.x = e.clientX;
     extendDrag();
@@ -281,18 +306,85 @@
   function enddrag() {
     drag = null;
     clearInterval(autoScroll);
+    if (!moveDrag) return;
+    const { from, active } = moveDrag;
+    const to = dropIndex;
+    moveDrag = null;
+    if (!active) {
+      selected = new Set([from]);
+      anchor = from;
+      current = from;
+      return;
+    }
+    const list = [...selected].sort((a, b) => a - b);
+    const start = to - list.filter((i) => i < to).length;
+    const moved = list.map((_, k) => start + k);
+    if (moved.every((m, k) => m === list[k])) return;
+    frameOp({ type: "move", frames: list, to }, moved);
   }
 
   // ---- edits ---------------------------------------------------------------------------------
 
-  async function deleteFrames() {
-    if (!toDelete.length || toDelete.length >= frames.length) return;
+  /** Runs a frame operation; afterwards `select` (if given) is selected and shown. */
+  async function frameOp(op: FrameOp, select?: number[]) {
+    if (busy) return;
     stop();
-    const first = toDelete[0];
-    view = await editorDelete(toDelete);
-    selected = new Set();
-    goTo(first);
+    busy = true;
+    error = null;
+    info = null;
+    const before = frames.length;
+    try {
+      view = await editorFrames(op);
+      selected = new Set(select ?? []);
+      if (select?.length) anchor = select[0];
+      goTo(select?.[0] ?? current);
+      if (frames.length < before && op.type !== "delete")
+        info = t("editor.removed", { n: before - frames.length });
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+    }
   }
+
+  function deleteFrames() {
+    if (!toDelete.length || toDelete.length >= frames.length) return;
+    const first = toDelete[0];
+    frameOp({ type: "delete", frames: toDelete }, []).then(() => goTo(first));
+  }
+
+  /** Duplicates the selection (or the current frame); the copies end up selected. */
+  function duplicate() {
+    const list = toDelete;
+    // Each copy lands right after its original: original k moves by the copies before it.
+    const copies = list.map((i, k) => i + k + 1);
+    frameOp({ type: "duplicate", frames: list }, copies);
+  }
+
+  function reverse() {
+    frameOp({ type: "reverse", frames: selected.size > 1 ? [...selected] : [] }, [...selected]);
+  }
+
+  function setDelay() {
+    const ms = Math.round(delayInput);
+    if (ms >= 1) frameOp({ type: "setDelay", frames: targets, ms }, [...selected]);
+  }
+
+  /** Speed in percent: 200 % halves the delays. */
+  function setSpeed() {
+    if (speedInput > 0)
+      frameOp({ type: "scaleDelay", frames: targets, percent: Math.round(10000 / speedInput) }, [
+        ...selected,
+      ]);
+  }
+
+  /** Index where dragged frames would be inserted (0..=len), for the mouse at screen x. */
+  function dropIndexAt(x: number) {
+    if (!strip) return 0;
+    const offset = x - strip.getBoundingClientRect().left + strip.scrollLeft - PAD;
+    return Math.max(0, Math.min(frames.length, Math.round(offset / stride)));
+  }
+  const dropIndex = $derived(moveDrag?.active ? dropIndexAt(moveDrag.x) : -1);
 
   async function undo(redo = false) {
     stop();
@@ -354,13 +446,17 @@
       [ctrl && key === "y", () => undo(true)],
       [ctrl && key === "s", () => save(e.shiftKey)],
       [ctrl && key === "a", () => (selected = new Set(frames.map((_, i) => i)))],
+      [ctrl && key === "d", () => duplicate()],
       [e.key === "Delete" || e.key === "Backspace", () => (selectedId ? deleteAnnotation() : deleteFrames())],
       [e.key === " ", () => play()],
       [e.key === "ArrowLeft", () => (stop(), goTo(current - 1))],
       [e.key === "ArrowRight", () => (stop(), goTo(current + 1))],
       [e.key === "Home", () => (stop(), goTo(0))],
       [e.key === "End", () => (stop(), goTo(frames.length - 1))],
-      [e.key === "Escape", () => (selectedId ? (selectedId = null) : (selected = new Set()))],
+      [
+        e.key === "Escape",
+        () => (panel ? (panel = null) : selectedId ? (selectedId = null) : (selected = new Set())),
+      ],
       [!ctrl && !e.altKey && !!toolForKey(key), () => (tool = toolForKey(key)!)],
     ];
     const action = actions.find(([matches]) => matches);
@@ -413,7 +509,66 @@
         >
         {t("editor.deleteCount", { n: toDelete.length })}
       </button>
-      <span class="info">
+      <button
+        class="icon"
+        title={t("editor.duplicate")}
+        aria-label={t("editor.duplicate")}
+        onclick={duplicate}
+        disabled={busy || !toDelete.length}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8zM5 15H4V4h11v1" /></svg>
+      </button>
+      <button
+        class="icon"
+        title={t("editor.reverse")}
+        aria-label={t("editor.reverse")}
+        onclick={reverse}
+        disabled={busy || frames.length < 2}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"
+          ><path d="M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7" /></svg
+        >
+      </button>
+      <button
+        class="icon"
+        title={t("editor.yoyo")}
+        aria-label={t("editor.yoyo")}
+        onclick={() => frameOp({ type: "yoyo" }, [])}
+        disabled={busy || frames.length < 2}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"
+          ><path d="M4 12a6 6 0 0 1 10.5-4M20 12a6 6 0 0 1-10.5 4M14 4l1 4-4 1M10 20l-1-4 4-1" /></svg
+        >
+      </button>
+      <button
+        class:active={panel === "timing"}
+        onclick={() => (panel = panel === "timing" ? null : "timing")}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"
+          ><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2 2M10 2h4" /></svg
+        >
+        {t("editor.timing")}
+      </button>
+      <button
+        class:active={panel === "cleanup"}
+        onclick={() => (panel = panel === "cleanup" ? null : "cleanup")}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"
+          ><path
+            d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"
+          /></svg
+        >
+        {t("editor.cleanup")}
+      </button>
+      <span
+        class="info"
+        title={t("editor.info", {
+          frames: frames.length,
+          duration: time(duration),
+          w: view.project.width,
+          h: view.project.height,
+        })}
+      >
         {t("editor.info", {
           frames: frames.length,
           duration: time(duration),
@@ -497,6 +652,56 @@
       {/if}
     </div>
 
+    {#if panel}
+      <div class="panel">
+        {#if panel === "timing"}
+          <span class="target"
+            >{t("editor.target", {
+              what: selected.size
+                ? t("editor.targetSelection", { n: selected.size })
+                : t("editor.targetAll", { n: frames.length }),
+            })}</span
+          >
+          <label
+            >{t("editor.delayLabel")}
+            <input type="number" min="1" max="60000" step="10" bind:value={delayInput} /> ms</label
+          >
+          <button onclick={setDelay} disabled={busy}>{t("editor.delaySet")}</button>
+          <span class="sep"></span>
+          <label title={t("editor.speedHint")}
+            >{t("editor.speedLabel")}
+            <input type="number" min="10" max="1000" step="10" bind:value={speedInput} /> %</label
+          >
+          <button onclick={setSpeed} disabled={busy} title={t("editor.speedHint")}
+            >{t("editor.speedApply")}</button
+          >
+        {:else}
+          <label title={t("editor.similarHint")}
+            >{t("editor.similarLabel")}
+            <input type="number" min="50" max="100" step="0.5" bind:value={similarInput} /> %</label
+          >
+          <button
+            onclick={() => frameOp({ type: "removeSimilar", threshold: similarInput }, [])}
+            disabled={busy || frames.length < 2}
+            title={t("editor.similarHint")}>{t("editor.remove")}</button
+          >
+          <span class="sep"></span>
+          <label title={t("editor.nthHint")}
+            >{t("editor.nthLabel")}
+            <input type="number" min="2" max="100" step="1" bind:value={nthInput} /></label
+          >
+          <button
+            onclick={() => frameOp({ type: "removeEveryNth", n: Math.round(nthInput) }, [])}
+            disabled={busy || frames.length < 2 || nthInput < 2}
+            title={t("editor.nthHint")}>{t("editor.remove")}</button
+          >
+        {/if}
+        {#if busy}<span class="target">{t("editor.working")}</span>{/if}
+      </div>
+    {/if}
+    {#if info}
+      <div class="notice">{info}</div>
+    {/if}
     {#if saved}
       <div class="notice">
         <span>{t("editor.saved", { path: saved })}</span>
@@ -596,7 +801,7 @@
           {/if}
         </span>
       {:else}
-        <span class="hint">{t("editor.hint")}</span>
+        <span class="hint">{t("editor.hintMove")}</span>
       {/if}
     </div>
 
@@ -608,11 +813,15 @@
       {onwheel}
     >
       <div class="track" style:width="{PAD * 2 + frames.length * stride - GAP}px">
+        {#if dropIndex >= 0}
+          <div class="drop" style:left="{PAD + dropIndex * stride - GAP / 2 - 1}px"></div>
+        {/if}
         {#each visible as { frame, i } (frame.id)}
           <button
             class="frame"
             class:current={i === current}
             class:selected={selected.has(i)}
+            class:moving={!!moveDrag?.active && selected.has(i)}
             class:in-range={!!selectedAnnotation &&
               i >= selectedAnnotation.frameStart &&
               i <= selectedAnnotation.frameEnd}
@@ -664,6 +873,17 @@
   .transport {
     border-top: 1px solid var(--border);
     border-bottom: none;
+  }
+  header button {
+    flex: none;
+    white-space: nowrap;
+  }
+  /* The frame info gives way first when the window is narrow. */
+  .info {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .info,
   .position {
@@ -882,6 +1102,56 @@
   .frame.selected {
     border-color: var(--accent);
     background: color-mix(in srgb, var(--accent) 18%, var(--bg));
+  }
+  .frame.moving {
+    opacity: 0.5;
+  }
+  .drop {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    z-index: 1;
+  }
+  header button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .panel label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .panel input {
+    width: 80px;
+    height: 30px;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: inherit;
+    font: inherit;
+  }
+  .panel .target {
+    color: var(--text-muted);
+  }
+  .panel .sep {
+    width: 1px;
+    height: 20px;
+    margin: 0 6px;
+    background: var(--border);
   }
   .frame.current {
     outline: 2px solid var(--text);

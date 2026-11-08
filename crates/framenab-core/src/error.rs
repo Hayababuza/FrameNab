@@ -18,6 +18,8 @@ pub enum CoreError {
     SizeMismatch { got_w: u32, got_h: u32, want_w: u32, want_h: u32 },
     #[error("Unsupported project version {0}")]
     UnsupportedVersion(u32),
+    #[error("The project was changed in the meantime, please try again")]
+    Busy,
 }
 
 pub type Result<T, E = CoreError> = std::result::Result<T, E>;

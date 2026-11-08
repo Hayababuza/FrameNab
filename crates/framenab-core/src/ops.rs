@@ -3,7 +3,88 @@
 //! Every operation that changes the frame order goes through [`apply_order`], which keeps the
 //! frame ranges of annotations consistent.
 
-use crate::{CoreError, Project, Result};
+use image::RgbaImage;
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+use crate::{CoreError, Frame, Project, Result};
+
+/// A frame operation requested by the editor. `frames` are frame indices (the selection).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[ts(export)]
+pub enum FrameOp {
+    Delete {
+        frames: Vec<u32>,
+    },
+    Duplicate {
+        frames: Vec<u32>,
+    },
+    /// Reverses the selected range (first to last selected frame), or everything if fewer than
+    /// two frames are selected.
+    Reverse {
+        frames: Vec<u32>,
+    },
+    Yoyo,
+    /// Moves the frames so they start at position `to` (an index of the current order,
+    /// `0..=len`; the frames keep their relative order).
+    Move {
+        frames: Vec<u32>,
+        to: u32,
+    },
+    RemoveEveryNth {
+        n: u32,
+    },
+    SetDelay {
+        frames: Vec<u32>,
+        ms: u32,
+    },
+    ScaleDelay {
+        frames: Vec<u32>,
+        percent: u32,
+    },
+    /// Removes frames that look like the frame before them (`threshold` = percent of identical
+    /// pixels, 100 = only exact copies); their time goes to the frame they repeat. Needs the
+    /// images, see [`similar_frames`].
+    RemoveSimilar {
+        threshold: f32,
+    },
+}
+
+fn indices(frames: &[u32]) -> Vec<usize> {
+    frames.iter().map(|&i| i as usize).collect()
+}
+
+/// Applies `op`. [`FrameOp::RemoveSimilar`] needs the frame images: `load` gives them.
+pub fn apply(project: &mut Project, op: &FrameOp, load: impl FnMut(&Frame) -> Result<RgbaImage>) -> Result<()> {
+    match op {
+        FrameOp::Delete { frames } => delete_frames(project, &indices(frames)),
+        FrameOp::Duplicate { frames } => duplicate_frames(project, &indices(frames)),
+        FrameOp::Reverse { frames } => {
+            let list = indices(frames);
+            match (list.iter().min(), list.iter().max()) {
+                (Some(&a), Some(&b)) if b > a => reverse(project, a, b),
+                _ if project.frames.len() > 1 => reverse(project, 0, project.frames.len() - 1),
+                _ => Ok(()),
+            }
+        }
+        FrameOp::Yoyo => yoyo(project),
+        FrameOp::Move { frames, to } => move_frames(project, &indices(frames), *to as usize),
+        FrameOp::RemoveEveryNth { n } => remove_every_nth(project, *n as usize),
+        FrameOp::SetDelay { frames, ms } => {
+            set_delay(project, &indices(frames), *ms);
+            Ok(())
+        }
+        FrameOp::ScaleDelay { frames, percent } => {
+            scale_delay(project, &indices(frames), *percent);
+            Ok(())
+        }
+        FrameOp::RemoveSimilar { threshold } => {
+            let similar = similar_frames(project, *threshold, load)?;
+            merge_into_previous(project, &similar)
+        }
+    }
+}
 
 /// Reorders frames. `order[new] = old` (indices may be missing or appear more than once).
 ///
@@ -88,19 +169,96 @@ pub fn remove_every_nth(project: &mut Project, n: usize) -> Result<()> {
     if n < 2 {
         return Ok(());
     }
-    let mut keep = Vec::new();
-    for i in identity(project) {
-        if (i + 1) % n == 0 {
-            if let Some(&prev) = keep.last() {
-                let removed = project.frames[i].delay_ms;
-                let frame: &mut crate::Frame = &mut project.frames[prev];
-                frame.delay_ms = frame.delay_ms.saturating_add(removed);
+    let remove: Vec<usize> = identity(project).into_iter().filter(|i| (i + 1) % n == 0).collect();
+    merge_into_previous(project, &remove)
+}
+
+/// Removes the given frames and adds their duration to the closest kept frame before them (or,
+/// for leading frames, after them), so the total duration stays the same. At least one frame
+/// is kept.
+pub fn merge_into_previous(project: &mut Project, remove: &[usize]) -> Result<()> {
+    let len = project.frames.len();
+    let mut keep: Vec<usize> = (0..len).filter(|i| !remove.contains(i)).collect();
+    if keep.is_empty() {
+        if len == 0 {
+            return Ok(());
+        }
+        keep.push(0);
+    }
+    let mut pending = 0u32;
+    for i in 0..len {
+        let delay = project.frames[i].delay_ms;
+        if keep.binary_search(&i).is_ok() {
+            continue;
+        }
+        match keep.iter().rev().find(|&&k| k < i) {
+            Some(&prev) => {
+                let frame = &mut project.frames[prev];
+                frame.delay_ms = frame.delay_ms.saturating_add(delay);
             }
-        } else {
-            keep.push(i);
+            None => pending = pending.saturating_add(delay),
         }
     }
+    let first = &mut project.frames[keep[0]];
+    first.delay_ms = first.delay_ms.saturating_add(pending);
     apply_order(project, &keep)
+}
+
+/// Moves `indices` so they start at position `to` of the current order (`0..=len`).
+pub fn move_frames(project: &mut Project, indices: &[usize], to: usize) -> Result<()> {
+    let len = project.frames.len();
+    if let Some(&bad) = indices.iter().find(|&&i| i >= len) {
+        return Err(CoreError::FrameOutOfRange { index: bad, len });
+    }
+    let mut moved: Vec<usize> = indices.to_vec();
+    moved.sort_unstable();
+    moved.dedup();
+    let rest = (0..len).filter(|i| !moved.contains(i));
+    let (before, after): (Vec<usize>, Vec<usize>) = rest.partition(|&i| i < to.min(len));
+    let order: Vec<usize> = before.into_iter().chain(moved).chain(after).collect();
+    apply_order(project, &order)
+}
+
+/// Percentage of identical pixels (0–100); images of different size are 0 % similar.
+#[must_use]
+pub fn similarity(a: &RgbaImage, b: &RgbaImage) -> f32 {
+    if a.dimensions() != b.dimensions() || a.is_empty() {
+        return 0.0;
+    }
+    let same = a.as_raw().as_chunks::<4>().0.iter().zip(b.as_raw().as_chunks::<4>().0).filter(|(p, q)| p == q).count();
+    same as f32 * 100.0 / (a.width() * a.height()) as f32
+}
+
+/// Frames (indices) that are at least `threshold` % identical to the last frame kept before
+/// them. Frames that share an image file are identical without loading it.
+pub fn similar_frames(
+    project: &Project,
+    threshold: f32,
+    mut load: impl FnMut(&Frame) -> Result<RgbaImage>,
+) -> Result<Vec<usize>> {
+    let mut similar = Vec::new();
+    let Some(first) = project.frames.first() else { return Ok(similar) };
+    let mut kept_file = &first.file;
+    let mut kept: Option<RgbaImage> = None;
+    for (i, frame) in project.frames.iter().enumerate().skip(1) {
+        if frame.file == *kept_file {
+            similar.push(i);
+            continue;
+        }
+        let image = load(frame)?;
+        let reference = match kept.take() {
+            Some(image) => image,
+            None => load(project.frames.iter().find(|f| f.file == *kept_file).unwrap_or(first))?,
+        };
+        if similarity(&reference, &image) >= threshold {
+            similar.push(i);
+            kept = Some(reference);
+        } else {
+            kept_file = &frame.file;
+            kept = Some(image);
+        }
+    }
+    Ok(similar)
 }
 
 /// Sets the display duration of the given frames.
@@ -196,6 +354,76 @@ mod tests {
         scale_delay(&mut p, &[0], 50);
         set_delay(&mut p, &[1], 0);
         assert_eq!((p.frames[0].delay_ms, p.frames[1].delay_ms), (50, 1));
+    }
+
+    #[test]
+    fn merge_into_previous_keeps_the_duration() {
+        let mut p = project(4);
+        merge_into_previous(&mut p, &[0, 2]).unwrap();
+        assert_eq!(ids(&p), ["f000002", "f000004"]);
+        assert_eq!((p.frames[0].delay_ms, p.frames[1].delay_ms), (300, 100));
+        let mut p = project(2);
+        merge_into_previous(&mut p, &[0, 1]).unwrap();
+        assert_eq!((p.frames.len(), p.frames[0].delay_ms), (1, 200));
+    }
+
+    #[test]
+    fn move_frames_keeps_their_order() {
+        let mut p = project(5);
+        move_frames(&mut p, &[3, 1], 0).unwrap();
+        assert_eq!(ids(&p), ["f000002", "f000004", "f000001", "f000003", "f000005"]);
+        let mut p = project(5);
+        move_frames(&mut p, &[0, 1], 5).unwrap();
+        assert_eq!(ids(&p), ["f000003", "f000004", "f000005", "f000001", "f000002"]);
+        let mut p = project(5);
+        move_frames(&mut p, &[0], 3).unwrap();
+        assert_eq!(ids(&p), ["f000002", "f000003", "f000001", "f000004", "f000005"]);
+    }
+
+    #[test]
+    fn removes_similar_frames_compared_with_the_last_kept_one() {
+        // Frame images: a, a, almost a (1 of 4 pixels differs), b, b (shared file).
+        let mut p = project(5);
+        p.frames[4].file = p.frames[3].file.clone();
+        let image = |v: u8, odd: bool| {
+            let mut im = RgbaImage::from_pixel(2, 2, image::Rgba([v, v, v, 255]));
+            if odd {
+                im.put_pixel(0, 0, image::Rgba([9, 9, 9, 255]));
+            }
+            im
+        };
+        let mut loads = 0;
+        let similar = similar_frames(&p, 75.0, |f| {
+            loads += 1;
+            Ok(match f.id.as_str() {
+                "f000001" | "f000002" => image(1, false),
+                "f000003" => image(1, true),
+                _ => image(2, false),
+            })
+        })
+        .unwrap();
+        assert_eq!(similar, [1, 2, 4]);
+        assert!(loads <= 4, "frames sharing a file are not loaded: {loads}");
+        let exact = similar_frames(&p, 100.0, |f| Ok(image(1, f.id == "f000003"))).unwrap();
+        assert_eq!(exact, [1, 4]);
+
+        apply(&mut p, &FrameOp::RemoveSimilar { threshold: 75.0 }, |f| {
+            Ok(if f.id < "f000004".into() { image(1, false) } else { image(2, false) })
+        })
+        .unwrap();
+        assert_eq!(ids(&p), ["f000001", "f000004"]);
+        assert_eq!(p.duration_ms(), 500);
+    }
+
+    #[test]
+    fn reverse_uses_the_selected_range_or_everything() {
+        let none = |_: &Frame| -> Result<RgbaImage> { unreachable!() };
+        let mut p = project(4);
+        apply(&mut p, &FrameOp::Reverse { frames: vec![1, 2] }, none).unwrap();
+        assert_eq!(ids(&p), ["f000001", "f000003", "f000002", "f000004"]);
+        let mut p = project(3);
+        apply(&mut p, &FrameOp::Reverse { frames: vec![1] }, none).unwrap();
+        assert_eq!(ids(&p), ["f000003", "f000002", "f000001"]);
     }
 
     #[test]

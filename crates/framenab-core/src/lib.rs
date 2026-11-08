@@ -14,4 +14,5 @@ pub use error::{CoreError, Result};
 pub use history::History;
 pub use input::{Effects, InputEvents};
 pub use model::*;
+pub use ops::FrameOp;
 pub use store::FrameStore;
