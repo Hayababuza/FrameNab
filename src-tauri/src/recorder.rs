@@ -276,8 +276,7 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
 /// Settings key: record clicks and keys (default on).
 const INPUT_KEY: &str = "recordInput";
 
-/// Saves the recorded input next to the frames and turns on the effects that have data
-/// (clicks, keys); the cursor highlight stays off until chosen in the editor.
+/// Saves the recorded input next to the frames and turns on the effects that have data.
 fn save_input(
     dir: &std::path::Path,
     mut project: framenab_core::Project,
@@ -285,6 +284,7 @@ fn save_input(
 ) -> Result<framenab_core::Project, String> {
     let store = framenab_core::FrameStore::create(dir).map_err(|e| e.to_string())?;
     store.save_input(input).map_err(|e| e.to_string())?;
+    project.effects.cursor = !input.cursor.is_empty();
     project.effects.clicks = !input.clicks.is_empty();
     project.effects.keys = !input.keys.is_empty();
     store.save_project(&project).map_err(|e| e.to_string())?;

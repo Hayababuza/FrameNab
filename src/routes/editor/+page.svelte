@@ -132,7 +132,12 @@
   let clicksAndKeysBlocked = $state(false);
 
   async function setEffects(change: Partial<Effects>) {
-    if (view) view = await editorSetEffects({ ...view.project.effects, ...change });
+    if (!view) return;
+    try {
+      view = await editorSetEffects({ ...view.project.effects, ...change });
+    } catch (e) {
+      error = String(e);
+    }
   }
 
   /** Recording time of frame `i` (frames keep it even after others were deleted). */
@@ -308,11 +313,11 @@
     if (frames.length < 2) return;
     playing = true;
     const step = () => {
-      if (!playing) return;
+      if (!playing || !view) return;
       const delay = frames[current]?.delayMs ?? 100;
       // Preload the next frame so playback does not flicker.
       const next = (current + 1) % frames.length;
-      new Image().src = previewUrl(frames[next].id);
+      new Image().src = previewUrl(frames[next].id, view.path);
       playTimer = setTimeout(() => {
         current = next;
         step();
@@ -505,7 +510,7 @@
     <main class="preview">
       {#if frames[current]}
         <AnnotationLayer
-          src={previewUrl(frames[current].id)}
+          src={previewUrl(frames[current].id, view.path)}
           width={view.project.width}
           height={view.project.height}
           {annotations}
@@ -616,7 +621,7 @@
             style:width="{thumbWidth}px"
           >
             <img
-              src={thumbUrl(frame.id)}
+              src={thumbUrl(frame.id, view.path)}
               alt=""
               loading="lazy"
               draggable="false"

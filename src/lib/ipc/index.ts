@@ -165,8 +165,12 @@ export const editorCancelExport = () => invoke<void>("editor_cancel_export");
 /** Formats recordings can be saved in on this system (MP4/WebM need FFmpeg). */
 export const recordingFormats = () => invoke<ExportFormat[]>("recording_formats");
 
-export const thumbUrl = (frameId: string) => convertFileSrc(`thumb/${frameId}`, "framenab");
-export const previewUrl = (frameId: string) => convertFileSrc(`preview/${frameId}`, "framenab");
+// Frame ids repeat across projects (`f000001` …), so the project path goes into the URL too;
+// otherwise the webview shows cached images of the previously opened recording.
+const frameUrl = (kind: string, frameId: string, project: string) =>
+  `${convertFileSrc(`${kind}/${frameId}`, "framenab")}?p=${encodeURIComponent(project)}`;
+export const thumbUrl = (frameId: string, project: string) => frameUrl("thumb", frameId, project);
+export const previewUrl = (frameId: string, project: string) => frameUrl("preview", frameId, project);
 export const openProject = (path: string) => invoke<void>("open_project", { path });
 export const recordingsDirectory = () => invoke<string>("recordings_directory");
 /** Wayland: screen position (pixels) of the recorder's calibration marker, or null if not found. */
