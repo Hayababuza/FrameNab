@@ -18,6 +18,9 @@
     editorExportProject,
     editorFrames,
     editorImage,
+    editorPickWatermark,
+    editorSetOverlays,
+    assetUrl,
     editorTransition,
     editorInput,
     editorSetAnnotations,
@@ -37,6 +40,8 @@
   import type { Direction } from "$lib/bindings/Direction";
   import type { InputEvents } from "$lib/bindings/InputEvents";
   import { effectAnnotations } from "$lib/annotations/effects";
+  import { progressAnnotation, watermarkRect } from "$lib/annotations/overlays";
+  import type { Overlays } from "$lib/bindings/Overlays";
   import { getSetting, type RecordingFormat } from "$lib/stores/settings";
 
   const THUMB_HEIGHT = 90;
@@ -61,7 +66,7 @@
   /** Moving the selected frames by dragging one of them; `active` once the mouse really moved. */
   let moveDrag = $state<{ from: number; startX: number; x: number; active: boolean } | null>(null);
   /** Open tool panel below the toolbar. */
-  type Panel = "timing" | "cleanup" | "image" | "transition";
+  type Panel = "timing" | "cleanup" | "image" | "transition" | "overlays";
   let panel = $state<Panel | null>(null);
   let transitionKind = $state<"fade" | "fadeToColor" | "slide">("fade");
   let transitionColor = $state("#000000");
@@ -463,6 +468,55 @@
     resizeH = Math.max(1, Math.round((view.project.height * percent) / 100));
   }
 
+  // ---- overlays (progress bar, watermark) ----
+
+  const overlays = $derived(view?.project.overlays ?? { progress: null, watermark: null });
+  const progressTop = $derived(view ? [progressAnnotation(view.project, current)].filter((a) => !!a) : []);
+  const watermarkView = $derived(
+    view?.project.overlays.watermark
+      ? {
+          src: assetUrl(view.project.overlays.watermark.file, view.path),
+          rect: watermarkRect(view.project.width, view.project.height, view.project.overlays.watermark),
+          opacity: view.project.overlays.watermark.opacity,
+        }
+      : null,
+  );
+
+  async function setOverlays(change: Partial<Overlays>) {
+    if (!view) return;
+    try {
+      view = await editorSetOverlays({ ...view.project.overlays, ...change });
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  function setProgress(change: Partial<NonNullable<Overlays["progress"]>> | null) {
+    const current = overlays.progress ?? { bottom: true, height: 6, color: { ...colors[0] } };
+    setOverlays({ progress: change === null ? null : { ...current, ...change } });
+  }
+
+  function setWatermark(change: Partial<NonNullable<Overlays["watermark"]>>) {
+    if (overlays.watermark) setOverlays({ watermark: { ...overlays.watermark, ...change } });
+  }
+
+  async function pickWatermark() {
+    try {
+      const next = await editorPickWatermark();
+      if (next) view = next;
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  const hex = (c: Rgba) => `#${[c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  const rgba = (h: string): Rgba => ({
+    r: parseInt(h.slice(1, 3), 16),
+    g: parseInt(h.slice(3, 5), 16),
+    b: parseInt(h.slice(5, 7), 16),
+    a: 255,
+  });
+
   /** Transitions go after the last selected frame, or after the current one. */
   const transitionAfter = $derived(selected.size ? Math.max(...selected) : current);
 
@@ -724,6 +778,10 @@
         >
         {t("editor.transition")}
       </button>
+      <button class:active={panel === "overlays"} onclick={() => togglePanel("overlays")}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 16h9M15 8h3v3h-3z" /></svg>
+        {t("editor.overlays")}
+      </button>
       <span
         class="info"
         title={t("editor.info", {
@@ -851,6 +909,89 @@
           <button onclick={setSpeed} disabled={busy} title={t("editor.speedHint")}
             >{t("editor.speedApply")}</button
           >
+        {:else if panel === "overlays"}
+          <label class="check"
+            ><input
+              type="checkbox"
+              checked={!!overlays.progress}
+              onchange={(e) => setProgress(e.currentTarget.checked ? {} : null)}
+            />
+            {t("editor.progressBar")}</label
+          >
+          {#if overlays.progress}
+            <select
+              value={overlays.progress.bottom ? "bottom" : "top"}
+              onchange={(e) => setProgress({ bottom: e.currentTarget.value === "bottom" })}
+            >
+              <option value="bottom">{t("editor.progressBottom")}</option>
+              <option value="top">{t("editor.progressTop")}</option>
+            </select>
+            <label
+              >{t("editor.progressHeight")}
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={overlays.progress.height}
+                onchange={(e) =>
+                  e.currentTarget.valueAsNumber >= 1 &&
+                  setProgress({ height: e.currentTarget.valueAsNumber })}
+              /> px</label
+            >
+            <input
+              class="color"
+              type="color"
+              value={hex(overlays.progress.color)}
+              onchange={(e) => setProgress({ color: rgba(e.currentTarget.value) })}
+            />
+          {/if}
+          <span class="sep"></span>
+          <span>{t("editor.watermark")}</span>
+          <button onclick={pickWatermark}
+            >{overlays.watermark ? t("editor.watermarkChange") : t("editor.watermarkPick")}</button
+          >
+          {#if overlays.watermark}
+            <select
+              value={overlays.watermark.anchor}
+              onchange={(e) =>
+                setWatermark({
+                  anchor: e.currentTarget.value as NonNullable<Overlays["watermark"]>["anchor"],
+                })}
+            >
+              <option value="topLeft">{t("editor.anchorTopLeft")}</option>
+              <option value="topRight">{t("editor.anchorTopRight")}</option>
+              <option value="bottomLeft">{t("editor.anchorBottomLeft")}</option>
+              <option value="bottomRight">{t("editor.anchorBottomRight")}</option>
+              <option value="center">{t("editor.anchorCenter")}</option>
+            </select>
+            <label
+              >{t("editor.watermarkSize")}
+              <input
+                type="number"
+                min="5"
+                max="100"
+                step="5"
+                value={Math.round(overlays.watermark.size * 100)}
+                onchange={(e) =>
+                  e.currentTarget.valueAsNumber >= 5 &&
+                  setWatermark({ size: e.currentTarget.valueAsNumber / 100 })}
+              /> %</label
+            >
+            <label
+              >{t("editor.watermarkOpacity")}
+              <input
+                type="number"
+                min="5"
+                max="100"
+                step="5"
+                value={Math.round(overlays.watermark.opacity * 100)}
+                onchange={(e) =>
+                  e.currentTarget.valueAsNumber >= 5 &&
+                  setWatermark({ opacity: Math.min(1, e.currentTarget.valueAsNumber / 100) })}
+              /> %</label
+            >
+            <button onclick={() => setOverlays({ watermark: null })}>{t("editor.watermarkRemove")}</button>
+          {/if}
         {:else if panel === "transition"}
           <span class="target" title={t("editor.transitionHint")}
             >{t("editor.transitionAfter", { n: transitionAfter + 1 })}</span
@@ -1031,6 +1172,8 @@
           readonly={playing}
           onchange={setAnnotations}
           extra={crop ? [] : fx}
+          watermark={crop ? null : watermarkView}
+          top={crop ? [] : progressTop}
           bind:crop
         />
       {/if}
@@ -1465,6 +1608,10 @@
     background: var(--bg);
     color: inherit;
     font: inherit;
+  }
+  .panel input[type="checkbox"] {
+    width: auto;
+    height: auto;
   }
   .panel input.color {
     width: 36px;

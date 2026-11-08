@@ -400,6 +400,12 @@ pub fn protocol<R: Runtime>(app: &AppHandle<R>, request: &Request<Vec<u8>>) -> R
     let decoded = request.uri().path().replace("%2F", "/").replace("%2f", "/");
     let path = decoded.trim_matches('/');
     let respond = |status: StatusCode, body: Vec<u8>| respond_as(status, "application/octet-stream", body);
+    if let Some(file) = path.strip_prefix("asset/") {
+        return match crate::editor::serve_asset(app, file) {
+            Some(png) => respond_as(StatusCode::OK, "image/png", png),
+            None => respond(StatusCode::NOT_FOUND, Vec::new()),
+        };
+    }
     if path.starts_with("thumb/") || path.starts_with("preview/") {
         return match crate::editor::serve(app, path) {
             Some(jpeg) => respond_as(StatusCode::OK, "image/jpeg", jpeg),

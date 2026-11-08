@@ -24,6 +24,8 @@ pub enum CoreError {
     InvalidImageOp,
     #[error("Project archive: {0}")]
     Archive(String),
+    #[error("Image: {0}")]
+    Image(String),
 }
 
 pub type Result<T, E = CoreError> = std::result::Result<T, E>;

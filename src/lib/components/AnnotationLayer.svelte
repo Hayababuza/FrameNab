@@ -41,6 +41,10 @@
     extra?: Annotation[];
     /** Crop mode: the area to keep (image pixels); dragging edits it instead of annotations. */
     crop?: Rect | null;
+    /** Watermark image drawn over everything else (except `top`). */
+    watermark?: { src: string; rect: Rect; opacity: number } | null;
+    /** Drawn last, not editable (the progress bar). */
+    top?: Annotation[];
     onchange: (annotations: Annotation[]) => void;
   }
 
@@ -58,6 +62,8 @@
     readonly = false,
     extra = [],
     crop = $bindable(null),
+    watermark = null,
+    top = [],
     onchange,
   }: Props = $props();
 
@@ -84,6 +90,15 @@
 
   const shown = $derived((moving ?? annotations).filter((a) => a.frameStart <= frame && frame <= a.frameEnd));
 
+  let markImage: HTMLImageElement | null = $state(null);
+  $effect(() => {
+    const src = watermark?.src;
+    if (!src) return void (markImage = null);
+    const next = new Image();
+    next.onload = () => (markImage = next);
+    next.src = src;
+  });
+
   // Load the frame image; keep showing the previous one until the next has loaded (no flicker).
   $effect(() => {
     const next = new Image();
@@ -93,6 +108,7 @@
 
   $effect(() => {
     void [image, shown, draft, selectedId, fit, box, extra, crop?.x, crop?.y, crop?.w, crop?.h];
+    void [markImage, watermark, top];
     draw();
   });
 
@@ -112,6 +128,14 @@
     ctx.setTransform(dpr * fit.k, 0, 0, dpr * fit.k, dpr * fit.x, dpr * fit.y);
     for (const a of shown) drawAnnotation(ctx, a);
     for (const a of extra) drawAnnotation(ctx, a);
+    if (watermark && markImage) {
+      ctx.save();
+      ctx.globalAlpha = watermark.opacity;
+      const r = watermark.rect;
+      ctx.drawImage(markImage, r.x, r.y, r.w, r.h);
+      ctx.restore();
+    }
+    for (const a of top) drawAnnotation(ctx, a);
     if (draft) drawAnnotation(ctx, draft);
     const selected = shown.find((a) => a.id === selectedId);
     if (selected && !crop) drawSelectionFrame(ctx, selected, 1 / fit.k);

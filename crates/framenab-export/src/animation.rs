@@ -8,6 +8,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+use framenab_core::overlays::{blend_image, watermark_rect};
 use framenab_core::{FrameStore, InputEvents, Project, input::effect_annotations};
 use image::RgbaImage;
 use rgb::FromSlice;
@@ -52,11 +53,45 @@ impl ExportControl {
     }
 }
 
-/// Loads frame `index` and renders the annotations that cover it and the input effects.
-fn rendered_frame(
+/// What every frame needs besides its own image, prepared once per export.
+pub struct Extras {
+    /// The recorded input, mapped onto the frames (empty without effects).
+    input: InputEvents,
+    /// The watermark, already scaled, with its top-left corner and opacity.
+    watermark: Option<(RgbaImage, i64, i64, f32)>,
+}
+
+impl Extras {
+    pub fn prepare(store: &FrameStore, project: &Project) -> Result<Self, ExportError> {
+        let input = if project.effects.any() {
+            store.load_input()?.transformed(&project.input_transform)
+        } else {
+            InputEvents::default()
+        };
+        let watermark = match &project.overlays.watermark {
+            Some(wm) => {
+                let rect = watermark_rect(project.width, project.height, wm);
+                let image = store.load_asset(&wm.file)?;
+                let scaled = image::imageops::resize(
+                    &image,
+                    rect.w as u32,
+                    rect.h as u32,
+                    image::imageops::FilterType::Lanczos3,
+                );
+                Some((scaled, rect.x as i64, rect.y as i64, wm.opacity))
+            }
+            None => None,
+        };
+        Ok(Self { input, watermark })
+    }
+}
+
+/// Loads frame `index` and renders the annotations that cover it, the input effects and the
+/// overlays (watermark, progress bar).
+pub fn rendered_frame(
     store: &FrameStore,
     project: &Project,
-    input: &InputEvents,
+    extras: &Extras,
     index: usize,
 ) -> Result<RgbaImage, ExportError> {
     let base = store.load_frame(&project.frames[index])?;
@@ -68,8 +103,20 @@ fn rendered_frame(
         framenab_render::render_frame(project, frame, &base).map_err(render_err)?
     };
     if project.effects.any() {
-        let fx = effect_annotations(input, project.effects, project.frame_time(index), project.width, project.height);
+        let fx = effect_annotations(
+            &extras.input,
+            project.effects,
+            project.frame_time(index),
+            project.width,
+            project.height,
+        );
         framenab_render::render_annotations(&mut image, &fx).map_err(render_err)?;
+    }
+    if let Some((mark, x, y, opacity)) = &extras.watermark {
+        blend_image(&mut image, mark, *x, *y, *opacity);
+    }
+    if let Some(bar) = project.progress_annotation(index) {
+        framenab_render::draw(&mut image, &bar).map_err(render_err)?;
     }
     Ok(image)
 }
@@ -85,17 +132,13 @@ pub fn export_animation(
     if project.frames.is_empty() {
         return Err(ExportError::Empty);
     }
-    let input = if project.effects.any() {
-        store.load_input()?.transformed(&project.input_transform)
-    } else {
-        InputEvents::default()
-    };
+    let extras = Extras::prepare(store, project)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|source| ExportError::Io { path: parent.to_owned(), source })?;
     }
     let result = match format {
-        ExportFormat::Gif => export_gif(store, project, &input, path, control),
-        ExportFormat::Mp4 | ExportFormat::Webm => export_video(store, project, &input, path, format, control),
+        ExportFormat::Gif => export_gif(store, project, &extras, path, control),
+        ExportFormat::Mp4 | ExportFormat::Webm => export_video(store, project, &extras, path, format, control),
         other => Err(ExportError::Unsupported(other)),
     };
     if result.is_err() {
@@ -108,7 +151,7 @@ pub fn export_animation(
 fn export_gif(
     store: &FrameStore,
     project: &Project,
-    input: &InputEvents,
+    extras: &Extras,
     path: &Path,
     control: &ExportControl,
 ) -> Result<(), ExportError> {
@@ -130,7 +173,7 @@ fn export_gif(
             if control.cancelled() {
                 return Err(ExportError::Cancelled);
             }
-            let image = rendered_frame(store, project, input, i)?;
+            let image = rendered_frame(store, project, extras, i)?;
             let (w, h) = (image.width() as usize, image.height() as usize);
             let pixels = image.as_raw().as_rgba().to_vec();
             collector
@@ -168,7 +211,7 @@ const VIDEO_FPS: u32 = 30;
 fn export_video(
     store: &FrameStore,
     project: &Project,
-    input: &InputEvents,
+    extras: &Extras,
     path: &Path,
     format: ExportFormat,
     control: &ExportControl,
@@ -200,7 +243,7 @@ fn export_video(
             if control.cancelled() {
                 return Err(ExportError::Cancelled);
             }
-            let image = rendered_frame(store, project, input, i)?;
+            let image = rendered_frame(store, project, extras, i)?;
             let exact = f64::from(frame.delay_ms) / frame_ms + carry;
             let repeats = exact.round().max(if i == 0 { 1.0 } else { 0.0 }) as usize;
             carry = exact - repeats as f64;
@@ -249,6 +292,36 @@ mod tests {
         assert_eq!(frames.len(), 3);
         assert_eq!(frames[0].buffer().dimensions(), (32, 18));
         assert_eq!(control.done.load(Ordering::Relaxed), 3);
+    }
+
+    #[test]
+    fn frames_get_the_watermark_and_a_growing_progress_bar() {
+        use framenab_core::overlays::{Anchor, ProgressBar, Watermark};
+        let dir = tempfile::tempdir().unwrap();
+        let (store, mut project) = project(dir.path(), 2);
+        let logo = dir.path().join("logo.png");
+        RgbaImage::from_pixel(4, 4, image::Rgba([255, 255, 255, 255])).save(&logo).unwrap();
+        let (file, w, h) = store.import_asset(&logo, "watermark").unwrap();
+        project.overlays.watermark = Some(Watermark {
+            file,
+            image_width: w,
+            image_height: h,
+            anchor: Anchor::TopLeft,
+            size: 0.25,
+            opacity: 1.0,
+        });
+        let green = framenab_core::Rgba { r: 0, g: 255, b: 0, a: 255 };
+        project.overlays.progress = Some(ProgressBar { bottom: true, height: 2.0, color: green });
+
+        let extras = Extras::prepare(&store, &project).unwrap();
+        let first = rendered_frame(&store, &project, &extras, 0).unwrap();
+        let last = rendered_frame(&store, &project, &extras, 1).unwrap();
+        // Watermark: 8×8 at the 0-pixel margin of an 18-pixel-high frame.
+        assert_eq!(first.get_pixel(2, 2).0, [255, 255, 255, 255]);
+        // The bar covers half the width after the first of two equal frames, all of it at the end.
+        assert_eq!(first.get_pixel(4, 17).0, [0, 255, 0, 255]);
+        assert_ne!(first.get_pixel(28, 17).0, [0, 255, 0, 255]);
+        assert_eq!(last.get_pixel(28, 17).0, [0, 255, 0, 255]);
     }
 
     #[test]

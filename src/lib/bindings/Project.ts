@@ -2,6 +2,7 @@
 import type { Annotation } from "./Annotation";
 import type { Effects } from "./Effects";
 import type { Frame } from "./Frame";
+import type { Overlays } from "./Overlays";
 import type { Transform } from "./Transform";
 
 export type Project = { version: number, width: number, height: number, frames: Array<Frame>, annotations: Array<Annotation>, 
@@ -21,4 +22,8 @@ effects: Effects,
  * Maps the recorded input (in pixels of the original recording) onto the frames after
  * cropping, resizing, rotating …
  */
-inputTransform?: Transform, };
+inputTransform?: Transform, 
+/**
+ * Progress bar and watermark over all frames.
+ */
+overlays: Overlays, };

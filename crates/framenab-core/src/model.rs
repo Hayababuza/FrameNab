@@ -37,6 +37,9 @@ pub struct Project {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[ts(skip)]
     pub recording: bool,
+    /// Progress bar and watermark over all frames.
+    #[serde(default)]
+    pub overlays: crate::overlays::Overlays,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -228,6 +231,7 @@ impl Project {
             effects: crate::Effects::default(),
             input_transform: crate::Transform::IDENTITY,
             recording: false,
+            overlays: crate::overlays::Overlays::default(),
         }
     }
 

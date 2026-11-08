@@ -3,6 +3,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Annotation } from "$lib/bindings/Annotation";
 import type { Effects } from "$lib/bindings/Effects";
 import type { FrameOp } from "$lib/bindings/FrameOp";
+import type { Overlays } from "$lib/bindings/Overlays";
 import type { ImageOp } from "$lib/bindings/ImageOp";
 import type { TransitionOp } from "$lib/bindings/TransitionOp";
 import type { InputEvents } from "$lib/bindings/InputEvents";
@@ -182,6 +183,13 @@ export const previewUrl = (frameId: string, project: string) => frameUrl("previe
 export const openProject = (path: string) => invoke<void>("open_project", { path });
 /** Exports the open project as `*.framenab.zip`; `null` if the dialog was cancelled. */
 export const editorExportProject = () => invoke<string | null>("editor_export_project");
+export const editorSetOverlays = (overlays: Overlays) =>
+  invoke<EditorView>("editor_set_overlays", { overlays });
+/** Picks an image and makes it the watermark; `null` if the dialog was cancelled. */
+export const editorPickWatermark = () => invoke<EditorView | null>("editor_pick_watermark");
+/** URL of an image in the open project's `assets/` folder. */
+export const assetUrl = (file: string, project: string) =>
+  `${convertFileSrc(`asset/${file}`, "framenab")}?p=${encodeURIComponent(project)}`;
 
 export interface RecentProject {
   path: string;

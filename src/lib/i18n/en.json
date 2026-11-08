@@ -181,5 +181,21 @@
   "home.deleteConfirm": "Delete this recording for good? Saved GIFs and videos are kept.",
   "home.showAll": "Show all in folder",
   "editor.exportProject": "Export as project (ZIP) – to pass it on or keep editing later; “Open project” reads it back",
-  "home.openFilter": "FrameNab project"
+  "home.openFilter": "FrameNab project",
+  "editor.overlays": "Overlays",
+  "editor.progressBar": "Progress bar",
+  "editor.progressTop": "top",
+  "editor.progressBottom": "bottom",
+  "editor.progressHeight": "Height",
+  "editor.watermark": "Watermark",
+  "editor.watermarkPick": "Choose image …",
+  "editor.watermarkChange": "Other image …",
+  "editor.watermarkSize": "Size",
+  "editor.watermarkOpacity": "Opacity",
+  "editor.watermarkRemove": "Remove",
+  "editor.anchorTopLeft": "top left",
+  "editor.anchorTopRight": "top right",
+  "editor.anchorBottomLeft": "bottom left",
+  "editor.anchorBottomRight": "bottom right",
+  "editor.anchorCenter": "center"
 }

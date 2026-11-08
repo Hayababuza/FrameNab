@@ -232,6 +232,67 @@ pub fn editor_set_effects(app: AppHandle, effects: framenab_core::Effects) -> Re
     })
 }
 
+/// Sets the progress bar and watermark settings.
+#[tauri::command]
+pub fn editor_set_overlays(app: AppHandle, overlays: framenab_core::overlays::Overlays) -> Result<EditorView, String> {
+    if let Some(wm) = &overlays.watermark
+        && !framenab_core::store::is_asset_name(&wm.file)
+    {
+        return Err("invalid watermark file".into());
+    }
+    edit(&app, |p| {
+        p.overlays = overlays;
+        Ok(())
+    })
+}
+
+/// Lets the user pick an image and makes it the watermark (copied into the project).
+/// Resolves to `None` if the dialog was cancelled.
+#[tauri::command]
+pub async fn editor_pick_watermark(app: AppHandle) -> Result<Option<EditorView>, String> {
+    use framenab_core::overlays::{Anchor, Watermark};
+    use tauri_plugin_dialog::DialogExt;
+
+    let store = {
+        let state = app.state::<EditorState>();
+        let guard = state.lock();
+        guard.as_ref().ok_or("no project open")?.store.clone()
+    };
+    let mut dialog = app.dialog().file().add_filter("Image", &["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
+    if let Some(window) = app.get_webview_window(LABEL) {
+        dialog = dialog.set_parent(&window);
+    }
+    let picked =
+        tauri::async_runtime::spawn_blocking(move || dialog.blocking_pick_file()).await.map_err(|e| e.to_string())?;
+    let Some(source) = picked.map(|p| p.into_path().map_err(|e| e.to_string())).transpose()? else { return Ok(None) };
+    let (file, width, height) = tauri::async_runtime::spawn_blocking(move || store.import_asset(&source, "watermark"))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    edit(&app, |p| {
+        let previous = p.overlays.watermark.take();
+        p.overlays.watermark = Some(Watermark {
+            file,
+            image_width: width,
+            image_height: height,
+            anchor: previous.as_ref().map_or(Anchor::BottomRight, |w| w.anchor),
+            size: previous.as_ref().map_or(0.2, |w| w.size),
+            opacity: previous.as_ref().map_or(0.8, |w| w.opacity),
+        });
+        Ok(())
+    })
+    .map(Some)
+}
+
+/// Serves `asset/<file>` (the watermark image) of the open project.
+pub fn serve_asset(app: &AppHandle<impl tauri::Runtime>, file: &str) -> Option<Vec<u8>> {
+    if !framenab_core::store::is_asset_name(file) {
+        return None;
+    }
+    let root = app.state::<EditorState>().lock().as_ref()?.store.root().to_path_buf();
+    std::fs::read(root.join(file)).ok()
+}
+
 /// Replaces all annotations (the editor sends the whole list after each change).
 #[tauri::command]
 pub fn editor_set_annotations(

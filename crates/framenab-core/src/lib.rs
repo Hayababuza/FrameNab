@@ -9,6 +9,7 @@ pub mod image_ops;
 pub mod input;
 pub mod model;
 pub mod ops;
+pub mod overlays;
 pub mod recorder;
 pub mod store;
 pub mod transitions;

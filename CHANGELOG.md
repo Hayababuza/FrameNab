@@ -4,6 +4,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- Editor overlays: a progress bar along the top or bottom edge (height, color) that fills up over the animation, and a watermark image (PNG, JPEG, WebP …) in a corner or the center with size and opacity; shown in the preview and burned into the saved GIF/video; the image is kept in the project folder
+- Projects as ZIP: the editor exports the open project as `*.framenab.zip` (frames, annotations, effects, watermark); "Open project" and `framenab edit` read it back (also the `project.json` of a recording folder)
+- Recovery: while recording, the project is saved every 2 s; a recording interrupted by a crash is marked on the start page and recovered when opened
+- Start page: the latest recordings with date, frames, length and size; open them with a click, delete them, or show the recordings folder
+
 ## [0.3.0] - 2026-11-08
 
 Recording (phase 2) and the frame editor (phase 3): record an area, a window or the whole screen, edit the frames and save them as GIF, MP4 or WebM.

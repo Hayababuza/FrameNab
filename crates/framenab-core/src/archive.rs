@@ -39,6 +39,12 @@ pub fn export_zip(store: &FrameStore, project: &Project, dest: &Path) -> Result<
         zip.write_all(&serde_json::to_vec(&input)?).map_err(zip_err)?;
     }
 
+    if let Some(wm) = &project.overlays.watermark {
+        let path = store.root().join(&wm.file);
+        zip.start_file(wm.file.as_str(), stored).map_err(zip_err)?;
+        zip.write_all(&fs::read(&path).at(&path)?).map_err(zip_err)?;
+    }
+
     let mut written = HashSet::new();
     for frame in &project.frames {
         if !written.insert(frame.file.as_str()) {
@@ -56,6 +62,7 @@ pub fn export_zip(store: &FrameStore, project: &Project, dest: &Path) -> Result<
 fn allowed(name: &str) -> bool {
     match name {
         "project.json" | "input.json" => true,
+        _ if crate::store::is_asset_name(name) => true,
         _ => name.strip_prefix("frames/").is_some_and(|file| {
             file.ends_with(".qoi") && !file.is_empty() && file.chars().all(|c| c.is_ascii_alphanumeric() || c == '.')
         }),
@@ -82,6 +89,9 @@ pub fn import_zip(src: &Path, dest_dir: &Path) -> Result<PathBuf> {
                 continue;
             }
             let path = root.join(entry.name());
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).at(parent)?;
+            }
             let mut bytes = Vec::new();
             entry.read_to_end(&mut bytes).map_err(zip_err)?;
             fs::write(&path, bytes).at(&path)?;
@@ -118,11 +128,24 @@ mod tests {
             crate::InputEvents { keys: vec![crate::input::KeyEvent { t: 5, label: "A".into() }], ..Default::default() };
         store.save_input(&input).unwrap();
 
+        let logo = dir.path().join("logo.png");
+        RgbaImage::from_pixel(3, 2, image::Rgba([9, 8, 7, 255])).save(&logo).unwrap();
+        let (file, w, h) = store.import_asset(&logo, "watermark").unwrap();
+        assert_eq!((file.as_str(), w, h), ("assets/watermark-1.png", 3, 2));
+        p.overlays.watermark = Some(crate::overlays::Watermark {
+            file,
+            image_width: w,
+            image_height: h,
+            anchor: crate::overlays::Anchor::Center,
+            size: 0.5,
+            opacity: 1.0,
+        });
+
         let zip_path = dir.path().join("Demo.framenab.zip");
         export_zip(&store, &p, &zip_path).unwrap();
         let names: Vec<String> =
             ZipArchive::new(fs::File::open(&zip_path).unwrap()).unwrap().file_names().map(String::from).collect();
-        assert_eq!(names.len(), 4, "project, input and two distinct frames: {names:?}");
+        assert_eq!(names.len(), 5, "project, input, watermark and two distinct frames: {names:?}");
 
         let out = dir.path().join("out");
         fs::create_dir_all(&out).unwrap();
@@ -132,6 +155,7 @@ mod tests {
         assert_eq!(imported.load_project().unwrap(), p);
         assert_eq!(imported.load_input().unwrap(), input);
         assert_eq!(imported.load_frame(&p.frames[2]).unwrap().get_pixel(0, 0).0[0], 3);
+        assert_eq!(imported.load_asset("assets/watermark-1.png").unwrap().get_pixel(0, 0).0, [9, 8, 7, 255]);
         // A second import gets its own folder.
         assert_eq!(import_zip(&zip_path, &out).unwrap(), out.join("Demo (2).framenab"));
     }
@@ -142,6 +166,8 @@ mod tests {
         assert!(!allowed("frames/../../etc/passwd"));
         assert!(!allowed("../project.json"));
         assert!(!allowed("frames/sub/x.qoi"));
+        assert!(allowed("assets/watermark-1.png"));
+        assert!(!allowed("assets/../x.png"));
 
         let dir = tempfile::tempdir().unwrap();
         let bad = dir.path().join("bad.zip");

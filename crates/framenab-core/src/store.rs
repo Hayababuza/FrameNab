@@ -24,6 +24,18 @@ use crate::{CoreError, Frame, Project, Result};
 const PROJECT_FILE: &str = "project.json";
 const INPUT_FILE: &str = "input.json";
 const FRAMES_DIR: &str = "frames";
+const ASSETS_DIR: &str = "assets";
+
+/// Whether `file` is a valid asset path (`assets/<name>.png`, no other directories).
+#[must_use]
+pub fn is_asset_name(file: &str) -> bool {
+    file.strip_prefix("assets/").is_some_and(|name| {
+        name.ends_with(".png")
+            && name.len() > 4
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+            && !name.starts_with('.')
+    })
+}
 
 #[derive(Debug, Clone)]
 pub struct FrameStore {
@@ -182,6 +194,34 @@ impl FrameStore {
         project.recording = false;
         self.save_project(&project)?;
         Ok((project, true))
+    }
+
+    /// Copies an image file (PNG, JPEG, WebP …) into the project as a PNG under `assets/`.
+    /// Returns its relative file name and size.
+    pub fn import_asset(&self, source: &Path, stem: &str) -> Result<(String, u32, u32)> {
+        let image = image::open(source).map_err(|e| CoreError::Image(e.to_string()))?.to_rgba8();
+        let dir = self.root.join(ASSETS_DIR);
+        fs::create_dir_all(&dir).at(&dir)?;
+        let mut n = 1;
+        let file = loop {
+            let file = format!("{ASSETS_DIR}/{stem}-{n}.png");
+            if !self.root.join(&file).exists() {
+                break file;
+            }
+            n += 1;
+        };
+        let path = self.root.join(&file);
+        image.save(&path).map_err(|e| CoreError::Image(e.to_string()))?;
+        Ok((file, image.width(), image.height()))
+    }
+
+    /// Loads an image from `assets/` (see [`import_asset`](Self::import_asset)).
+    pub fn load_asset(&self, file: &str) -> Result<RgbaImage> {
+        if !is_asset_name(file) {
+            return Err(CoreError::Image(format!("invalid asset name {file}")));
+        }
+        let path = self.root.join(file);
+        Ok(image::open(&path).map_err(|e| CoreError::Image(format!("{}: {e}", path.display())))?.to_rgba8())
     }
 
     /// Saves the recorded input (`input.json`).

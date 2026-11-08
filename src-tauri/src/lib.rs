@@ -73,6 +73,8 @@ pub fn run() {
             editor::editor_set_annotations,
             editor::editor_input,
             editor::editor_set_effects,
+            editor::editor_set_overlays,
+            editor::editor_pick_watermark,
             recorder::input_support,
             editor::editor_export,
             editor::editor_cancel_export,

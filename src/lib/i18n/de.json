@@ -181,5 +181,21 @@
   "home.deleteConfirm": "Diese Aufnahme endgültig löschen? Gespeicherte GIFs und Videos bleiben erhalten.",
   "home.showAll": "Alle im Ordner zeigen",
   "editor.exportProject": "Als Projekt exportieren (ZIP) – zum Weitergeben oder später Weiterbearbeiten; „Projekt öffnen“ liest es wieder ein",
-  "home.openFilter": "FrameNab-Projekt"
+  "home.openFilter": "FrameNab-Projekt",
+  "editor.overlays": "Einblendungen",
+  "editor.progressBar": "Fortschrittsbalken",
+  "editor.progressTop": "oben",
+  "editor.progressBottom": "unten",
+  "editor.progressHeight": "Höhe",
+  "editor.watermark": "Wasserzeichen",
+  "editor.watermarkPick": "Bild wählen …",
+  "editor.watermarkChange": "Anderes Bild …",
+  "editor.watermarkSize": "Größe",
+  "editor.watermarkOpacity": "Deckkraft",
+  "editor.watermarkRemove": "Entfernen",
+  "editor.anchorTopLeft": "oben links",
+  "editor.anchorTopRight": "oben rechts",
+  "editor.anchorBottomLeft": "unten links",
+  "editor.anchorBottomRight": "unten rechts",
+  "editor.anchorCenter": "Mitte"
 }
