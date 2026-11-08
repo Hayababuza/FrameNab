@@ -29,6 +29,9 @@
   let available = $state<ExportFormat[]>(["gif"]);
   const recordingLabels: Record<RecordingFormat, string> = {
     gif: "GIF",
+    apng: "APNG",
+    webp: "WebP",
+    pngSequence: "PNG (ZIP)",
     mp4: "MP4 (H.264)",
     webm: "WebM (VP9)",
   };

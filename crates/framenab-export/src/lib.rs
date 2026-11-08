@@ -4,6 +4,7 @@
 //! Still images: [`still`]; recordings: [`animation`] (GIF, MP4, WebM so far).
 
 pub mod animation;
+mod formats;
 pub mod still;
 
 use std::path::PathBuf;
@@ -42,20 +43,32 @@ impl ExportFormat {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GifOptions {
-    /// 1–100, passed through to gifski.
+/// Settings of an animation export (the export dialog).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ExportOptions {
+    /// 1–100: GIF quality (gifski), lossy WebP quality, video quality.
     pub quality: u8,
-    /// Lossy compression for smaller files (gifski `lossy_quality`).
-    pub lossy: Option<u8>,
-    /// Fixed repetitions; `None` = use the project's value.
+    /// GIF: lossy compression (smaller, slight noise); WebP: lossy instead of lossless (FFmpeg).
+    pub lossy: bool,
+    /// Repetitions of GIF/APNG/WebP (0 = forever); `None` = the project's value.
     pub loop_count: Option<u16>,
+    /// Output size relative to the project (0.1–1).
+    pub scale: f32,
 }
 
-impl Default for GifOptions {
+impl Default for ExportOptions {
     fn default() -> Self {
-        Self { quality: 90, lossy: None, loop_count: None }
+        Self { quality: 90, lossy: false, loop_count: None, scale: 1.0 }
+    }
+}
+
+impl ExportOptions {
+    /// Output size for a `width` × `height` project (at least 1 × 1).
+    #[must_use]
+    pub fn output_size(&self, width: u32, height: u32) -> (u32, u32) {
+        let s = if self.scale.is_finite() { self.scale.clamp(0.05, 1.0) } else { 1.0 };
+        (((width as f32 * s).round() as u32).max(1), ((height as f32 * s).round() as u32).max(1))
     }
 }
 

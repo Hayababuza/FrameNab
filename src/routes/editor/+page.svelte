@@ -11,6 +11,7 @@
   import { colors, type Tool, toolForKey, widths } from "$lib/annotations/tools";
   import AnnotationLayer from "$lib/components/AnnotationLayer.svelte";
   import AnnotationTools from "$lib/components/AnnotationTools.svelte";
+  import ExportDialog from "$lib/components/ExportDialog.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
     editorCancelExport,
@@ -42,10 +43,17 @@
   import { effectAnnotations } from "$lib/annotations/effects";
   import { progressAnnotation, watermarkRect } from "$lib/annotations/overlays";
   import type { Overlays } from "$lib/bindings/Overlays";
-  import { getSetting, type RecordingFormat } from "$lib/stores/settings";
+  import { getSetting, setSetting, type ExportOptions, type RecordingFormat } from "$lib/stores/settings";
 
   const THUMB_HEIGHT = 90;
-  const formatNames: Record<RecordingFormat, string> = { gif: "GIF", mp4: "MP4", webm: "WebM" };
+  const formatNames: Record<RecordingFormat, string> = {
+    gif: "GIF",
+    apng: "APNG",
+    webp: "WebP",
+    pngSequence: "PNG (ZIP)",
+    mp4: "MP4",
+    webm: "WebM",
+  };
 
   let view = $state<EditorView | null>(null);
   let current = $state(0);
@@ -54,6 +62,10 @@
   let playing = $state(false);
   let playTimer: ReturnType<typeof setTimeout> | undefined;
   let format = $state<RecordingFormat>("gif");
+  let exportOptions = $state<ExportOptions>({ quality: 90, lossy: false, loopCount: null, scale: 1 });
+  /** The export dialog is open. */
+  let exportDialog = $state(false);
+  let copied = $state(false);
   let progress = $state<[number, number] | null>(null);
   let saved = $state<string | null>(null);
   let error = $state<string | null>(null);
@@ -203,6 +215,7 @@
   onMount(() => {
     load();
     getSetting("recordingFormat").then((f) => (format = f));
+    getSetting("exportOptions").then((o) => (exportOptions = { ...exportOptions, ...o }));
     const unlisteners = [
       listen("editor-reload", () => {
         stop();
@@ -609,20 +622,42 @@
 
   // ---- saving --------------------------------------------------------------------------------
 
-  async function save(ask = false) {
+  /** Saves in the chosen (or last used) format; `ask` shows a "Save as" dialog first. */
+  async function save(ask = false, chosen?: RecordingFormat, options?: ExportOptions) {
     if (progress || !frames.length) return;
     stop();
     error = null;
     saved = null;
+    copied = false;
     progress = [0, frames.length];
     try {
-      const path = await editorExport(ask);
+      const path = await editorExport(ask, chosen ?? format, options ?? exportOptions);
       if (path) saved = path;
     } catch (e) {
       const message = String(e);
       if (!message.toLowerCase().includes("cancel")) error = message;
     } finally {
       progress = null;
+    }
+  }
+
+  /** The export dialog decided: remember the choice and save. */
+  function onexport(chosen: RecordingFormat, options: ExportOptions, ask: boolean) {
+    exportDialog = false;
+    format = chosen;
+    exportOptions = options;
+    setSetting("recordingFormat", chosen);
+    setSetting("exportOptions", options);
+    save(ask, chosen, options);
+  }
+
+  async function copyPath() {
+    if (!saved) return;
+    try {
+      await navigator.clipboard.writeText(saved);
+      copied = true;
+    } catch (e) {
+      error = String(e);
     }
   }
 
@@ -649,7 +684,7 @@
     const actions: [boolean, () => void][] = [
       [ctrl && key === "z", () => undo(e.shiftKey)],
       [ctrl && key === "y", () => undo(true)],
-      [ctrl && key === "s", () => save(e.shiftKey)],
+      [ctrl && key === "s", () => (e.shiftKey ? (exportDialog = true) : save())],
       [ctrl && key === "a", () => (selected = new Set(frames.map((_, i) => i)))],
       [ctrl && key === "d", () => duplicate()],
       [e.key === "Delete" || e.key === "Backspace", () => (selectedId ? deleteAnnotation() : deleteFrames())],
@@ -687,6 +722,17 @@
 </script>
 
 <svelte:window {onkeydown} onmousemove={ondragmove} onmouseup={enddrag} />
+
+{#if exportDialog && view}
+  <ExportDialog
+    {format}
+    options={exportOptions}
+    width={view.project.width}
+    height={view.project.height}
+    onsave={onexport}
+    oncancel={() => (exportDialog = false)}
+  />
+{/if}
 
 {#if !view}
   <p class="empty">{t("editor.empty")}</p>
@@ -825,7 +871,7 @@
           >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v12H4zM3 4h18v4H3zM10 12h4" /></svg>
           </button>
-          <button title={t("editor.saveAs")} onclick={() => save(true)}>
+          <button title={t("editor.saveAs")} onclick={() => (stop(), (exportDialog = true))}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
                 d="M11 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10l3 3v3M8 4v5h7V4M13 21l.5-3 5-5 2.5 2.5-5 5z"
@@ -1150,6 +1196,7 @@
       <div class="notice">
         <span>{t("editor.saved", { path: saved })}</span>
         <button onclick={() => saved && revealItemInDir(saved)}>{t("editor.openFolder")}</button>
+        <button onclick={copyPath}>{copied ? t("editor.copied") : t("editor.copyPath")}</button>
       </div>
     {/if}
     {#if error}

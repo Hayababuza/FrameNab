@@ -3,6 +3,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Annotation } from "$lib/bindings/Annotation";
 import type { Effects } from "$lib/bindings/Effects";
 import type { FrameOp } from "$lib/bindings/FrameOp";
+import type { ExportOptions } from "$lib/stores/settings";
 import type { Overlays } from "$lib/bindings/Overlays";
 import type { ImageOp } from "$lib/bindings/ImageOp";
 import type { TransitionOp } from "$lib/bindings/TransitionOp";
@@ -169,7 +170,11 @@ export const editorSetAnnotations = (annotations: Annotation[]) =>
   invoke<EditorView>("editor_set_annotations", { annotations });
 /** Saves the recording (into the save folder, or with `ask` via a "Save as" dialog); resolves to the
  * file path, or null if the dialog was cancelled. */
-export const editorExport = (ask = false) => invoke<string | null>("editor_export", { ask });
+export const editorExport = (ask = false, format?: ExportFormat, options?: ExportOptions) =>
+  invoke<string | null>("editor_export", { ask, format: format ?? null, options: options ?? null });
+/** Estimated file size in bytes of saving the open project. */
+export const editorEstimate = (format: ExportFormat, options: ExportOptions) =>
+  invoke<number>("editor_estimate", { format, options });
 export const editorCancelExport = () => invoke<void>("editor_cancel_export");
 /** Formats recordings can be saved in on this system (MP4/WebM need FFmpeg). */
 export const recordingFormats = () => invoke<ExportFormat[]>("recording_formats");

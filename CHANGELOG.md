@@ -5,6 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
+- Export (phase 4): new formats APNG, animated WebP (lossless built in; lossy through FFmpeg) and PNG sequence (ZIP), next to GIF, MP4 and WebM. "Save as…" (Ctrl+Shift+S) opens an export dialog with the format, quality, lossy compression (smaller GIFs via gifski, lossy WebP), repetitions, output size (10–100 %) and an estimate of the file size; the choice is remembered for the quick "Save". After saving, the path can be copied
 - Editor overlays: a progress bar along the top or bottom edge (height, color) that fills up over the animation, and a watermark image (PNG, JPEG, WebP …) in a corner or the center with size and opacity; shown in the preview and burned into the saved GIF/video; the image is kept in the project folder
 - Projects as ZIP: the editor exports the open project as `*.framenab.zip` (frames, annotations, effects, watermark); "Open project" and `framenab edit` read it back (also the `project.json` of a recording folder)
 - Recovery: while recording, the project is saved every 2 s; a recording interrupted by a crash is marked on the start page and recovered when opened

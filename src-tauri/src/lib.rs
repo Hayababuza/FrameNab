@@ -79,6 +79,7 @@ pub fn run() {
             editor::editor_export,
             editor::editor_cancel_export,
             editor::editor_export_project,
+            editor::editor_estimate,
             editor::recording_formats,
             editor::open_project,
             editor::recordings_directory,

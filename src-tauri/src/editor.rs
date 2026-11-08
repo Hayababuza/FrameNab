@@ -10,8 +10,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use framenab_core::{FrameOp, FrameStore, History, ImageOp, Project, TransitionOp, ops};
-use framenab_export::ExportFormat;
 use framenab_export::animation::{ExportControl, export_animation};
+use framenab_export::{ExportFormat, ExportOptions};
 use image::codecs::jpeg::JpegEncoder;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -320,25 +320,48 @@ pub fn editor_undo(app: AppHandle, redo: bool) -> Result<EditorView, String> {
 
 /// Settings key for the format of saved recordings.
 const FORMAT_KEY: &str = "recordingFormat";
+/// Settings key for the export options (quality, lossy, loops, scale).
+const OPTIONS_KEY: &str = "exportOptions";
 
-/// Saves the project as an animation: into the save folder in the format from the settings, or
-/// with `ask` wherever and in whatever format the user picks in a "Save as" dialog. Resolves to
-/// the path, or `None` if the dialog was cancelled. Progress goes to the editor window as
-/// `export-progress` events (`[done, total]`).
+/// Estimated file size in bytes of saving the open project in `format` with `options`.
 #[tauri::command]
-pub async fn editor_export(app: AppHandle, ask: bool) -> Result<Option<String>, String> {
+pub async fn editor_estimate(app: AppHandle, format: ExportFormat, options: ExportOptions) -> Result<u64, String> {
     let (store, project) = {
         let state = app.state::<EditorState>();
         let guard = state.lock();
         let open = guard.as_ref().ok_or("no project open")?;
         (open.store.clone(), open.project.clone())
     };
-    let format: ExportFormat = app
-        .store("settings.json")
-        .ok()
-        .and_then(|s| s.get(FORMAT_KEY))
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or(ExportFormat::Gif);
+    tauri::async_runtime::spawn_blocking(move || {
+        framenab_export::animation::estimate_size(&store, &project, format, &options)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())
+}
+
+/// Saves the project as an animation: into the save folder in the format from the settings, or
+/// with `ask` wherever and in whatever format the user picks in a "Save as" dialog. Resolves to
+/// the path, or `None` if the dialog was cancelled. Progress goes to the editor window as
+/// `export-progress` events (`[done, total]`).
+#[tauri::command]
+pub async fn editor_export(
+    app: AppHandle,
+    ask: bool,
+    format: Option<ExportFormat>,
+    options: Option<ExportOptions>,
+) -> Result<Option<String>, String> {
+    let (store, project) = {
+        let state = app.state::<EditorState>();
+        let guard = state.lock();
+        let open = guard.as_ref().ok_or("no project open")?;
+        (open.store.clone(), open.project.clone())
+    };
+    let saved = |key: &str| app.store("settings.json").ok().and_then(|s| s.get(key));
+    let format =
+        format.or_else(|| saved(FORMAT_KEY).and_then(|v| serde_json::from_value(v).ok())).unwrap_or(ExportFormat::Gif);
+    let options =
+        options.or_else(|| saved(OPTIONS_KEY).and_then(|v| serde_json::from_value(v).ok())).unwrap_or_default();
     let config = settings::save_settings(&app);
     let name = framenab_export::still::file_name_now(&config.template);
     let (path, format) = if ask {
@@ -373,7 +396,7 @@ pub async fn editor_export(app: AppHandle, ask: bool) -> Result<Option<String>, 
     let target = path.clone();
     let worker_control = control.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        export_animation(&store, &project, &target, format, &worker_control)
+        export_animation(&store, &project, &target, format, &options, &worker_control)
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -395,6 +418,9 @@ pub async fn editor_export(app: AppHandle, ask: bool) -> Result<Option<String>, 
 fn format_for_extension(ext: &str) -> Option<ExportFormat> {
     match ext.to_ascii_lowercase().as_str() {
         "gif" => Some(ExportFormat::Gif),
+        "png" | "apng" => Some(ExportFormat::Apng),
+        "webp" => Some(ExportFormat::Webp),
+        "zip" => Some(ExportFormat::PngSequence),
         "mp4" | "m4v" => Some(ExportFormat::Mp4),
         "webm" => Some(ExportFormat::Webm),
         _ => None,
@@ -423,8 +449,11 @@ async fn ask_path(
     for f in formats {
         let (label, extensions): (&str, &[&str]) = match f {
             ExportFormat::Gif => ("GIF", &["gif"]),
+            ExportFormat::Apng => ("APNG", &["png", "apng"]),
+            ExportFormat::Webp => ("WebP", &["webp"]),
+            ExportFormat::PngSequence => ("PNG (ZIP)", &["zip"]),
             ExportFormat::Mp4 => ("MP4 (H.264)", &["mp4"]),
-            _ => ("WebM (VP9)", &["webm"]),
+            ExportFormat::Webm => ("WebM (VP9)", &["webm"]),
         };
         dialog = dialog.add_filter(label, extensions);
     }
@@ -538,11 +567,7 @@ pub fn serve<R: tauri::Runtime>(app: &AppHandle<R>, path: &str) -> Option<Vec<u8
 /// Format names offered for recordings, so the settings page can show what works here.
 #[tauri::command]
 pub fn recording_formats() -> Vec<ExportFormat> {
-    let ffmpeg = framenab_export::find_ffmpeg().is_some();
-    [ExportFormat::Gif, ExportFormat::Mp4, ExportFormat::Webm]
-        .into_iter()
-        .filter(|f| ffmpeg || !f.requires_ffmpeg())
-        .collect()
+    framenab_export::available_formats()
 }
 
 /// "Open project" in the main window.

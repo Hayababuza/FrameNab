@@ -3,7 +3,19 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import type { Locale } from "$lib/i18n/translate";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
-export type RecordingFormat = "gif" | "mp4" | "webm";
+export type RecordingFormat = "gif" | "apng" | "webp" | "pngSequence" | "mp4" | "webm";
+
+/** Settings of an animation export (mirrors `framenab_export::ExportOptions`). */
+export interface ExportOptions {
+  /** 1–100 */
+  quality: number;
+  /** GIF: lossy compression; WebP: lossy instead of lossless (needs FFmpeg). */
+  lossy: boolean;
+  /** Repetitions of GIF/APNG/WebP (0 = forever); `null` = the project's value. */
+  loopCount: number | null;
+  /** Output size relative to the project (0.1–1). */
+  scale: number;
+}
 
 export interface Settings {
   /** `null` = system language */
@@ -23,6 +35,8 @@ export interface Settings {
   nativeWayland: boolean;
   /** Record clicks and key presses during recordings (for the click and key effects). */
   recordInput: boolean;
+  /** Last used export settings (also used by the quick "Save"). */
+  exportOptions: ExportOptions;
 }
 
 export const DEFAULT_TEMPLATE = "FrameNab_{yyyy-MM-dd_HH-mm-ss}";
@@ -38,6 +52,7 @@ const defaults: Settings = {
   recordingFormat: "gif",
   nativeWayland: false,
   recordInput: true,
+  exportOptions: { quality: 90, lossy: false, loopCount: null, scale: 1 },
 };
 
 let store: Promise<Store> | undefined;
