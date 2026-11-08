@@ -160,5 +160,18 @@
   "editor.rotateRight": "Rotate 90° right",
   "editor.flipH": "Flip horizontally",
   "editor.flipV": "Flip vertically",
-  "editor.imageProgress": "Processing images … {done}/{total}"
+  "editor.imageProgress": "Processing images … {done}/{total}",
+  "editor.transition": "Transition",
+  "editor.transitionAfter": "After frame {n}",
+  "editor.transitionFade": "Fade",
+  "editor.transitionColor": "Fade to color",
+  "editor.transitionSlide": "Slide",
+  "editor.transitionFrames": "Frames",
+  "editor.transitionDuration": "Duration",
+  "editor.transitionInsert": "Insert",
+  "editor.transitionHint": "Inserts frames between this frame and the next one (after the last: back to the first).",
+  "editor.dirLeft": "left",
+  "editor.dirRight": "right",
+  "editor.dirUp": "up",
+  "editor.dirDown": "down"
 }

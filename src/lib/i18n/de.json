@@ -160,5 +160,18 @@
   "editor.rotateRight": "90° nach rechts drehen",
   "editor.flipH": "Horizontal spiegeln",
   "editor.flipV": "Vertikal spiegeln",
-  "editor.imageProgress": "Bilder werden bearbeitet … {done}/{total}"
+  "editor.imageProgress": "Bilder werden bearbeitet … {done}/{total}",
+  "editor.transition": "Übergang",
+  "editor.transitionAfter": "Nach Frame {n}",
+  "editor.transitionFade": "Überblenden",
+  "editor.transitionColor": "Zu Farbe überblenden",
+  "editor.transitionSlide": "Schieben",
+  "editor.transitionFrames": "Frames",
+  "editor.transitionDuration": "Dauer",
+  "editor.transitionInsert": "Einfügen",
+  "editor.transitionHint": "Fügt Frames zwischen diesem und dem nächsten Frame ein (nach dem letzten: zurück zum ersten).",
+  "editor.dirLeft": "nach links",
+  "editor.dirRight": "nach rechts",
+  "editor.dirUp": "nach oben",
+  "editor.dirDown": "nach unten"
 }

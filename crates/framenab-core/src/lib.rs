@@ -10,6 +10,7 @@ pub mod model;
 pub mod ops;
 pub mod recorder;
 pub mod store;
+pub mod transitions;
 
 pub use error::{CoreError, Result};
 pub use history::History;
@@ -18,3 +19,4 @@ pub use input::{Effects, InputEvents};
 pub use model::*;
 pub use ops::FrameOp;
 pub use store::FrameStore;
+pub use transitions::TransitionOp;

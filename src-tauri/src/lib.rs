@@ -68,6 +68,7 @@ pub fn run() {
             editor::editor_view,
             editor::editor_frames,
             editor::editor_image,
+            editor::editor_transition,
             editor::editor_undo,
             editor::editor_set_annotations,
             editor::editor_input,

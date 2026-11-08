@@ -17,6 +17,7 @@
     editorExport,
     editorFrames,
     editorImage,
+    editorTransition,
     editorInput,
     editorSetAnnotations,
     editorSetEffects,
@@ -32,6 +33,7 @@
   import type { FrameOp } from "$lib/bindings/FrameOp";
   import type { ImageOp } from "$lib/bindings/ImageOp";
   import type { Rect } from "$lib/bindings/Rect";
+  import type { Direction } from "$lib/bindings/Direction";
   import type { InputEvents } from "$lib/bindings/InputEvents";
   import { effectAnnotations } from "$lib/annotations/effects";
   import { getSetting, type RecordingFormat } from "$lib/stores/settings";
@@ -58,7 +60,13 @@
   /** Moving the selected frames by dragging one of them; `active` once the mouse really moved. */
   let moveDrag = $state<{ from: number; startX: number; x: number; active: boolean } | null>(null);
   /** Open tool panel below the toolbar. */
-  let panel = $state<"timing" | "cleanup" | "image" | null>(null);
+  type Panel = "timing" | "cleanup" | "image" | "transition";
+  let panel = $state<Panel | null>(null);
+  let transitionKind = $state<"fade" | "fadeToColor" | "slide">("fade");
+  let transitionColor = $state("#000000");
+  let transitionDirection = $state<Direction>("left");
+  let transitionFrames = $state(10);
+  let transitionDuration = $state(500);
   /** Crop mode: the area to keep. */
   let crop = $state<Rect | null>(null);
   let resizeW = $state(0);
@@ -454,7 +462,51 @@
     resizeH = Math.max(1, Math.round((view.project.height * percent) / 100));
   }
 
-  function togglePanel(name: "timing" | "cleanup" | "image") {
+  /** Transitions go after the last selected frame, or after the current one. */
+  const transitionAfter = $derived(selected.size ? Math.max(...selected) : current);
+
+  function insertTransition() {
+    const n = Math.round(transitionFrames);
+    if (!(n >= 1)) return;
+    const hex = transitionColor;
+    const color = {
+      r: parseInt(hex.slice(1, 3), 16),
+      g: parseInt(hex.slice(3, 5), 16),
+      b: parseInt(hex.slice(5, 7), 16),
+      a: 255,
+    };
+    const transition =
+      transitionKind === "fade"
+        ? ({ type: "fade" } as const)
+        : transitionKind === "fadeToColor"
+          ? ({ type: "fadeToColor", color } as const)
+          : ({ type: "slide", direction: transitionDirection } as const);
+    const after = transitionAfter;
+    transitionOp(
+      { after, transition, frames: n, durationMs: Math.max(n, Math.round(transitionDuration)) },
+      Array.from({ length: n }, (_, k) => after + 1 + k),
+    );
+  }
+
+  async function transitionOp(op: Parameters<typeof editorTransition>[0], select: number[]) {
+    if (busy) return;
+    stop();
+    busy = true;
+    error = null;
+    info = null;
+    try {
+      view = await editorTransition(op);
+      selected = new Set(select);
+      anchor = select[0] ?? 0;
+      goTo(select[0] ?? current);
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function togglePanel(name: Panel) {
     panel = panel === name ? null : name;
     crop = null;
     if (panel === "image") resetResize();
@@ -649,6 +701,12 @@
         >
         {t("editor.image")}
       </button>
+      <button class:active={panel === "transition"} onclick={() => togglePanel("transition")}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"
+          ><path d="M3 5h8v14H3zM13 5h8v14h-8" opacity="0.5" /><path d="M9 12h6M13 9l3 3-3 3" /></svg
+        >
+        {t("editor.transition")}
+      </button>
       <span
         class="info"
         title={t("editor.info", {
@@ -766,6 +824,39 @@
           >
           <button onclick={setSpeed} disabled={busy} title={t("editor.speedHint")}
             >{t("editor.speedApply")}</button
+          >
+        {:else if panel === "transition"}
+          <span class="target" title={t("editor.transitionHint")}
+            >{t("editor.transitionAfter", { n: transitionAfter + 1 })}</span
+          >
+          <select bind:value={transitionKind}>
+            <option value="fade">{t("editor.transitionFade")}</option>
+            <option value="fadeToColor">{t("editor.transitionColor")}</option>
+            <option value="slide">{t("editor.transitionSlide")}</option>
+          </select>
+          {#if transitionKind === "fadeToColor"}
+            <input class="color" type="color" bind:value={transitionColor} />
+          {:else if transitionKind === "slide"}
+            <select bind:value={transitionDirection}>
+              <option value="left">← {t("editor.dirLeft")}</option>
+              <option value="right">→ {t("editor.dirRight")}</option>
+              <option value="up">↑ {t("editor.dirUp")}</option>
+              <option value="down">↓ {t("editor.dirDown")}</option>
+            </select>
+          {/if}
+          <label
+            >{t("editor.transitionFrames")}
+            <input type="number" min="1" max="120" bind:value={transitionFrames} /></label
+          >
+          <label
+            >{t("editor.transitionDuration")}
+            <input type="number" min="10" max="10000" step="50" bind:value={transitionDuration} /> ms</label
+          >
+          <button
+            class="primary"
+            onclick={insertTransition}
+            disabled={busy || !(transitionFrames >= 1 && transitionFrames <= 120)}
+            title={t("editor.transitionHint")}>{t("editor.transitionInsert")}</button
           >
         {:else if panel === "image" && crop}
           <span class="target">{t("editor.cropHint")}</span>
@@ -1339,6 +1430,19 @@
     background: var(--bg);
     color: inherit;
     font: inherit;
+  }
+  .panel select {
+    height: 30px;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: inherit;
+    font: inherit;
+  }
+  .panel input.color {
+    width: 36px;
+    padding: 2px;
   }
   .panel .target {
     color: var(--text-muted);

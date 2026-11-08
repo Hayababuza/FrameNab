@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use framenab_core::{FrameOp, FrameStore, History, ImageOp, Project, ops};
+use framenab_core::{FrameOp, FrameStore, History, ImageOp, Project, TransitionOp, ops};
 use framenab_export::ExportFormat;
 use framenab_export::animation::{ExportControl, export_animation};
 use image::codecs::jpeg::JpegEncoder;
@@ -119,31 +119,26 @@ pub fn editor_view(app: AppHandle) -> Option<EditorView> {
     app.state::<EditorState>().lock().as_ref().map(view)
 }
 
-/// Applies a frame operation (delete, duplicate, reverse, timing …). Runs off the main thread:
-/// removing similar frames loads and compares every image.
-#[tauri::command]
-pub async fn editor_frames(app: AppHandle, op: FrameOp) -> Result<EditorView, String> {
-    if let FrameOp::Delete { frames } = &op {
-        let len = app.state::<EditorState>().lock().as_ref().map_or(0, |o| o.project.frames.len());
-        if frames.len() >= len {
-            return Err("at least one frame has to stay".into());
-        }
-    }
+/// Runs `change` on a copy of the open project off the main thread (it may load and write
+/// frame images), then takes the result over as one undoable edit.
+async fn background_edit(
+    app: &AppHandle,
+    change: impl FnOnce(&FrameStore, &mut Project) -> framenab_core::Result<()> + Send + 'static,
+) -> Result<EditorView, String> {
     let (store, before) = {
         let state = app.state::<EditorState>();
         let guard = state.lock();
         let open = guard.as_ref().ok_or("no project open")?;
         (open.store.clone(), open.project.clone())
     };
-    let changed = tauri::async_runtime::spawn_blocking(move || {
+    let (before, project) = tauri::async_runtime::spawn_blocking(move || {
         let mut project = before.clone();
-        ops::apply(&mut project, &op, |frame| store.load_frame(frame)).map(|()| (before, project))
+        change(&store, &mut project).map(|()| (before, project))
     })
     .await
     .map_err(|e| e.to_string())?
     .map_err(|e| e.to_string())?;
-    let (before, project) = changed;
-    edit(&app, move |p| {
+    edit(app, move |p| {
         // Only if nothing else changed the project meanwhile.
         if *p != before {
             return Err(framenab_core::CoreError::Busy);
@@ -153,17 +148,29 @@ pub async fn editor_frames(app: AppHandle, op: FrameOp) -> Result<EditorView, St
     })
 }
 
-/// Crops, resizes, rotates or flips every frame. Writes new frame files in the background;
-/// progress goes to the editor as `image-progress` events (`[done, total]`).
+/// Applies a frame operation (delete, duplicate, reverse, timing …). Removing similar frames
+/// loads and compares every image.
+#[tauri::command]
+pub async fn editor_frames(app: AppHandle, op: FrameOp) -> Result<EditorView, String> {
+    if let FrameOp::Delete { frames } = &op {
+        let len = app.state::<EditorState>().lock().as_ref().map_or(0, |o| o.project.frames.len());
+        if frames.len() >= len {
+            return Err("at least one frame has to stay".into());
+        }
+    }
+    background_edit(&app, move |store, project| ops::apply(project, &op, |frame| store.load_frame(frame))).await
+}
+
+/// Crops, resizes, rotates or flips every frame. Progress goes to the editor as
+/// `image-progress` events (`[done, total]`).
 #[tauri::command]
 pub async fn editor_image(app: AppHandle, op: ImageOp) -> Result<EditorView, String> {
-    let (store, before) = {
+    let total = {
         let state = app.state::<EditorState>();
         let guard = state.lock();
         let open = guard.as_ref().ok_or("no project open")?;
-        (open.store.clone(), open.project.clone())
+        open.project.frames.iter().map(|f| &f.file).collect::<std::collections::HashSet<_>>().len()
     };
-    let total = before.frames.iter().map(|f| &f.file).collect::<std::collections::HashSet<_>>().len();
     let done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let ticker = {
         let (app, done) = (app.clone(), std::sync::Arc::clone(&done));
@@ -179,22 +186,20 @@ pub async fn editor_image(app: AppHandle, op: ImageOp) -> Result<EditorView, Str
         })
     };
     let worker_done = std::sync::Arc::clone(&done);
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let mut project = before.clone();
-        framenab_core::image_ops::apply_image_op(&store, &mut project, &op, &worker_done).map(|()| (before, project))
+    let result = background_edit(&app, move |store, project| {
+        framenab_core::image_ops::apply_image_op(store, project, &op, &worker_done)
     })
-    .await
-    .map_err(|e| e.to_string());
+    .await;
     done.store(total, Ordering::Relaxed);
     let _ = ticker.await;
-    let (before, project) = result?.map_err(|e| e.to_string())?;
-    edit(&app, move |p| {
-        if *p != before {
-            return Err(framenab_core::CoreError::Busy);
-        }
-        *p = project;
-        Ok(())
-    })
+    result
+}
+
+/// Inserts transition frames (fade, slide) after a frame.
+#[tauri::command]
+pub async fn editor_transition(app: AppHandle, op: TransitionOp) -> Result<EditorView, String> {
+    background_edit(&app, move |store, project| framenab_core::transitions::insert_transition(store, project, &op))
+        .await
 }
 
 /// The input recorded with the open project (mouse, clicks, keys) for the effect preview.

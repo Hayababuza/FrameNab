@@ -4,6 +4,7 @@ import type { Annotation } from "$lib/bindings/Annotation";
 import type { Effects } from "$lib/bindings/Effects";
 import type { FrameOp } from "$lib/bindings/FrameOp";
 import type { ImageOp } from "$lib/bindings/ImageOp";
+import type { TransitionOp } from "$lib/bindings/TransitionOp";
 import type { InputEvents } from "$lib/bindings/InputEvents";
 import type { Project } from "$lib/bindings/Project";
 
@@ -160,6 +161,8 @@ export const editorView = () => invoke<EditorView | null>("editor_view");
 export const editorFrames = (op: FrameOp) => invoke<EditorView>("editor_frames", { op });
 /** Crops, resizes, rotates or flips all frames (progress: `image-progress` events). */
 export const editorImage = (op: ImageOp) => invoke<EditorView>("editor_image", { op });
+/** Inserts transition frames (fade, slide) after a frame. */
+export const editorTransition = (op: TransitionOp) => invoke<EditorView>("editor_transition", { op });
 export const editorUndo = (redo = false) => invoke<EditorView>("editor_undo", { redo });
 export const editorSetAnnotations = (annotations: Annotation[]) =>
   invoke<EditorView>("editor_set_annotations", { annotations });
