@@ -25,6 +25,12 @@ pub fn choose_backend() {
         let forced = std::env::var_os("GDK_BACKEND").is_some();
         if wayland_session && x_available && !forced && !native_wayland_preferred() {
             gtk::gdk::set_allowed_backends("x11");
+            // GTK 3's XInput2 smooth scrolling loses most mouse wheel events under XWayland: the
+            // web views only scrolled with the pointer near the scrollbar. Core X events deliver
+            // every wheel step (touchpads then scroll in steps instead of smoothly).
+            if std::env::var_os("GDK_CORE_DEVICE_EVENTS").is_none() {
+                let _ = gtk::glib::setenv("GDK_CORE_DEVICE_EVENTS", "1", false);
+            }
             XWAYLAND.store(true, Ordering::SeqCst);
         }
     }

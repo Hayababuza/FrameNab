@@ -15,6 +15,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Recovery: while recording, the project is saved every 2 s; a recording interrupted by a crash is marked on the start page and recovered when opened
 - Start page: the latest recordings with date, frames, length and size; open them with a click, delete them, or show the recordings folder
 
+### Fixed
+- Wayland (XWayland mode): the mouse wheel only scrolled with the pointer near the scrollbar; GTK now gets core X events (`GDK_CORE_DEVICE_EVENTS=1`), so every wheel step arrives
+
 ### Changed
 - Better contrast (WCAG AA) of buttons and links in the accent color, in light and dark mode
 - Tauri 2.12 (Rust crates now match the JavaScript packages; minimum Rust version 1.90)
