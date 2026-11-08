@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use framenab_core::{FrameOp, FrameStore, History, Project, ops};
+use framenab_core::{FrameOp, FrameStore, History, ImageOp, Project, ops};
 use framenab_export::ExportFormat;
 use framenab_export::animation::{ExportControl, export_animation};
 use image::codecs::jpeg::JpegEncoder;
@@ -153,13 +153,57 @@ pub async fn editor_frames(app: AppHandle, op: FrameOp) -> Result<EditorView, St
     })
 }
 
+/// Crops, resizes, rotates or flips every frame. Writes new frame files in the background;
+/// progress goes to the editor as `image-progress` events (`[done, total]`).
+#[tauri::command]
+pub async fn editor_image(app: AppHandle, op: ImageOp) -> Result<EditorView, String> {
+    let (store, before) = {
+        let state = app.state::<EditorState>();
+        let guard = state.lock();
+        let open = guard.as_ref().ok_or("no project open")?;
+        (open.store.clone(), open.project.clone())
+    };
+    let total = before.frames.iter().map(|f| &f.file).collect::<std::collections::HashSet<_>>().len();
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let ticker = {
+        let (app, done) = (app.clone(), std::sync::Arc::clone(&done));
+        tauri::async_runtime::spawn(async move {
+            loop {
+                let n = done.load(Ordering::Relaxed).min(total);
+                let _ = app.emit_to(LABEL, "image-progress", (n, total));
+                if n >= total {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(150)).await;
+            }
+        })
+    };
+    let worker_done = std::sync::Arc::clone(&done);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let mut project = before.clone();
+        framenab_core::image_ops::apply_image_op(&store, &mut project, &op, &worker_done).map(|()| (before, project))
+    })
+    .await
+    .map_err(|e| e.to_string());
+    done.store(total, Ordering::Relaxed);
+    let _ = ticker.await;
+    let (before, project) = result?.map_err(|e| e.to_string())?;
+    edit(&app, move |p| {
+        if *p != before {
+            return Err(framenab_core::CoreError::Busy);
+        }
+        *p = project;
+        Ok(())
+    })
+}
+
 /// The input recorded with the open project (mouse, clicks, keys) for the effect preview.
 #[tauri::command]
 pub fn editor_input(app: AppHandle) -> Result<framenab_core::InputEvents, String> {
     let state = app.state::<EditorState>();
     let guard = state.lock();
     let open = guard.as_ref().ok_or("no project open")?;
-    open.store.load_input().map_err(|e| e.to_string())
+    open.store.load_input().map(|input| input.transformed(&open.project.input_transform)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

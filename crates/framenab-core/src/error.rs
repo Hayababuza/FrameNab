@@ -20,6 +20,8 @@ pub enum CoreError {
     UnsupportedVersion(u32),
     #[error("The project was changed in the meantime, please try again")]
     Busy,
+    #[error("Invalid image operation (outside the image or size out of range)")]
+    InvalidImageOp,
 }
 
 pub type Result<T, E = CoreError> = std::result::Result<T, E>;

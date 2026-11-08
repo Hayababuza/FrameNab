@@ -148,5 +148,17 @@
   "editor.remove": "Remove",
   "editor.working": "Working …",
   "editor.removed": "{n} frames removed.",
-  "editor.hintMove": "Click a frame to select · Shift/Ctrl+click for more · Drag selected frames to move them · Del deletes"
+  "editor.hintMove": "Click a frame to select · Shift/Ctrl+click for more · Drag selected frames to move them · Del deletes",
+  "editor.image": "Image",
+  "editor.cropStart": "Crop …",
+  "editor.cropHint": "Drag a frame in the preview, move it or drag its corners",
+  "editor.cropApply": "Crop",
+  "editor.resizeLabel": "Size",
+  "editor.keepAspect": "Keep aspect ratio",
+  "editor.resizeApply": "Resize",
+  "editor.rotateLeft": "Rotate 90° left",
+  "editor.rotateRight": "Rotate 90° right",
+  "editor.flipH": "Flip horizontally",
+  "editor.flipV": "Flip vertically",
+  "editor.imageProgress": "Processing images … {done}/{total}"
 }

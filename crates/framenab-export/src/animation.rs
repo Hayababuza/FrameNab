@@ -85,7 +85,11 @@ pub fn export_animation(
     if project.frames.is_empty() {
         return Err(ExportError::Empty);
     }
-    let input = if project.effects.any() { store.load_input()? } else { InputEvents::default() };
+    let input = if project.effects.any() {
+        store.load_input()?.transformed(&project.input_transform)
+    } else {
+        InputEvents::default()
+    };
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|source| ExportError::Io { path: parent.to_owned(), source })?;
     }

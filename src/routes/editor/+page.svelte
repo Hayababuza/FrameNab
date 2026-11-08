@@ -16,6 +16,7 @@
     editorCancelExport,
     editorExport,
     editorFrames,
+    editorImage,
     editorInput,
     editorSetAnnotations,
     editorSetEffects,
@@ -29,6 +30,8 @@
   } from "$lib/ipc";
   import type { Effects } from "$lib/bindings/Effects";
   import type { FrameOp } from "$lib/bindings/FrameOp";
+  import type { ImageOp } from "$lib/bindings/ImageOp";
+  import type { Rect } from "$lib/bindings/Rect";
   import type { InputEvents } from "$lib/bindings/InputEvents";
   import { effectAnnotations } from "$lib/annotations/effects";
   import { getSetting, type RecordingFormat } from "$lib/stores/settings";
@@ -55,7 +58,13 @@
   /** Moving the selected frames by dragging one of them; `active` once the mouse really moved. */
   let moveDrag = $state<{ from: number; startX: number; x: number; active: boolean } | null>(null);
   /** Open tool panel below the toolbar. */
-  let panel = $state<"timing" | "cleanup" | null>(null);
+  let panel = $state<"timing" | "cleanup" | "image" | null>(null);
+  /** Crop mode: the area to keep. */
+  let crop = $state<Rect | null>(null);
+  let resizeW = $state(0);
+  let resizeH = $state(0);
+  let keepAspect = $state(true);
+  let imageProgress = $state<[number, number] | null>(null);
   /** A frame operation is running (removing similar frames can take a while). */
   let busy = $state(false);
   let info = $state<string | null>(null);
@@ -187,6 +196,9 @@
         current = 0;
         saved = null;
         load();
+      }),
+      listen<[number, number]>("image-progress", (e) => {
+        if (imageProgress) imageProgress = e.payload;
       }),
       listen<[number, number]>("export-progress", (e) => {
         if (progress) progress = e.payload;
@@ -378,6 +390,76 @@
       ]);
   }
 
+  /** Crops, resizes, rotates or flips all frames. */
+  async function imageOp(op: ImageOp) {
+    if (busy || !view) return;
+    stop();
+    busy = true;
+    error = null;
+    info = null;
+    imageProgress = [0, frames.length];
+    try {
+      view = await editorImage(op);
+      crop = null;
+      // The effect positions follow the new image.
+      input = await editorInput().catch(() => input);
+      resetResize();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+      imageProgress = null;
+    }
+  }
+
+  function startCrop() {
+    if (!view) return;
+    stop();
+    const { width: w, height: h } = view.project;
+    crop = { x: Math.round(w * 0.1), y: Math.round(h * 0.1), w: Math.round(w * 0.8), h: Math.round(h * 0.8) };
+  }
+
+  function applyCrop() {
+    if (!crop || !view) return;
+    const x = Math.max(0, Math.round(crop.x));
+    const y = Math.max(0, Math.round(crop.y));
+    const width = Math.min(view.project.width - x, Math.round(crop.w));
+    const height = Math.min(view.project.height - y, Math.round(crop.h));
+    if (width >= 1 && height >= 1) imageOp({ type: "crop", x, y, width, height });
+  }
+
+  function resetResize() {
+    if (!view) return;
+    resizeW = view.project.width;
+    resizeH = view.project.height;
+  }
+
+  /** Changing one side keeps the aspect ratio if wanted. */
+  function resizeSide(side: "w" | "h", value: number) {
+    if (!view || !(value > 0)) return;
+    const ratio = view.project.width / view.project.height;
+    if (side === "w") {
+      resizeW = value;
+      if (keepAspect) resizeH = Math.max(1, Math.round(value / ratio));
+    } else {
+      resizeH = value;
+      if (keepAspect) resizeW = Math.max(1, Math.round(value * ratio));
+    }
+  }
+
+  /** Fills in a size of `percent` % of the current one. */
+  function scaleTo(percent: number) {
+    if (!view) return;
+    resizeW = Math.max(1, Math.round((view.project.width * percent) / 100));
+    resizeH = Math.max(1, Math.round((view.project.height * percent) / 100));
+  }
+
+  function togglePanel(name: "timing" | "cleanup" | "image") {
+    panel = panel === name ? null : name;
+    crop = null;
+    if (panel === "image") resetResize();
+  }
+
   /** Index where dragged frames would be inserted (0..=len), for the mouse at screen x. */
   function dropIndexAt(x: number) {
     if (!strip) return 0;
@@ -455,7 +537,14 @@
       [e.key === "End", () => (stop(), goTo(frames.length - 1))],
       [
         e.key === "Escape",
-        () => (panel ? (panel = null) : selectedId ? (selectedId = null) : (selected = new Set())),
+        () =>
+          crop
+            ? (crop = null)
+            : panel
+              ? (panel = null)
+              : selectedId
+                ? (selectedId = null)
+                : (selected = new Set()),
       ],
       [!ctrl && !e.altKey && !!toolForKey(key), () => (tool = toolForKey(key)!)],
     ];
@@ -540,25 +629,25 @@
           ><path d="M4 12a6 6 0 0 1 10.5-4M20 12a6 6 0 0 1-10.5 4M14 4l1 4-4 1M10 20l-1-4 4-1" /></svg
         >
       </button>
-      <button
-        class:active={panel === "timing"}
-        onclick={() => (panel = panel === "timing" ? null : "timing")}
-      >
+      <button class:active={panel === "timing"} onclick={() => togglePanel("timing")}>
         <svg viewBox="0 0 24 24" aria-hidden="true"
           ><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2 2M10 2h4" /></svg
         >
         {t("editor.timing")}
       </button>
-      <button
-        class:active={panel === "cleanup"}
-        onclick={() => (panel = panel === "cleanup" ? null : "cleanup")}
-      >
+      <button class:active={panel === "cleanup"} onclick={() => togglePanel("cleanup")}>
         <svg viewBox="0 0 24 24" aria-hidden="true"
           ><path
             d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"
           /></svg
         >
         {t("editor.cleanup")}
+      </button>
+      <button class:active={panel === "image"} onclick={() => togglePanel("image")}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"
+          ><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14" /></svg
+        >
+        {t("editor.image")}
       </button>
       <span
         class="info"
@@ -576,41 +665,44 @@
           h: view.project.height,
         })}
       </span>
-      <span class="spacer"></span>
-      <button
-        title={t("editor.newRecording")}
-        onclick={() => (stop(), runAction("record"))}
-        disabled={!!progress}
-      >
-        <span class="rec-dot"></span>
-        {t("editor.newRecording")}
-      </button>
-      {#if progress}
-        <span class="progress">
-          <span class="bar"
-            ><span style:width="{(progress[0] / Math.max(1, progress[1])) * 100}%"></span></span
-          >
-          {t("editor.saving", { done: progress[0], total: progress[1] })}
-        </span>
-        <button onclick={() => editorCancelExport()}>{t("editor.cancel")}</button>
-      {:else}
-        <button title={t("editor.saveAs")} onclick={() => save(true)}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M11 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10l3 3v3M8 4v5h7V4M13 21l.5-3 5-5 2.5 2.5-5 5z" />
-          </svg>
-          {t("editor.saveAs").replace(/ \(.*\)$/, "")}
-        </button>
+      <div class="actions">
         <button
-          class="primary"
-          title={t("editor.save", { format: formatNames[format] })}
-          onclick={() => save()}
+          title={t("editor.newRecording")}
+          onclick={() => (stop(), runAction("record"))}
+          disabled={!!progress}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 4v5h7V4M8 20v-6h8v6" />
-          </svg>
-          {t("editor.save", { format: formatNames[format] }).replace(/ \(.*\)$/, "")}
+          <span class="rec-dot"></span>
+          {t("editor.newRecording")}
         </button>
-      {/if}
+        {#if progress}
+          <span class="progress">
+            <span class="bar"
+              ><span style:width="{(progress[0] / Math.max(1, progress[1])) * 100}%"></span></span
+            >
+            {t("editor.saving", { done: progress[0], total: progress[1] })}
+          </span>
+          <button onclick={() => editorCancelExport()}>{t("editor.cancel")}</button>
+        {:else}
+          <button title={t("editor.saveAs")} onclick={() => save(true)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M11 20H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10l3 3v3M8 4v5h7V4M13 21l.5-3 5-5 2.5 2.5-5 5z"
+              />
+            </svg>
+            {t("editor.saveAs").replace(/ \(.*\)$/, "")}
+          </button>
+          <button
+            class="primary"
+            title={t("editor.save", { format: formatNames[format] })}
+            onclick={() => save()}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 4v5h7V4M8 20v-6h8v6" />
+            </svg>
+            {t("editor.save", { format: formatNames[format] }).replace(/ \(.*\)$/, "")}
+          </button>
+        {/if}
+      </div>
     </header>
 
     <div class="annotate">
@@ -675,6 +767,94 @@
           <button onclick={setSpeed} disabled={busy} title={t("editor.speedHint")}
             >{t("editor.speedApply")}</button
           >
+        {:else if panel === "image" && crop}
+          <span class="target">{t("editor.cropHint")}</span>
+          <label>X <input type="number" min="0" max={view.project.width - 1} bind:value={crop.x} /></label>
+          <label>Y <input type="number" min="0" max={view.project.height - 1} bind:value={crop.y} /></label>
+          <label
+            >{t("editor.resizeLabel")}
+            <input type="number" min="1" max={view.project.width} bind:value={crop.w} /> ×
+            <input type="number" min="1" max={view.project.height} bind:value={crop.h} /></label
+          >
+          <button class="primary" onclick={applyCrop} disabled={busy}>{t("editor.cropApply")}</button>
+          <button onclick={() => (crop = null)}>{t("editor.cancel")}</button>
+        {:else if panel === "image"}
+          <button onclick={startCrop} disabled={busy}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"
+              ><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14" /></svg
+            >
+            {t("editor.cropStart")}
+          </button>
+          <span class="sep"></span>
+          <label
+            >{t("editor.resizeLabel")}
+            <input
+              type="number"
+              min="1"
+              max="8192"
+              value={resizeW}
+              oninput={(e) => resizeSide("w", e.currentTarget.valueAsNumber)}
+            />
+            ×
+            <input
+              type="number"
+              min="1"
+              max="8192"
+              value={resizeH}
+              oninput={(e) => resizeSide("h", e.currentTarget.valueAsNumber)}
+            /> px</label
+          >
+          <label class="check"
+            ><input type="checkbox" bind:checked={keepAspect} /> {t("editor.keepAspect")}</label
+          >
+          {#each [50, 75] as percent (percent)}
+            <button onclick={() => scaleTo(percent)}>{percent} %</button>
+          {/each}
+          <button
+            onclick={() =>
+              imageOp({ type: "resize", width: Math.round(resizeW), height: Math.round(resizeH) })}
+            disabled={busy ||
+              !(resizeW >= 1 && resizeH >= 1) ||
+              (resizeW === view.project.width && resizeH === view.project.height)}
+            >{t("editor.resizeApply")}</button
+          >
+          <span class="sep"></span>
+          <button
+            class="icon"
+            title={t("editor.rotateLeft")}
+            aria-label={t("editor.rotateLeft")}
+            onclick={() => imageOp({ type: "rotate", clockwise: false })}
+            disabled={busy}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v5h5M4.5 9A8 8 0 1 1 6 17" /></svg>
+          </button>
+          <button
+            class="icon"
+            title={t("editor.rotateRight")}
+            aria-label={t("editor.rotateRight")}
+            onclick={() => imageOp({ type: "rotate", clockwise: true })}
+            disabled={busy}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4v5h-5M19.5 9A8 8 0 1 0 18 17" /></svg>
+          </button>
+          <button
+            class="icon"
+            title={t("editor.flipH")}
+            aria-label={t("editor.flipH")}
+            onclick={() => imageOp({ type: "flip", horizontal: true })}
+            disabled={busy}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M9 7L3 17h6zM15 7l6 10h-6z" /></svg>
+          </button>
+          <button
+            class="icon"
+            title={t("editor.flipV")}
+            aria-label={t("editor.flipV")}
+            onclick={() => imageOp({ type: "flip", horizontal: false })}
+            disabled={busy}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M7 9L17 3v6zM7 15l10 6v-6z" /></svg>
+          </button>
         {:else}
           <label title={t("editor.similarHint")}
             >{t("editor.similarLabel")}
@@ -696,7 +876,13 @@
             title={t("editor.nthHint")}>{t("editor.remove")}</button
           >
         {/if}
-        {#if busy}<span class="target">{t("editor.working")}</span>{/if}
+        {#if imageProgress}
+          <span class="target"
+            >{t("editor.imageProgress", { done: imageProgress[0], total: imageProgress[1] })}</span
+          >
+        {:else if busy}
+          <span class="target">{t("editor.working")}</span>
+        {/if}
       </div>
     {/if}
     {#if info}
@@ -727,7 +913,8 @@
           bind:selectedId
           readonly={playing}
           onchange={setAnnotations}
-          extra={fx}
+          extra={crop ? [] : fx}
+          bind:crop
         />
       {/if}
     </main>
@@ -873,6 +1060,15 @@
   .transport {
     border-top: 1px solid var(--border);
     border-bottom: none;
+  }
+  header {
+    flex-wrap: wrap;
+  }
+  /* Recording and saving stay together on the right, also when the toolbar wraps. */
+  .actions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
   }
   header button {
     flex: none;

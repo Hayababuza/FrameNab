@@ -51,6 +51,22 @@ impl InputEvents {
         self.cursor.is_empty() && self.clicks.is_empty() && self.keys.is_empty()
     }
 
+    /// The events with positions mapped through `t` (see [`Project::input_transform`]).
+    #[must_use]
+    pub fn transformed(&self, t: &crate::Transform) -> Self {
+        let mut out = self.clone();
+        if t.is_identity() {
+            return out;
+        }
+        for s in &mut out.cursor {
+            Point { x: s.x, y: s.y } = t.apply(Point { x: s.x, y: s.y });
+        }
+        for c in &mut out.clicks {
+            Point { x: c.x, y: c.y } = t.apply(Point { x: c.x, y: c.y });
+        }
+        out
+    }
+
     /// Mouse position at time `t` (interpolated between samples).
     #[must_use]
     pub fn cursor_at(&self, t: u64) -> Option<Point> {

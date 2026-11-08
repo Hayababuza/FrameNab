@@ -148,5 +148,17 @@
   "editor.remove": "Entfernen",
   "editor.working": "Wird bearbeitet …",
   "editor.removed": "{n} Frames entfernt.",
-  "editor.hintMove": "Frame anklicken zum Auswählen · Umschalt/Strg+Klick für mehrere · Ausgewählte Frames ziehen zum Verschieben · Entf löscht"
+  "editor.hintMove": "Frame anklicken zum Auswählen · Umschalt/Strg+Klick für mehrere · Ausgewählte Frames ziehen zum Verschieben · Entf löscht",
+  "editor.image": "Bild",
+  "editor.cropStart": "Zuschneiden …",
+  "editor.cropHint": "Rahmen in der Vorschau aufziehen, verschieben oder an den Ecken ziehen",
+  "editor.cropApply": "Zuschneiden",
+  "editor.resizeLabel": "Größe",
+  "editor.keepAspect": "Seitenverhältnis",
+  "editor.resizeApply": "Ändern",
+  "editor.rotateLeft": "90° nach links drehen",
+  "editor.rotateRight": "90° nach rechts drehen",
+  "editor.flipH": "Horizontal spiegeln",
+  "editor.flipV": "Vertikal spiegeln",
+  "editor.imageProgress": "Bilder werden bearbeitet … {done}/{total}"
 }

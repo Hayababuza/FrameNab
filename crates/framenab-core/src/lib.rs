@@ -4,6 +4,7 @@
 
 pub mod error;
 pub mod history;
+pub mod image_ops;
 pub mod input;
 pub mod model;
 pub mod ops;
@@ -12,6 +13,7 @@ pub mod store;
 
 pub use error::{CoreError, Result};
 pub use history::History;
+pub use image_ops::{ImageOp, Transform};
 pub use input::{Effects, InputEvents};
 pub use model::*;
 pub use ops::FrameOp;

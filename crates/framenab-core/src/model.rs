@@ -27,6 +27,11 @@ pub struct Project {
     /// Input effects burned into the result (recordings only).
     #[serde(default)]
     pub effects: crate::Effects,
+    /// Maps the recorded input (in pixels of the original recording) onto the frames after
+    /// cropping, resizing, rotating …
+    #[serde(default, skip_serializing_if = "crate::Transform::is_identity")]
+    #[ts(as = "Option<crate::Transform>", optional)]
+    pub input_transform: crate::Transform,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -216,6 +221,7 @@ impl Project {
             loop_count: 0,
             next_frame_id: 0,
             effects: crate::Effects::default(),
+            input_transform: crate::Transform::IDENTITY,
         }
     }
 

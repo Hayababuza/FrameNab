@@ -2,6 +2,7 @@
 import type { Annotation } from "./Annotation";
 import type { Effects } from "./Effects";
 import type { Frame } from "./Frame";
+import type { Transform } from "./Transform";
 
 export type Project = { version: number, width: number, height: number, frames: Array<Frame>, annotations: Array<Annotation>, 
 /**
@@ -15,4 +16,9 @@ nextFrameId: number,
 /**
  * Input effects burned into the result (recordings only).
  */
-effects: Effects, };
+effects: Effects, 
+/**
+ * Maps the recorded input (in pixels of the original recording) onto the frames after
+ * cropping, resizing, rotating …
+ */
+inputTransform?: Transform, };

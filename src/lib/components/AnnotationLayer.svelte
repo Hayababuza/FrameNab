@@ -7,6 +7,7 @@
   import { onMount, tick } from "svelte";
   import type { Annotation } from "$lib/bindings/Annotation";
   import type { Point } from "$lib/bindings/Point";
+  import type { Rect } from "$lib/bindings/Rect";
   import type { Rgba } from "$lib/bindings/Rgba";
   import { hitTest, LINE_HEIGHT, translateShape } from "$lib/annotations/geometry";
   import { drawAnnotation, drawSelectionFrame, FONT_FAMILY } from "$lib/annotations/render";
@@ -38,6 +39,8 @@
     readonly?: boolean;
     /** Drawn on top, not editable (input effects). */
     extra?: Annotation[];
+    /** Crop mode: the area to keep (image pixels); dragging edits it instead of annotations. */
+    crop?: Rect | null;
     onchange: (annotations: Annotation[]) => void;
   }
 
@@ -54,6 +57,7 @@
     selectedId = $bindable(),
     readonly = false,
     extra = [],
+    crop = $bindable(null),
     onchange,
   }: Props = $props();
 
@@ -65,6 +69,7 @@
   let drag:
     | { kind: "draw"; start: Point; points: Point[] }
     | { kind: "move"; id: string; last: Point; moved: boolean }
+    | { kind: "crop"; mode: "new" | "move" | "corner"; anchor: Point; start: Rect; from: Point }
     | null = null;
   /** While dragging an annotation, its moved copy (committed on release). */
   let moving = $state<Annotation[] | null>(null);
@@ -87,7 +92,7 @@
   });
 
   $effect(() => {
-    void [image, shown, draft, selectedId, fit, box, extra];
+    void [image, shown, draft, selectedId, fit, box, extra, crop?.x, crop?.y, crop?.w, crop?.h];
     draw();
   });
 
@@ -109,8 +114,88 @@
     for (const a of extra) drawAnnotation(ctx, a);
     if (draft) drawAnnotation(ctx, draft);
     const selected = shown.find((a) => a.id === selectedId);
-    if (selected) drawSelectionFrame(ctx, selected, 1 / fit.k);
+    if (selected && !crop) drawSelectionFrame(ctx, selected, 1 / fit.k);
     ctx.restore();
+    if (crop) drawCrop(ctx, crop);
+  }
+
+  /** Dims everything outside the crop area and draws its frame, corner handles and size. */
+  function drawCrop(ctx: CanvasRenderingContext2D, r: Rect) {
+    const x = fit.x + r.x * fit.k;
+    const y = fit.y + r.y * fit.k;
+    const w = r.w * fit.k;
+    const h = r.h * fit.k;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.beginPath();
+    ctx.rect(0, 0, box.w, box.h);
+    ctx.rect(x, y, w, h);
+    ctx.fill("evenodd");
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#fff";
+    for (const [cx, cy] of corners(r)) {
+      ctx.fillRect(fit.x + cx * fit.k - 5, fit.y + cy * fit.k - 5, 10, 10);
+    }
+    const label = `${Math.round(r.w)} × ${Math.round(r.h)}`;
+    ctx.font = "12px sans-serif";
+    const lw = ctx.measureText(label).width + 10;
+    const ly = y > 24 ? y - 22 : y + 4;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillRect(x, ly, lw, 18);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(label, x + 5, ly + 13);
+  }
+
+  const corners = (r: Rect): [number, number][] => [
+    [r.x, r.y],
+    [r.x + r.w, r.y],
+    [r.x, r.y + r.h],
+    [r.x + r.w, r.y + r.h],
+  ];
+
+  const clampX = (v: number) => Math.max(0, Math.min(width, v));
+  const clampY = (v: number) => Math.max(0, Math.min(height, v));
+
+  /** Rect spanned by two points, inside the image, in whole pixels. */
+  function span(a: Point, b: Point): Rect {
+    const x0 = Math.round(clampX(Math.min(a.x, b.x)));
+    const y0 = Math.round(clampY(Math.min(a.y, b.y)));
+    const x1 = Math.round(clampX(Math.max(a.x, b.x)));
+    const y1 = Math.round(clampY(Math.max(a.y, b.y)));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  function cropDown(p: Point) {
+    if (!crop) return;
+    const near = 10 / fit.k;
+    const corner = corners(crop).findIndex(
+      ([cx, cy]) => Math.abs(p.x - cx) < near && Math.abs(p.y - cy) < near,
+    );
+    if (corner >= 0) {
+      // The opposite corner stays where it is.
+      const [ox, oy] = corners(crop)[3 - corner];
+      drag = { kind: "crop", mode: "corner", anchor: { x: ox, y: oy }, start: { ...crop }, from: p };
+    } else if (p.x > crop.x && p.x < crop.x + crop.w && p.y > crop.y && p.y < crop.y + crop.h) {
+      drag = { kind: "crop", mode: "move", anchor: p, start: { ...crop }, from: p };
+    } else {
+      drag = { kind: "crop", mode: "new", anchor: p, start: { ...crop }, from: p };
+    }
+  }
+
+  function cropMove(p: Point) {
+    if (drag?.kind !== "crop") return;
+    if (drag.mode === "move") {
+      const { start } = drag;
+      const x = Math.round(Math.max(0, Math.min(width - start.w, start.x + p.x - drag.from.x)));
+      const y = Math.round(Math.max(0, Math.min(height - start.h, start.y + p.y - drag.from.y)));
+      crop = { ...start, x, y };
+    } else {
+      const next = span(drag.anchor, p);
+      if (next.w >= 1 && next.h >= 1) crop = next;
+    }
   }
 
   onMount(() => draw());
@@ -144,7 +229,9 @@
     if (textEdit) return commitText();
     const p = toImage(e);
     canvas.setPointerCapture(e.pointerId);
-    if (tool === "select") {
+    if (crop) {
+      cropDown(p);
+    } else if (tool === "select") {
       const hit = annotationAt(p);
       selectedId = hit?.id ?? null;
       if (hit) drag = { kind: "move", id: hit.id, last: p, moved: false };
@@ -162,7 +249,9 @@
   function onpointermove(e: PointerEvent) {
     if (!drag) return;
     const p = toImage(e);
-    if (drag.kind === "draw") {
+    if (drag.kind === "crop") {
+      cropMove(p);
+    } else if (drag.kind === "draw") {
       drag.points.push(p);
       const shape = shapeFromDrag(tool, drag.start, p, [...drag.points], strokeWidth);
       draft = shape ? create(shape) : null;
@@ -190,7 +279,7 @@
 
   function ondblclick(e: MouseEvent) {
     // Double-click a text to edit it.
-    const hit = tool === "select" ? annotationAt(toImage(e)) : undefined;
+    const hit = tool === "select" && !crop ? annotationAt(toImage(e)) : undefined;
     if (hit?.shape.type !== "text") return;
     onchange(annotations.filter((a) => a.id !== hit.id));
     selectedId = null;
@@ -224,7 +313,15 @@
   }
 
   const cursor = $derived(
-    readonly ? "default" : tool === "select" ? "default" : tool === "text" ? "text" : "crosshair",
+    crop
+      ? "crosshair"
+      : readonly
+        ? "default"
+        : tool === "select"
+          ? "default"
+          : tool === "text"
+            ? "text"
+            : "crosshair",
   );
 </script>
 

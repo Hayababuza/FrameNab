@@ -61,12 +61,23 @@ impl FrameStore {
             });
         }
         let id = project.allocate_frame_id();
-        let file = format!("{FRAMES_DIR}/{id}.qoi");
-        let path = self.root.join(&file);
-        let bytes = qoi::encode_to_vec(image.as_raw(), image.width(), image.height())?;
-        fs::write(&path, bytes).at(&path)?;
+        let file = self.frame_file_name(&id);
+        self.write_image(&file, image)?;
         project.frames.push(Frame { id, file, delay_ms: delay_ms.max(1), time_ms: None });
         Ok(project.frames.last().expect("just pushed"))
+    }
+
+    /// Relative file name for a new frame with `id`.
+    #[must_use]
+    pub fn frame_file_name(&self, id: &str) -> String {
+        format!("{FRAMES_DIR}/{id}.qoi")
+    }
+
+    /// Writes an image to the frame file `file` (relative to the project folder).
+    pub fn write_image(&self, file: &str, image: &RgbaImage) -> Result<()> {
+        let path = self.root.join(file);
+        let bytes = qoi::encode_to_vec(image.as_raw(), image.width(), image.height())?;
+        fs::write(&path, bytes).at(&path)
     }
 
     /// Loads the pixel data of a frame.
