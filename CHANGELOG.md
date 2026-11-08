@@ -5,6 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
+- Updates: FrameNab checks the GitHub releases at startup (can be switched off) and in Settings → Updates; an available version is installed with one click (signed packages, also for `.deb`/`.rpm` and the AppImage) and the app restarts
 - Installers: release workflow (`v*` tag) that builds `.exe`/`.msi` for Windows, a universal `.dmg` for macOS and `.deb`/`.rpm`/`.AppImage` for Linux into a draft GitHub release; package metadata (publisher, license, description, PipeWire dependency, per-user Windows setup in English and German)
 - App icon: viewfinder corners with a red record dot (replaces the Tauri default icon)
 - Settings: appearance (system, light, dark) for all windows including the title bars; start with the system (in the tray, via the autostart plugin); configurable global shortcuts for screenshot and recording (click and press the keys, Del switches off, shortcuts taken by other programs are reported); on Wayland the page shows the commands to bind in the system settings instead

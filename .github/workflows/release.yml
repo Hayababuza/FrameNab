@@ -63,6 +63,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update packages; the public key is in tauri.conf.json (plugins.updater).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: FrameNab ${{ github.ref_name }}
@@ -77,4 +80,5 @@ jobs:
             MP4/WebM export and lossy WebP need an installed FFmpeg.
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          # Update packages + latest.json only here, so local `tauri build` works without the key.
+          args: ${{ matrix.args }} --config src-tauri/tauri.release.conf.json

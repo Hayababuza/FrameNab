@@ -58,6 +58,8 @@ git tag -a v0.4.0 -m "FrameNab 0.4.0" && git push && git push --tags
 
 The [release workflow](.github/workflows/release.yml) builds the installers for all three systems and attaches them to a **draft** release; check it on GitHub and publish it.
 
+Update packages are signed in the workflow with the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (`src-tauri/tauri.release.conf.json` switches them on); the matching public key is in `src-tauri/tauri.conf.json`. Installed apps find new versions through `latest.json` of the newest published release.
+
 ### Commands
 
 | Command | Purpose |

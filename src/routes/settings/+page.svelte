@@ -18,6 +18,8 @@
     type HotkeyProblem,
   } from "$lib/ipc";
   import ShortcutField from "$lib/components/ShortcutField.svelte";
+  import UpdateNotice from "$lib/components/UpdateNotice.svelte";
+  import { findUpdate, type Update } from "$lib/updater";
   import {
     DEFAULT_HOTKEYS,
     DEFAULT_TEMPLATE,
@@ -38,6 +40,15 @@
 
   let locale = $state<Locale | "system">("system");
   let theme = $state<Theme>("system");
+  let updateCheck = $state(true);
+  let version = $state("");
+  let updateState = $state<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "none" }
+    | { kind: "found"; update: Update }
+    | { kind: "error"; error: string }
+  >({ kind: "idle" });
   let hotkeys = $state({ ...DEFAULT_HOTKEYS } as { screenshot: string | null; record: string | null });
   let hotkeyProblems = $state<HotkeyProblem[]>([]);
   let autostart = $state(false);
@@ -73,6 +84,8 @@
     useXwayland = !(await getSetting("nativeWayland"));
     locale = (await getSetting("locale")) ?? "system";
     theme = await getSetting("theme");
+    updateCheck = await getSetting("updateCheck");
+    version = (await appInfo()).version;
     hotkeys = await getSetting("hotkeys");
     autostart = await autostartEnabled().catch(() => false);
     saveDirectory = await getSetting("saveDirectory");
@@ -94,6 +107,16 @@
     hotkeys = { ...hotkeys, [action]: value };
     await setSetting("hotkeys", hotkeys);
     hotkeyProblems = await applyHotkeys();
+  }
+
+  async function checkUpdate() {
+    updateState = { kind: "checking" };
+    try {
+      const update = await findUpdate();
+      updateState = update ? { kind: "found", update } : { kind: "none" };
+    } catch (e) {
+      updateState = { kind: "error", error: String(e) };
+    }
   }
 
   async function changeTheme() {
@@ -177,6 +200,37 @@
       {/if}
     </section>
   {/if}
+
+  <h2>{t("settings.updates")}</h2>
+  <section>
+    <label class="row">
+      <span>{t("settings.updateAuto")}</span>
+      <input
+        type="checkbox"
+        bind:checked={updateCheck}
+        onchange={() => setSetting("updateCheck", updateCheck)}
+      />
+    </label>
+    <div class="row">
+      <span>
+        {#if updateState.kind === "checking"}
+          {t("settings.updateChecking")}
+        {:else if updateState.kind === "none"}
+          {t("settings.updateNone", { version })}
+        {:else if updateState.kind === "error"}
+          {t("settings.updateError", { error: updateState.error })}
+        {:else}
+          FrameNab {version}
+        {/if}
+      </span>
+      <button onclick={checkUpdate} disabled={updateState.kind === "checking"}
+        >{t("settings.updateCheck")}</button
+      >
+    </div>
+    {#if updateState.kind === "found"}
+      <div class="row"><UpdateNotice update={updateState.update} /></div>
+    {/if}
+  </section>
 
   <h2>{t("settings.hotkeys")}</h2>
   <section>

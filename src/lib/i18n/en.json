@@ -240,5 +240,16 @@
   "settings.hotkeyHelp": "Click and press the keys; Del switches the shortcut off.",
   "settings.hotkeyReset": "Default",
   "settings.hotkeyTaken": "“{shortcut}” does not work ({error}) – another program probably uses it.",
-  "settings.hotkeysWayland": "On Wayland the system assigns shortcuts. In the system settings (GNOME: Keyboard → Keyboard Shortcuts → Custom Shortcuts) add a shortcut with this command:"
+  "settings.hotkeysWayland": "On Wayland the system assigns shortcuts. In the system settings (GNOME: Keyboard → Keyboard Shortcuts → Custom Shortcuts) add a shortcut with this command:",
+  "update.available": "FrameNab {version} is available.",
+  "update.install": "Update now",
+  "update.downloading": "Downloading …",
+  "update.progress": "Downloading … {percent} %",
+  "update.failed": "Update failed: {error}",
+  "settings.updates": "Updates",
+  "settings.updateAuto": "Check for updates at startup",
+  "settings.updateCheck": "Check now",
+  "settings.updateChecking": "Checking …",
+  "settings.updateNone": "You have the newest version ({version}).",
+  "settings.updateError": "The check did not work: {error}"
 }

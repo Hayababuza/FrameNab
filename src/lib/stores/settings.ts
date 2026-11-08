@@ -39,6 +39,8 @@ export interface Settings {
   recordInput: boolean;
   /** Last used export settings (also used by the quick "Save"). */
   exportOptions: ExportOptions;
+  /** Check for a new version when the app starts. */
+  updateCheck: boolean;
   /** Global shortcuts as accelerators (`Shift+PrintScreen`); `null` = off. Not on Wayland. */
   hotkeys: { screenshot: string | null; record: string | null };
 }
@@ -61,6 +63,7 @@ const defaults: Settings = {
   recordInput: true,
   exportOptions: { quality: 90, lossy: false, loopCount: null, scale: 1 },
   hotkeys: { ...DEFAULT_HOTKEYS },
+  updateCheck: true,
 };
 
 let store: Promise<Store> | undefined;

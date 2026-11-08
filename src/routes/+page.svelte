@@ -18,6 +18,8 @@
     type RecentProject,
   } from "$lib/ipc";
   import { getSetting } from "$lib/stores/settings";
+  import UpdateNotice from "$lib/components/UpdateNotice.svelte";
+  import { findUpdate, type Update } from "$lib/updater";
 
   let info = $state<AppInfo>();
   let saveDirectory = $state("");
@@ -39,12 +41,18 @@
   }
 
   let recent = $state<RecentProject[]>([]);
+  let update = $state<Update | null>(null);
   const loadRecent = () => recentProjects(6).then((list) => (recent = list));
 
   async function removeRecording(path: string) {
     if (!(await ask(t("home.deleteConfirm"), { kind: "warning" }))) return;
     await deleteProject(path).catch(() => {});
     loadRecent();
+    // Once per start, a few seconds in (not in development builds).
+    if (!import.meta.env.DEV)
+      setTimeout(async () => {
+        if (await getSetting("updateCheck")) update = await findUpdate().catch(() => null);
+      }, 4000);
   }
 
   const duration = (ms: number) => {
@@ -125,6 +133,10 @@
       </button>
     {/each}
   </section>
+
+  {#if update}
+    <UpdateNotice {update} />
+  {/if}
 
   {#if recent.length}
     <section class="recent">

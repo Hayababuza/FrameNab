@@ -240,5 +240,16 @@
   "settings.hotkeyHelp": "Klicken und die Tasten drücken; Entf schaltet das Kürzel ab.",
   "settings.hotkeyReset": "Standard",
   "settings.hotkeyTaken": "„{shortcut}“ funktioniert nicht ({error}) – vermutlich belegt ein anderes Programm das Kürzel.",
-  "settings.hotkeysWayland": "Unter Wayland vergibt das System die Kürzel. Lege in den Systemeinstellungen (GNOME: Tastatur → Tastenkürzel → Eigene Tastenkürzel) ein Kürzel mit diesem Befehl an:"
+  "settings.hotkeysWayland": "Unter Wayland vergibt das System die Kürzel. Lege in den Systemeinstellungen (GNOME: Tastatur → Tastenkürzel → Eigene Tastenkürzel) ein Kürzel mit diesem Befehl an:",
+  "update.available": "FrameNab {version} ist verfügbar.",
+  "update.install": "Jetzt aktualisieren",
+  "update.downloading": "Wird heruntergeladen …",
+  "update.progress": "Wird heruntergeladen … {percent} %",
+  "update.failed": "Aktualisieren fehlgeschlagen: {error}",
+  "settings.updates": "Updates",
+  "settings.updateAuto": "Beim Start nach Updates suchen",
+  "settings.updateCheck": "Jetzt suchen",
+  "settings.updateChecking": "Suche …",
+  "settings.updateNone": "Du hast die neueste Version ({version}).",
+  "settings.updateError": "Die Suche hat nicht geklappt: {error}"
 }

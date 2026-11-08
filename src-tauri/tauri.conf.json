@@ -64,5 +64,14 @@
     "macOS": {
       "minimumSystemVersion": "11.0"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY3MkEwQ0ZBMTIzMkI1MEEKUldRS3RUSVMrZ3dxWnoveWpzZDVJVk1kL2RBUnJpclViRW8zR3BhbDlKOU5QZTBDSkU2L2ZMTkYK",
+      "endpoints": ["https://github.com/Hayababuza/FrameNab/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
