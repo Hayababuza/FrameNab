@@ -226,6 +226,13 @@ export interface HotkeyProblem {
 /** Registers the shortcuts saved in the settings; returns the ones that did not work. */
 export const applyHotkeys = () => invoke<HotkeyProblem[]>("apply_hotkeys");
 
+/** Windows only: whether Windows takes the Print Screen key for its own screen capture. */
+export const printScreenOwner = () => invoke<"windows" | "free" | null>("print_screen_owner");
+/** Windows only: hands the Print Screen key to FrameNab (after signing in again). */
+export const releasePrintScreen = () => invoke<void>("release_print_screen");
+/** Opens the Windows keyboard settings with the Print Screen option. */
+export const openPrintScreenSettings = () => invoke<void>("open_print_screen_settings");
+
 /** How many recordings (and bytes) are older than `days`. */
 export const oldRecordings = (days: number) =>
   invoke<{ count: number; bytes: number }>("old_recordings", { days });

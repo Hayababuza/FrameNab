@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- Windows 11: Settings → Shortcuts notices when Windows takes the Print Screen key for its own screen capture (Snipping Tool) and offers to hand it to FrameNab (switches that Windows option off for the current user, effective after signing in again) or to open the Windows setting
+
 ## [0.4.2] - 2026-11-12
 
 ### Fixed

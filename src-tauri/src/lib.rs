@@ -12,6 +12,7 @@ mod hotkeys;
 mod i18n;
 mod logging;
 mod pin;
+mod printscreen;
 mod recorder;
 mod settings;
 mod tray;
@@ -61,6 +62,9 @@ pub fn run() {
             commands::app_info,
             commands::run_action,
             hotkeys::apply_hotkeys,
+            printscreen::print_screen_owner,
+            printscreen::release_print_screen,
+            printscreen::open_print_screen_settings,
             capture::capture_info,
             capture::copy_selection,
             capture::save_selection,

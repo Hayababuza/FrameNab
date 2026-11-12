@@ -46,6 +46,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
 
+[target.'cfg(windows)'.dependencies]
+windows-registry = "0.6.1"
+
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 arboard = { version = "3.7.0", default-features = false, features = ["image-data"] }
 

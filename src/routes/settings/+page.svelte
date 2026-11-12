@@ -14,7 +14,10 @@
     defaultSaveDirectory,
     inputSupport,
     oldRecordings,
+    openPrintScreenSettings,
+    printScreenOwner,
     recordingFormats,
+    releasePrintScreen,
     type ExportFormat,
     type HotkeyProblem,
   } from "$lib/ipc";
@@ -55,6 +58,12 @@
   >({ kind: "idle" });
   let hotkeys = $state({ ...DEFAULT_HOTKEYS } as { screenshot: string | null; record: string | null });
   let hotkeyProblems = $state<HotkeyProblem[]>([]);
+  /** Windows 11 takes the Print Screen key; `released`: switched off, effective after signing in. */
+  let printScreen = $state<"windows" | "free" | "released" | null>(null);
+  let printScreenError = $state<string | null>(null);
+  const usesPrintScreen = $derived(
+    [hotkeys.screenshot, hotkeys.record].some((h) => h?.split("+").includes("PrintScreen")),
+  );
   let autostart = $state(false);
   let saveDirectory = $state<string | null>(null);
   let defaultDirectory = $state("");
@@ -92,6 +101,7 @@
     cleanup = await getSetting("recordingCleanup");
     version = (await appInfo()).version;
     hotkeys = await getSetting("hotkeys");
+    printScreen = await printScreenOwner().catch(() => null);
     autostart = await autostartEnabled().catch(() => false);
     saveDirectory = await getSetting("saveDirectory");
     template = await getSetting("filenameTemplate");
@@ -112,6 +122,16 @@
     hotkeys = { ...hotkeys, [action]: value };
     await setSetting("hotkeys", hotkeys);
     hotkeyProblems = await applyHotkeys();
+  }
+
+  async function releaseKey() {
+    printScreenError = null;
+    try {
+      await releasePrintScreen();
+      printScreen = "released";
+    } catch (e) {
+      printScreenError = String(e);
+    }
   }
 
   // Show how many recordings the chosen age affects, so nothing disappears by surprise.
@@ -286,6 +306,19 @@
           {t("settings.hotkeyTaken", { shortcut: problem.shortcut, error: problem.error })}
         </p>
       {/each}
+      {#if usesPrintScreen && printScreen === "windows"}
+        <p class="help warn">{t("settings.printScreenTaken")}</p>
+        <div class="row">
+          <span></span>
+          <div class="dir">
+            <button onclick={releaseKey}>{t("settings.printScreenRelease")}</button>
+            <button onclick={() => openPrintScreenSettings()}>{t("settings.printScreenSettings")}</button>
+          </div>
+        </div>
+        {#if printScreenError}<p class="help warn">{printScreenError}</p>{/if}
+      {:else if printScreen === "released"}
+        <p class="help">{t("settings.printScreenReleased")}</p>
+      {/if}
     {/if}
   </section>
 
