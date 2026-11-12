@@ -4,6 +4,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-12
+
+### Fixed
+- Windows: windows opened from the tray menu, a global shortcut or a second launch (e.g. Settings) stayed blank, could not be closed and froze the app; these actions now run asynchronously as well, as WebView2 requires
+
 ## [0.4.1] - 2026-11-12
 
 ### Added
@@ -96,7 +101,8 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/Hayababuza/FrameNab/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/Hayababuza/FrameNab/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Hayababuza/FrameNab/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Hayababuza/FrameNab/compare/v0.1.0...v0.3.0
