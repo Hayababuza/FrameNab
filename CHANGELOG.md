@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-12
+
 ### Added
 - Settings → Saving: delete old recordings automatically (off by default) after 1, 7, 14, 30 or 90 days without changes, at startup and every 6 hours; the recording open in the editor and a running one are kept, saved GIFs/videos are not touched; the page shows how many recordings (and how much space) the chosen age affects
 
@@ -94,7 +96,8 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Hayababuza/FrameNab/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Hayababuza/FrameNab/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Hayababuza/FrameNab/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/Hayababuza/FrameNab/releases/tag/v0.1.0

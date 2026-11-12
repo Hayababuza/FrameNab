@@ -73,10 +73,11 @@ jobs:
             What is new: see [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md).
 
             **Downloads**
-            - Windows: `FrameNab_*_x64-setup.exe` (or the `.msi`)
-            - macOS (Apple Silicon and Intel): `FrameNab_*_universal.dmg` — the app is not notarized yet: right-click → Open the first time
+            - Windows: `FrameNab_*_x64-setup.exe` (or the `.msi`) — not code-signed yet: if Windows shows "Windows protected your PC", click "More info" → "Run anyway"
+            - macOS (Apple Silicon and Intel): `FrameNab_*_universal.dmg` — the app is not notarized yet: right-click → Open the first time (macOS 15+: System Settings → Privacy & Security → Open Anyway)
             - Linux: `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE) or `.AppImage` (any distribution)
 
+            Quit a running FrameNab (tray → Quit) before installing by hand; the built-in updater restarts it by itself.
             MP4/WebM export and lossy WebP need an installed FFmpeg.
           releaseDraft: true
           prerelease: false
