@@ -26,6 +26,11 @@ pub enum CaptureError {
     NotImplemented(Platform),
     #[error("The user denied screen sharing")]
     PermissionDenied,
+    /// The portal refused without asking. GNOME only lets the focused app show its access
+    /// dialog ("Allow … to take screenshots?"), so the request has to be repeated while a
+    /// FrameNab window has the focus.
+    #[error("The system did not allow the screenshot")]
+    AccessRequired,
     #[error("Monitor {0} not found")]
     MonitorNotFound(u32),
     #[error("Capture error: {0}")]

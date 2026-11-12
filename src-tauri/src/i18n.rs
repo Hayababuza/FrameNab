@@ -54,6 +54,34 @@ pub fn t(key: &str) -> &'static str {
                 "Save screenshot"
             }
         }
+        "capture.accessExplain" => {
+            if de {
+                "Das System fragt gleich einmalig, ob FrameNab Bildschirmfotos aufnehmen darf. Bitte dort „Erlauben“ wählen – danach fragt es nicht mehr."
+            } else {
+                "The system is about to ask once whether FrameNab may take screenshots. Please choose \"Allow\" there – it will not ask again."
+            }
+        }
+        "capture.accessContinue" => {
+            if de {
+                "Weiter"
+            } else {
+                "Continue"
+            }
+        }
+        "capture.accessCancel" => {
+            if de {
+                "Abbrechen"
+            } else {
+                "Cancel"
+            }
+        }
+        "capture.accessDenied" => {
+            if de {
+                "Das System hat Bildschirmfotos für FrameNab nicht erlaubt. In den GNOME-Einstellungen unter Apps → FrameNab lässt sich das ändern."
+            } else {
+                "The system did not allow screenshots for FrameNab. This can be changed in the GNOME Settings under Apps → FrameNab."
+            }
+        }
         "capture.failed" => {
             if de {
                 "Der Screenshot konnte nicht aufgenommen werden."

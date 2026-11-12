@@ -51,6 +51,7 @@ pub(crate) fn runtime() -> Result<&'static tokio::runtime::Runtime> {
 pub(crate) fn map_err(err: ashpd::Error) -> CaptureError {
     match err {
         ashpd::Error::Response(ashpd::desktop::ResponseError::Cancelled) => CaptureError::PermissionDenied,
+        ashpd::Error::Response(ashpd::desktop::ResponseError::Other) => CaptureError::AccessRequired,
         other => CaptureError::Backend(other.to_string()),
     }
 }

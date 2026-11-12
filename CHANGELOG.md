@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Fixed
+- Installed app on GNOME: the first screenshot failed ("Portal request didn't succeed") because GNOME only lets the focused app ask for the screenshot permission; FrameNab now comes to the front, explains the system question and asks again, so the permission is granted once and stored
+
 ## [0.4.0] - 2026-11-08
 
 Export (phase 4) and polish (phase 5): more formats with an export dialog, overlays, project archives, crash recovery, settings for appearance, autostart and shortcuts, installers for every system and automatic updates.

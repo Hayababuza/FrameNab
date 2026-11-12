@@ -96,13 +96,21 @@ pub fn start(app: &AppHandle, hide: Option<String>, mode: CaptureMode) {
         let hidden = hide.filter(|label| windows::hide_window(&app, label));
         let delay = hidden.is_some();
         app.state::<CaptureState>().restore.set(hidden);
+        let app_for_access = app.clone();
         let result = tauri::async_runtime::spawn_blocking(move || {
             if delay {
                 // Give the compositor time to actually remove the window from the screen.
                 std::thread::sleep(Duration::from_millis(300));
             }
             let backend = framenab_capture::backend();
-            let image = backend.screenshot(&CaptureTarget::AllMonitors)?;
+            let image = match backend.screenshot(&CaptureTarget::AllMonitors) {
+                Err(CaptureError::AccessRequired) => {
+                    request_access(&app_for_access)?;
+                    std::thread::sleep(Duration::from_millis(300));
+                    backend.screenshot(&CaptureTarget::AllMonitors)?
+                }
+                other => other?,
+            };
             // Window frames are in desktop coordinates; the image starts at the desktop's top-left.
             let (min_x, min_y, _, _) =
                 framenab_capture::bounds(&backend.monitors().unwrap_or_default()).unwrap_or_default();
@@ -146,6 +154,36 @@ pub fn start(app: &AppHandle, hide: Option<String>, mode: CaptureMode) {
             }
         }
     });
+}
+
+/// The first screenshot of the installed app on GNOME: the system asks once whether FrameNab may
+/// take screenshots, but only lets the focused app ask. Brings FrameNab to the front, explains
+/// what comes next (the click on OK gives it the focus), asks through the portal while it is
+/// focused, and hides it again. Afterwards the permission is stored and no dialog appears.
+fn request_access(app: &AppHandle) -> Result<(), CaptureError> {
+    use tauri_plugin_dialog::MessageDialogButtons;
+
+    tracing::info!("screenshot permission missing; asking with FrameNab in front");
+    windows::show_main(app);
+    let mut dialog =
+        app.dialog().message(t("capture.accessExplain")).title("FrameNab").kind(MessageDialogKind::Info).buttons(
+            MessageDialogButtons::OkCancelCustom(t("capture.accessContinue").into(), t("capture.accessCancel").into()),
+        );
+    if let Some(main) = app.get_webview_window(windows::MAIN) {
+        dialog = dialog.parent(&main);
+    }
+    if !dialog.blocking_show() {
+        let _ = windows::hide_window(app, windows::MAIN);
+        return Err(CaptureError::PermissionDenied);
+    }
+    // While FrameNab has the focus, the portal may show its access dialog.
+    let granted = framenab_capture::backend().screenshot(&CaptureTarget::AllMonitors);
+    let _ = windows::hide_window(app, windows::MAIN);
+    match granted {
+        Ok(_) => Ok(()),
+        Err(CaptureError::AccessRequired) => Err(CaptureError::Backend(t("capture.accessDenied").into())),
+        Err(other) => Err(other),
+    }
 }
 
 /// Cleans up after the overlay closed (or the capture failed).
