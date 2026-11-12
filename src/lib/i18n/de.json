@@ -251,5 +251,12 @@
   "settings.updateCheck": "Jetzt suchen",
   "settings.updateChecking": "Suche …",
   "settings.updateNone": "Du hast die neueste Version ({version}).",
-  "settings.updateError": "Die Suche hat nicht geklappt: {error}"
+  "settings.updateError": "Die Suche hat nicht geklappt: {error}",
+  "settings.cleanup": "Alte Aufnahmen automatisch löschen",
+  "settings.cleanupHelp": "Löscht Aufnahme-Projekte (nicht die gespeicherten GIFs/Videos), die länger nicht geändert wurden – beim Start und alle 6 Stunden. Geöffnete und laufende Aufnahmen bleiben.",
+  "settings.cleanupAfter": "Löschen nach",
+  "settings.cleanupDays": "{n} Tagen",
+  "settings.cleanupDay": "1 Tag",
+  "settings.cleanupPreview": "Betrifft derzeit {count} Aufnahmen ({size}).",
+  "settings.cleanupPreviewNone": "Derzeit ist keine Aufnahme so alt."
 }

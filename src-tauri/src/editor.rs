@@ -594,18 +594,7 @@ pub struct RecentProject {
 /// The `limit` most recently changed recordings.
 #[tauri::command]
 pub fn recent_projects(app: AppHandle, limit: usize) -> Vec<RecentProject> {
-    let dir = crate::recorder::recordings_dir(&app);
-    let Ok(entries) = std::fs::read_dir(&dir) else { return Vec::new() };
-    let mut folders: Vec<(std::time::SystemTime, PathBuf)> = entries
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.is_dir() && p.extension().is_some_and(|e| e == "framenab"))
-        .filter_map(|p| {
-            // project.json changes with every edit; the folder itself when frames are added.
-            let modified = std::fs::metadata(p.join("project.json")).or_else(|_| std::fs::metadata(&p));
-            Some((modified.and_then(|m| m.modified()).ok()?, p))
-        })
-        .collect();
+    let mut folders = crate::cleanup::recording_folders(&crate::recorder::recordings_dir(&app));
     folders.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
     folders
         .into_iter()
@@ -626,6 +615,11 @@ pub fn recent_projects(app: AppHandle, limit: usize) -> Vec<RecentProject> {
             }
         })
         .collect()
+}
+
+/// Folder of the project open in the editor.
+pub fn open_root(app: &AppHandle) -> Option<PathBuf> {
+    app.state::<EditorState>().lock().as_ref().map(|o| o.store.root().to_path_buf())
 }
 
 /// Deletes a recording folder. Only folders inside the recordings folder can be deleted.

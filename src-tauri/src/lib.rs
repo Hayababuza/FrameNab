@@ -2,6 +2,7 @@
 //! the actual logic is in `crates/*`.
 
 mod capture;
+mod cleanup;
 mod cli;
 mod clipboard;
 mod commands;
@@ -94,6 +95,7 @@ pub fn run() {
             editor::recordings_directory,
             editor::recent_projects,
             editor::delete_project,
+            cleanup::old_recordings,
             pin::pin_info,
             pin::copy_pin,
             settings::default_save_directory,
@@ -117,6 +119,7 @@ pub fn run() {
             }
             tray::create(app.handle())?;
             hotkeys::register(app.handle());
+            cleanup::start(app.handle());
 
             if initial.hidden {
                 windows::hide_main(app.handle());

@@ -298,6 +298,11 @@ pub fn input_support() -> framenab_capture::input::InputSupport {
 }
 
 /// `<app data>/recordings`
+/// Folder of the recording that is running right now.
+pub fn recording_dir(app: &AppHandle) -> Option<PathBuf> {
+    app.state::<RecorderState>().lock().project_dir.clone()
+}
+
 pub fn recordings_dir(app: &AppHandle) -> PathBuf {
     app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("framenab")).join("recordings")
 }

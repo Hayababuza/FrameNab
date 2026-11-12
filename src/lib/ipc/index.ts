@@ -225,3 +225,7 @@ export interface HotkeyProblem {
 }
 /** Registers the shortcuts saved in the settings; returns the ones that did not work. */
 export const applyHotkeys = () => invoke<HotkeyProblem[]>("apply_hotkeys");
+
+/** How many recordings (and bytes) are older than `days`. */
+export const oldRecordings = (days: number) =>
+  invoke<{ count: number; bytes: number }>("old_recordings", { days });

@@ -39,6 +39,8 @@ export interface Settings {
   recordInput: boolean;
   /** Last used export settings (also used by the quick "Save"). */
   exportOptions: ExportOptions;
+  /** Delete recording folders not changed for `days` (off by default). */
+  recordingCleanup: { enabled: boolean; days: number };
   /** Check for a new version when the app starts. */
   updateCheck: boolean;
   /** Global shortcuts as accelerators (`Shift+PrintScreen`); `null` = off. Not on Wayland. */
@@ -64,6 +66,7 @@ const defaults: Settings = {
   exportOptions: { quality: 90, lossy: false, loopCount: null, scale: 1 },
   hotkeys: { ...DEFAULT_HOTKEYS },
   updateCheck: true,
+  recordingCleanup: { enabled: false, days: 30 },
 };
 
 let store: Promise<Store> | undefined;

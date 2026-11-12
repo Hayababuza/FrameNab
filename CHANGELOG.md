@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- Settings → Saving: delete old recordings automatically (off by default) after 1, 7, 14, 30 or 90 days without changes, at startup and every 6 hours; the recording open in the editor and a running one are kept, saved GIFs/videos are not touched; the page shows how many recordings (and how much space) the chosen age affects
+
 ### Fixed
 - Installed app on GNOME: the first screenshot failed ("Portal request didn't succeed") because GNOME only lets the focused app ask for the screenshot permission; FrameNab now comes to the front, explains the system question and asks again, so the permission is granted once and stored
 

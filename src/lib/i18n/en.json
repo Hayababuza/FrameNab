@@ -251,5 +251,12 @@
   "settings.updateCheck": "Check now",
   "settings.updateChecking": "Checking …",
   "settings.updateNone": "You have the newest version ({version}).",
-  "settings.updateError": "The check did not work: {error}"
+  "settings.updateError": "The check did not work: {error}",
+  "settings.cleanup": "Delete old recordings automatically",
+  "settings.cleanupHelp": "Deletes recording projects (not the saved GIFs/videos) that were not changed for a while – at startup and every 6 hours. Open and running recordings stay.",
+  "settings.cleanupAfter": "Delete after",
+  "settings.cleanupDays": "{n} days",
+  "settings.cleanupDay": "1 day",
+  "settings.cleanupPreview": "Currently {count} recordings ({size}).",
+  "settings.cleanupPreviewNone": "No recording is that old right now."
 }

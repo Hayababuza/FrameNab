@@ -13,6 +13,7 @@
     applyHotkeys,
     defaultSaveDirectory,
     inputSupport,
+    oldRecordings,
     recordingFormats,
     type ExportFormat,
     type HotkeyProblem,
@@ -41,6 +42,9 @@
   let locale = $state<Locale | "system">("system");
   let theme = $state<Theme>("system");
   let updateCheck = $state(true);
+  let cleanup = $state({ enabled: false, days: 30 });
+  let cleanupPreview = $state<{ count: number; bytes: number } | null>(null);
+  const cleanupChoices = [1, 7, 14, 30, 90];
   let version = $state("");
   let updateState = $state<
     | { kind: "idle" }
@@ -85,6 +89,7 @@
     locale = (await getSetting("locale")) ?? "system";
     theme = await getSetting("theme");
     updateCheck = await getSetting("updateCheck");
+    cleanup = await getSetting("recordingCleanup");
     version = (await appInfo()).version;
     hotkeys = await getSetting("hotkeys");
     autostart = await autostartEnabled().catch(() => false);
@@ -108,6 +113,23 @@
     await setSetting("hotkeys", hotkeys);
     hotkeyProblems = await applyHotkeys();
   }
+
+  // Show how many recordings the chosen age affects, so nothing disappears by surprise.
+  $effect(() => {
+    const days = cleanup.days;
+    oldRecordings(days)
+      .then((r) => (cleanupPreview = r))
+      .catch(() => (cleanupPreview = null));
+  });
+
+  function saveCleanup() {
+    setSetting("recordingCleanup", { ...cleanup });
+  }
+
+  const megabytes = (bytes: number) =>
+    bytes >= 1024 ** 3
+      ? `${(bytes / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB`
+      : `${Math.round(bytes / 1024 ** 2).toLocaleString()} MB`;
 
   async function checkUpdate() {
     updateState = { kind: "checking" };
@@ -328,6 +350,35 @@
           <option {value} disabled={!available.includes(value as ExportFormat)}>
             {label}{available.includes(value as ExportFormat) ? "" : ` – ${t("settings.needsFfmpeg")}`}
           </option>
+        {/each}
+      </select>
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.cleanup")}
+        <small class="help-inline">{t("settings.cleanupHelp")}</small>
+      </span>
+      <input type="checkbox" bind:checked={cleanup.enabled} onchange={saveCleanup} />
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.cleanupAfter")}
+        {#if cleanupPreview}
+          <small class="help-inline"
+            >{cleanupPreview.count
+              ? t("settings.cleanupPreview", {
+                  count: cleanupPreview.count,
+                  size: megabytes(cleanupPreview.bytes),
+                })
+              : t("settings.cleanupPreviewNone")}</small
+          >
+        {/if}
+      </span>
+      <select bind:value={cleanup.days} onchange={saveCleanup}>
+        {#each cleanupChoices as days (days)}
+          <option value={days}
+            >{days === 1 ? t("settings.cleanupDay") : t("settings.cleanupDays", { n: days })}</option
+          >
         {/each}
       </select>
     </label>
