@@ -34,7 +34,8 @@ pub fn app_info() -> AppInfo {
 }
 
 #[tauri::command]
-pub fn run_action(app: AppHandle, window: WebviewWindow, action: Action) {
+// `async`: it may open windows, which deadlocks on Windows from a synchronous command (wry#583).
+pub async fn run_action(app: AppHandle, window: WebviewWindow, action: Action) {
     // Triggered from the main window: hide it so it is not part of the screenshot.
     // From the main window or the editor: hide it so it is not in the picture, restore it after.
     let label = window.label();

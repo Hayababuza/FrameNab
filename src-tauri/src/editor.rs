@@ -572,7 +572,8 @@ pub fn recording_formats() -> Vec<ExportFormat> {
 
 /// "Open project" in the main window.
 #[tauri::command]
-pub fn open_project(app: AppHandle, path: PathBuf) -> Result<(), String> {
+// `async`: opens the editor window (a synchronous command would deadlock on Windows, wry#583).
+pub async fn open_project(app: AppHandle, path: PathBuf) -> Result<(), String> {
     open(&app, path, None)
 }
 

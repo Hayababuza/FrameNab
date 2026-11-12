@@ -252,7 +252,9 @@ pub fn capture_info(app: AppHandle) -> Option<CaptureInfo> {
 
 /// Record mode: records `selection` (image pixels), or the whole screen if `None`.
 #[tauri::command]
-pub fn record_selection(app: AppHandle, selection: Option<Selection>) -> Result<(), String> {
+// `async`: commands that create windows must not run synchronously, or they deadlock on
+// Windows (WebView2, wry#583).
+pub async fn record_selection(app: AppHandle, selection: Option<Selection>) -> Result<(), String> {
     let (width, height) = {
         let state = app.state::<CaptureState>();
         let guard = state.current.lock().expect("capture lock");
@@ -269,7 +271,7 @@ pub fn record_selection(app: AppHandle, selection: Option<Selection>) -> Result<
 
 /// Record mode: records a single window chosen in the system dialog (Wayland).
 #[tauri::command]
-pub fn record_window(app: AppHandle) -> Result<(), String> {
+pub async fn record_window(app: AppHandle) -> Result<(), String> {
     open_recorder(&app, None);
     Ok(())
 }
