@@ -47,5 +47,5 @@ pub async fn run_action(app: AppHandle, window: WebviewWindow, action: Action) {
             _ => {}
         }
     }
-    windows::dispatch(&app, action);
+    windows::run(&app, action);
 }

@@ -149,9 +149,13 @@ pub fn run() {
         .expect("failed to start FrameNab");
 }
 
-/// Opens a recording folder in the editor, reporting failures in the log.
+/// Opens a recording folder in the editor, reporting failures in the log. Runs in an async task:
+/// it may be called from an event handler, where opening a window deadlocks on Windows.
 fn open_project(app: &tauri::AppHandle, path: std::path::PathBuf) {
-    if let Err(err) = editor::open(app, path, None) {
-        tracing::error!(%err, "could not open the project");
-    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(err) = editor::open(&app, path, None) {
+            tracing::error!(%err, "could not open the project");
+        }
+    });
 }

@@ -48,7 +48,18 @@ pub fn hide_window(app: &AppHandle, label: &str) -> bool {
     app.get_webview_window(label).is_some_and(|w| w.is_visible().unwrap_or(false) && w.hide().is_ok())
 }
 
+/// Runs `action` from an event handler (tray menu, global shortcut, second launch).
+///
+/// Creating a window inside an event handler deadlocks on Windows (WebView2, wry#583): the window
+/// appears but stays blank and does not react, not even to closing. So the action runs in an
+/// async task instead, like the `async` commands do.
 pub fn dispatch(app: &AppHandle, action: Action) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move { run(&app, action) });
+}
+
+/// Runs `action` right away. Only call this from an `async` command or another async task.
+pub fn run(app: &AppHandle, action: Action) {
     let result = match action {
         Action::Screenshot => {
             crate::capture::start(app, None, crate::capture::CaptureMode::Screenshot);
