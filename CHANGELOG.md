@@ -4,6 +4,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-18
+
+### Changed
+- Quick recording became the **instant GIF**: the shortcut (`Ctrl+Shift+PrintScreen`), the new start page card, the tray entry or `framenab instant-gif` open the area selection; as soon as an area is dragged or a window clicked, recording starts after the countdown, and stopping saves the file into the save folder (name from the template) and copies it, without the editor. Pressing the shortcut again stops
+- Settings → Instant GIF: format, frame rate, countdown, size, mouse pointer, pressed keys, copy to the clipboard, and a button to start one
+
 ## [0.5.0] - 2026-11-17
 
 Feedback from the first tests on Windows: quick recording, options before recording, several monitors, copying to the clipboard.
@@ -117,7 +123,8 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Hayababuza/FrameNab/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Hayababuza/FrameNab/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/Hayababuza/FrameNab/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/Hayababuza/FrameNab/compare/v0.4.0...v0.4.1
