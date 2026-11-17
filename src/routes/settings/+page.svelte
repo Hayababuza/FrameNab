@@ -18,6 +18,7 @@
     printScreenOwner,
     recordingFormats,
     releasePrintScreen,
+    runAction,
     type ExportFormat,
     type HotkeyProblem,
   } from "$lib/ipc";
@@ -26,9 +27,11 @@
   import { findUpdate, type Update } from "$lib/updater";
   import {
     DEFAULT_HOTKEYS,
+    DEFAULT_INSTANT_GIF,
     DEFAULT_TEMPLATE,
     getSetting,
     type Hotkeys,
+    type InstantGif,
     type ImageFormat,
     type RecordingFormat,
     setSetting,
@@ -76,6 +79,11 @@
   let imageFormat = $state<ImageFormat>("png");
   let recordingFormat = $state<RecordingFormat>("gif");
   let afterRecording = $state<"editor" | "save">("editor");
+  let instant = $state<InstantGif>({ ...DEFAULT_INSTANT_GIF });
+  const saveInstant = () => setSetting("instantGif", $state.snapshot(instant));
+  const INSTANT_FPS = [5, 10, 15, 20, 25, 30];
+  const INSTANT_COUNTDOWNS = [0, 1, 2, 3, 5];
+  const INSTANT_SIZES = [1, 0.75, 0.5, 0.25];
   let copyRecording = $state(true);
   let available = $state<ExportFormat[]>(["gif"]);
   const recordingLabels: Record<RecordingFormat, string> = {
@@ -110,6 +118,7 @@
     // Shortcuts added in later versions are missing from older settings.
     hotkeys = { ...DEFAULT_HOTKEYS, ...(await getSetting("hotkeys")) };
     afterRecording = await getSetting("afterRecording");
+    instant = { ...DEFAULT_INSTANT_GIF, ...(await getSetting("instantGif")) };
     copyRecording = await getSetting("copyRecording");
     printScreen = await printScreenOwner().catch(() => null);
     autostart = await autostartEnabled().catch(() => false);
@@ -376,6 +385,68 @@
         onchange={() => setSetting("copyRecording", copyRecording)}
       />
     </label>
+  </section>
+
+  <h2>{t("instant.title")}</h2>
+  <section>
+    <p class="help">
+      {t("instant.help")}
+      {#if hotkeys.recordNow && !waylandSession}
+        {t("instant.helpShortcut", { shortcut: hotkeys.recordNow })}
+      {/if}
+    </p>
+    <label class="row">
+      <span>{t("instant.format")}</span>
+      <select bind:value={instant.format} onchange={saveInstant}>
+        {#each Object.entries(recordingLabels) as [value, label] (value)}
+          <option {value} disabled={!available.includes(value as ExportFormat)}>
+            {label}{available.includes(value as ExportFormat) ? "" : ` – ${t("settings.needsFfmpeg")}`}
+          </option>
+        {/each}
+      </select>
+    </label>
+    <label class="row">
+      <span>{t("instant.fps")}</span>
+      <select bind:value={instant.fps} onchange={saveInstant}>
+        {#each INSTANT_FPS as f (f)}<option value={f}>{f} fps</option>{/each}
+      </select>
+    </label>
+    <label class="row">
+      <span>{t("instant.countdown")}</span>
+      <select bind:value={instant.countdown} onchange={saveInstant}>
+        {#each INSTANT_COUNTDOWNS as c (c)}<option value={c}>{t("recorder.seconds", { n: c })}</option>{/each}
+      </select>
+    </label>
+    <label class="row">
+      <span>{t("instant.size")}</span>
+      <select bind:value={instant.scale} onchange={saveInstant}>
+        {#each INSTANT_SIZES as size (size)}<option value={size}>{Math.round(size * 100)} %</option>{/each}
+      </select>
+    </label>
+    <label class="row">
+      <span>{t("instant.cursor")}</span>
+      <input type="checkbox" bind:checked={instant.cursor} onchange={saveInstant} />
+    </label>
+    <label class="row">
+      <span>
+        {t("instant.keys")}
+        {#if !recordInput || inputBlocked}<small class="help-inline">{t("recorder.keysOff")}</small>{/if}
+      </span>
+      <input
+        type="checkbox"
+        bind:checked={instant.keys}
+        onchange={saveInstant}
+        disabled={!recordInput || inputBlocked}
+      />
+    </label>
+    <label class="row">
+      <span>{t("instant.copy")}</span>
+      <input type="checkbox" bind:checked={instant.copy} onchange={saveInstant} />
+    </label>
+    <div class="row">
+      <span></span>
+      <button onclick={() => runAction("recordNow")}>{t("instant.start")}</button>
+    </div>
   </section>
 
   <h2>{t("settings.saving")}</h2>

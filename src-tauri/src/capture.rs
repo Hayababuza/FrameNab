@@ -28,6 +28,8 @@ pub enum CaptureMode {
     #[default]
     Screenshot,
     Record,
+    /// Instant GIF: recording starts as soon as the area is chosen.
+    Instant,
 }
 
 #[derive(Default)]
@@ -314,13 +316,12 @@ fn open_recorder(app: &AppHandle, region: Option<recorder::Region>) {
             .map(|m| windows::Placement::of(&m))
             .or(other),
     };
+    let instant =
+        (*state.mode.lock().expect("mode lock") == CaptureMode::Instant).then(|| recorder::instant_settings(app));
     // The recorder takes over bringing the main window back.
     let restore = state.restore.take();
     windows::close_overlay(app);
-    recorder::open(
-        app,
-        recorder::Open { region, size, origin, background: image, restore, placement, autostart: false },
-    );
+    recorder::open(app, recorder::Open { region, size, origin, background: image, restore, placement, instant });
 }
 
 /// Crops the current capture to `selection` and renders the annotations into it.

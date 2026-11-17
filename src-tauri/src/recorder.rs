@@ -48,8 +48,8 @@ pub struct Setup {
     compact: bool,
     /// The window covers all monitors (no fullscreen request).
     span: bool,
-    /// Start right away (quick recording by shortcut), without waiting for the start button.
-    autostart: bool,
+    /// Instant GIF: start right away with these settings, save and copy when stopped.
+    instant: Option<InstantGif>,
     /// Desktop position of the region's coordinate origin, in physical pixels.
     #[serde(skip)]
     origin: (i32, i32),
@@ -102,7 +102,50 @@ pub struct Open {
     /// Window to show again when the recorder closes.
     pub restore: Option<String>,
     pub placement: Option<windows::Placement>,
-    pub autostart: bool,
+    /// Instant GIF: start right away, save and copy when stopped.
+    pub instant: Option<InstantGif>,
+}
+
+/// Settings of the instant GIF (`instantGif` in `settings.json`): choose an area, it records
+/// right away, and stopping saves the file into the save folder and copies it, without the editor.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct InstantGif {
+    pub format: framenab_export::ExportFormat,
+    pub fps: u32,
+    /// Seconds between choosing the area and the start.
+    pub countdown: u32,
+    /// Draw the mouse pointer in.
+    pub cursor: bool,
+    /// Show the pressed keys.
+    pub keys: bool,
+    /// Output size relative to the area (0.1–1).
+    pub scale: f32,
+    /// Put the file on the clipboard.
+    pub copy: bool,
+}
+
+impl Default for InstantGif {
+    fn default() -> Self {
+        Self {
+            format: framenab_export::ExportFormat::Gif,
+            fps: 15,
+            countdown: 1,
+            cursor: true,
+            keys: true,
+            scale: 1.0,
+            copy: true,
+        }
+    }
+}
+
+/// The instant GIF settings.
+pub fn instant_settings(app: &AppHandle) -> InstantGif {
+    app.store("settings.json")
+        .ok()
+        .and_then(|s| s.get("instantGif"))
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default()
 }
 
 /// Opens the recorder window.
@@ -122,7 +165,7 @@ pub fn open(app: &AppHandle, open: Open) {
             background: background.is_some(),
             compact,
             span,
-            autostart: open.autostart,
+            instant: open.instant,
             origin: open.origin,
         });
     }
@@ -131,60 +174,6 @@ pub fn open(app: &AppHandle, open: Open) {
     if let Err(err) = windows::open_recorder(app, open.placement.as_ref()) {
         tracing::error!(%err, "failed to open the recorder window");
     }
-}
-
-/// Settings key: the last recorded area, in desktop pixels (relative to the monitor on Wayland).
-const LAST_AREA_KEY: &str = "lastRecordArea";
-
-/// Quick recording (shortcut, `framenab record-now`): records the last recorded area again, or
-/// the whole monitor under the mouse, and starts right away (after the countdown). Stops a
-/// running recording instead.
-pub fn record_now(app: &AppHandle) {
-    if is_recording(app) {
-        return request_stop(app);
-    }
-    if let Some(w) = app.get_webview_window(windows::RECORDER) {
-        let _ = w.set_focus();
-        return;
-    }
-    let last: Option<Region> =
-        app.store("settings.json").ok().and_then(|s| s.get(LAST_AREA_KEY)).and_then(|v| serde_json::from_value(v).ok());
-    let portal = framenab_capture::Platform::detect().requires_portal();
-    let center = last.map(|r| (r.x + r.w as i32 / 2, r.y + r.h as i32 / 2));
-    let Some(placement) = windows::placement(app, center.filter(|_| !portal)) else {
-        tracing::warn!("no monitor found for a quick recording");
-        return;
-    };
-    // Region coordinates are relative to the window; on Wayland the stored area already is.
-    let origin = if portal { (0, 0) } else { (placement.x, placement.y) };
-    let fits = |r: &Region| {
-        let (x, y) = (r.x - origin.0, r.y - origin.1);
-        x >= 0 && y >= 0 && x as u32 + r.w <= placement.width && y as u32 + r.h <= placement.height
-    };
-    let region = match last.filter(fits) {
-        Some(r) => Region { x: r.x - origin.0, y: r.y - origin.1, w: r.w, h: r.h },
-        None => {
-            // The whole monitor under the mouse (within a window that spans all of them).
-            let monitor = windows::monitor_at(app, None).filter(|_| placement.span && !portal);
-            match monitor {
-                Some(m) => Region { x: m.x - origin.0, y: m.y - origin.1, w: m.width, h: m.height },
-                None => Region { x: 0, y: 0, w: placement.width, h: placement.height },
-            }
-        }
-    };
-    tracing::info!(?region, ?placement, "quick recording");
-    open(
-        app,
-        Open {
-            region: Some(region),
-            size: (placement.width, placement.height),
-            origin,
-            background: None,
-            restore: None,
-            placement: Some(placement),
-            autostart: true,
-        },
-    );
 }
 
 /// Is a recording running (used by the tray/shortcut to stop it)?
@@ -277,13 +266,6 @@ pub fn recorder_start(app: AppHandle, fps: u32, show_keys: bool) -> Result<(), S
     let setup = inner.setup.clone();
     let area = setup.as_ref().and_then(|s| s.region.map(|r| (r, s.origin)));
     let crop = area.map(|(r, o)| Crop { x: r.x + o.0 - origin.0, y: r.y + o.1 - origin.1, width: r.w, height: r.h });
-    // Remembered for the quick recording.
-    if let Some((r, o)) = area
-        && let Ok(store) = app.store("settings.json")
-        && let Ok(value) = serde_json::to_value(Region { x: r.x + o.0, y: r.y + o.1, ..r })
-    {
-        store.set(LAST_AREA_KEY, value);
-    }
     inner.show_keys = show_keys;
     let dir = recordings_dir(&app)
         .join(format!("{}.framenab", framenab_export::still::file_name_now(framenab_export::still::DEFAULT_TEMPLATE)));
@@ -343,7 +325,7 @@ const AFTER_KEY: &str = "afterRecording";
 
 #[tauri::command]
 pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
-    let (recording, dir, show_keys) = {
+    let (recording, dir, show_keys, instant) = {
         let state = app.state::<RecorderState>();
         let mut inner = state.lock();
         inner.input.take();
@@ -351,6 +333,7 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
             inner.recording.take().ok_or("not recording")?,
             inner.project_dir.clone().ok_or("no project folder")?,
             inner.show_keys,
+            inner.setup.as_ref().and_then(|s| s.instant.clone()),
         )
     };
     let target = dir.clone();
@@ -364,9 +347,20 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
     .map_err(|e| e.to_string())??;
     tracing::info!(path = %dir.display(), frames = stats.frames, dropped = stats.dropped, "recording finished");
     let restore = app.state::<RecorderState>().restore.take();
-    let direct = app.store("settings.json").ok().and_then(|s| s.get(AFTER_KEY)).is_some_and(|v| v == "save");
-    let saved = if direct {
-        match save_directly(&app, &dir, &project).await {
+    // Instant GIF: its own format and size; otherwise "after recording: save" uses the settings.
+    let direct = match instant {
+        Some(i) => {
+            let (_, options) = crate::editor::saved_choice(&app);
+            Some((i.format, framenab_export::ExportOptions { scale: i.scale.clamp(0.1, 1.0), ..options }, i.copy))
+        }
+        None if app.store("settings.json").ok().and_then(|s| s.get(AFTER_KEY)).is_some_and(|v| v == "save") => {
+            let (format, options) = crate::editor::saved_choice(&app);
+            Some((format, options, crate::editor::copy_setting(&app)))
+        }
+        None => None,
+    };
+    let saved = if let Some((format, options, copy)) = direct {
+        match save_directly(&app, &dir, &project, format, options, copy).await {
             Ok(path) => Some(path.display().to_string()),
             Err(err) => {
                 tracing::error!(%err, "saving the recording directly failed");
@@ -407,11 +401,13 @@ async fn save_directly(
     app: &AppHandle,
     dir: &std::path::Path,
     project: &framenab_core::Project,
+    format: framenab_export::ExportFormat,
+    options: framenab_export::ExportOptions,
+    copy: bool,
 ) -> Result<PathBuf, String> {
     use framenab_export::animation::{ExportControl, export_animation};
     use framenab_export::still::{file_name_now, unique_path};
 
-    let (format, options) = crate::editor::saved_choice(app);
     let config = crate::settings::save_settings(app);
     let path = unique_path(&config.directory, &file_name_now(&config.template), format.extension());
     let (dir, project, target) = (dir.to_owned(), project.clone(), path.clone());
@@ -422,7 +418,7 @@ async fn save_directly(
     })
     .await
     .map_err(|e| e.to_string())??;
-    crate::editor::announce_saved(app, &path).await;
+    crate::editor::announce_saved(app, &path, copy).await;
     Ok(path)
 }
 

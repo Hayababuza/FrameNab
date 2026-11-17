@@ -24,7 +24,7 @@ const KEY: &str = "hotkeys";
 pub struct Hotkeys {
     pub screenshot: Option<String>,
     pub record: Option<String>,
-    /// Start recording the last area right away.
+    /// Instant GIF: choose an area, record right away, save and copy.
     pub record_now: Option<String>,
 }
 

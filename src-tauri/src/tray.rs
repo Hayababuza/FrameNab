@@ -13,6 +13,7 @@ pub fn create(app: &AppHandle) -> Result<()> {
         &[
             &item("screenshot", "tray.screenshot")?,
             &item("record", "tray.record")?,
+            &item("instant", "tray.instant")?,
             &item("editor", "tray.editor")?,
             &PredefinedMenuItem::separator(app)?,
             &item("settings", "tray.settings")?,
@@ -24,6 +25,7 @@ pub fn create(app: &AppHandle) -> Result<()> {
         match event.id.as_ref() {
             "screenshot" => windows::dispatch(app, Action::Screenshot),
             "record" => windows::dispatch(app, Action::Record),
+            "instant" => windows::dispatch(app, Action::RecordNow),
             "editor" => windows::dispatch(app, Action::Editor),
             "settings" => windows::dispatch(app, Action::Settings),
             "quit" => app.exit(0),

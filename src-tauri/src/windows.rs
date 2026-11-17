@@ -74,7 +74,7 @@ pub fn run(app: &AppHandle, action: Action) {
             Ok(())
         }
         Action::RecordNow => {
-            crate::recorder::record_now(app);
+            instant_gif(app, None);
             Ok(())
         }
         Action::Editor => {
@@ -101,6 +101,18 @@ pub fn record(app: &AppHandle, hide: Option<String>) {
     }
 }
 
+/// Instant GIF (tray, shortcut, CLI, start page): choose an area, it records right away and is
+/// saved and copied when stopped. Stops a running recording instead.
+pub fn instant_gif(app: &AppHandle, hide: Option<String>) {
+    if crate::recorder::is_recording(app) {
+        crate::recorder::request_stop(app);
+    } else if let Some(w) = app.get_webview_window(RECORDER) {
+        let _ = w.set_focus();
+    } else {
+        crate::capture::start(app, hide, crate::capture::CaptureMode::Instant);
+    }
+}
+
 /// Opens the recorder for the whole primary monitor, without choosing an area first.
 fn record_screen(app: &AppHandle) {
     if crate::recorder::is_recording(app) {
@@ -118,7 +130,7 @@ fn record_screen(app: &AppHandle) {
             background: None,
             restore: None,
             placement: Some(monitor),
-            autostart: false,
+            instant: None,
         },
     );
 }

@@ -125,6 +125,10 @@
       formats = await recordingFormats();
       setup = await recorderInfo();
       if (!setup) return void win.close();
+      // Instant GIF: its own settings (shown in the bar, not saved as the recorder's defaults).
+      if (setup.instant) {
+        ({ fps, countdown: delay, cursor, keys, format } = setup.instant);
+      }
       if (setup.background) {
         background = await loadRecorderBackground(setup);
         drawBackground();
@@ -140,8 +144,8 @@
       }
       await win.setFocus();
       await updateInputRegion();
-      // Quick recording by shortcut: go straight to the countdown.
-      if (setup.autostart) await record();
+      // Instant GIF: go straight to the countdown.
+      if (setup.instant) await record();
     })().catch((e) => (error = String(e)));
 
     const unlisten = listen("recorder-stop-requested", () => stop());

@@ -333,10 +333,14 @@ pub fn saved_choice(app: &AppHandle) -> (ExportFormat, ExportOptions) {
     (format, options)
 }
 
-/// After a recording was saved: copies the file to the clipboard (if switched on) and tells the
-/// user where it is.
-pub async fn announce_saved(app: &AppHandle, path: &std::path::Path) {
-    let copy = app.store("settings.json").ok().and_then(|s| s.get(COPY_KEY)).and_then(|v| v.as_bool()).unwrap_or(true);
+/// Whether saved recordings go to the clipboard (setting, default on).
+pub fn copy_setting(app: &AppHandle) -> bool {
+    app.store("settings.json").ok().and_then(|s| s.get(COPY_KEY)).and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
+/// After a recording was saved: copies the file to the clipboard (with `copy`) and tells the user
+/// where it is.
+pub async fn announce_saved(app: &AppHandle, path: &std::path::Path, copy: bool) {
     let copied = copy
         && match crate::clipboard::copy_file(app, path.to_owned()).await {
             Ok(()) => true,
@@ -433,7 +437,7 @@ pub async fn editor_export(
     app.state::<EditorState>().export.lock().expect("export lock").take();
     result.map_err(|e| e.to_string())?;
 
-    announce_saved(&app, &path).await;
+    announce_saved(&app, &path, copy_setting(&app)).await;
     Ok(Some(path.display().to_string()))
 }
 

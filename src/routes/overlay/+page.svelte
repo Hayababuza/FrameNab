@@ -383,8 +383,11 @@
     clickPending = false;
     clickedWindow = null;
     if (interaction.kind === "draw" && draft && !isTrivial(draft.shape, 3 * scale)) add(draft);
+    const chose = interaction.kind === "area" && selection !== null;
     draft = null;
     interaction = null;
+    // Instant GIF: choosing the area (drag, or click on a window) starts the recording.
+    if (instantMode && chose) void startRecording();
   }
 
   function ondblclick(e: MouseEvent) {
@@ -423,7 +426,9 @@
 
   // ---- record mode (choosing the area of a recording) -------------------------------------------
 
-  const recordMode = $derived(info?.mode === "record");
+  const recordMode = $derived(info?.mode === "record" || info?.mode === "instant");
+  /** Instant GIF: the recording starts as soon as the area is chosen. */
+  const instantMode = $derived(info?.mode === "instant");
 
   /** Records the selection, or the whole screen with `whole` (or when nothing is selected). */
   async function startRecording(whole = false) {
@@ -778,7 +783,11 @@
   {/if}
 {:else if !error && recordMode && !interaction}
   <div class="record-panel">
-    <span>{t(info?.windows.length ? "record.hintWithWindows" : "record.hint")}</span>
+    <span
+      >{instantMode
+        ? t("record.instantHint")
+        : t(info?.windows.length ? "record.hintWithWindows" : "record.hint")}</span
+    >
     <div class="row">
       <button class="primary" onclick={() => startRecording(true)} disabled={busy}>
         <span class="rec-dot"></span>

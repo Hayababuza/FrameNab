@@ -16,7 +16,7 @@ Wayland isolates apps from each other. Two things that are taken for granted on 
 |---|---|---|
 | FrameNab Screenshot | `framenab gui` | `Print` |
 | FrameNab Recording | `framenab record` | `Shift+Print` |
-| FrameNab Quick recording | `framenab record-now` | `Ctrl+Shift+Print` |
+| FrameNab Instant GIF | `framenab instant-gif` | `Ctrl+Shift+Print` |
 
 If GNOME already uses `Print` for its own screenshot tool, remove that binding first.
 

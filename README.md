@@ -9,7 +9,7 @@ FrameNab combines two tools in one app:
 
 Both modes share the same annotation tools. Internally a screenshot is a project with exactly one frame and can be opened in the editor at any time.
 
-> **Status:** v0.5.0 – screenshot mode, recorder, frame editor, export formats and installers (phases 1–5) are done; next are the extras after 1.0 (webcam, audio, upload, OCR). See the [roadmap](docs/PROJECT-PLAN.md#4-features-by-phase).
+> **Status:** v0.5.1 – screenshot mode, recorder, frame editor, export formats and installers (phases 1–5) are done; next are the extras after 1.0 (webcam, audio, upload, OCR). See the [roadmap](docs/PROJECT-PLAN.md#4-features-by-phase).
 
 ## Installation
 
@@ -77,7 +77,7 @@ Update packages are signed in the workflow with the repository secrets `TAURI_SI
 ```bash
 framenab gui        # screenshot overlay
 framenab record     # recording (choose the area)
-framenab record-now # record the last area right away (again: stop)
+framenab instant-gif # instant GIF: choose an area, records right away, saved and copied on stop
 framenab edit <file> # open a recording folder, its project.json or a .framenab.zip
 framenab editor     # editor
 framenab settings   # settings

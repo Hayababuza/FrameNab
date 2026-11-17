@@ -44,6 +44,7 @@ pub async fn run_action(app: AppHandle, window: WebviewWindow, action: Action) {
         match action {
             Action::Screenshot => return crate::capture::start(&app, hide, crate::capture::CaptureMode::Screenshot),
             Action::Record => return windows::record(&app, hide),
+            Action::RecordNow => return windows::instant_gif(&app, hide),
             _ => {}
         }
     }

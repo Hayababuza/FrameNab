@@ -81,8 +81,8 @@
   const cards: {
     action: Action;
     icon: string;
-    title: "home.screenshot" | "home.record" | "home.open";
-    hint: "home.screenshotHint" | "home.recordHint" | "home.openHint";
+    title: "home.screenshot" | "home.record" | "home.instant" | "home.open";
+    hint: "home.screenshotHint" | "home.recordHint" | "home.instantHint" | "home.openHint";
     phase?: number;
   }[] = [
     {
@@ -96,6 +96,12 @@
       icon: "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z",
       title: "home.record",
       hint: "home.recordHint",
+    },
+    {
+      action: "recordNow",
+      icon: "M13 3 4 14h7l-1 7 9-11h-7z",
+      title: "home.instant",
+      hint: "home.instantHint",
     },
     {
       action: "editor",

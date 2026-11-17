@@ -50,9 +50,37 @@ export interface Settings {
   recordingCleanup: { enabled: boolean; days: number };
   /** Check for a new version when the app starts. */
   updateCheck: boolean;
+  /** Instant GIF: choose an area, it records right away and is saved and copied when stopped. */
+  instantGif: InstantGif;
   /** Global shortcuts as accelerators (`Shift+PrintScreen`); `null` = off. Not on Wayland. */
   hotkeys: Hotkeys;
 }
+
+/** Mirrors `InstantGif` in `src-tauri/src/recorder.rs`. */
+export interface InstantGif {
+  format: RecordingFormat;
+  fps: number;
+  /** Seconds between choosing the area and the start. */
+  countdown: number;
+  /** Draw the mouse pointer in. */
+  cursor: boolean;
+  /** Show the pressed keys. */
+  keys: boolean;
+  /** Output size relative to the area (0.1–1). */
+  scale: number;
+  /** Put the file on the clipboard. */
+  copy: boolean;
+}
+
+export const DEFAULT_INSTANT_GIF: InstantGif = {
+  format: "gif",
+  fps: 15,
+  countdown: 1,
+  cursor: true,
+  keys: true,
+  scale: 1,
+  copy: true,
+};
 
 export interface Hotkeys {
   screenshot: string | null;
@@ -88,6 +116,7 @@ const defaults: Settings = {
   hotkeys: { ...DEFAULT_HOTKEYS },
   updateCheck: true,
   recordingCleanup: { enabled: false, days: 30 },
+  instantGif: { ...DEFAULT_INSTANT_GIF },
 };
 
 let store: Promise<Store> | undefined;

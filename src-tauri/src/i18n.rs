@@ -110,6 +110,13 @@ pub fn t(key: &str) -> &'static str {
                 "Record"
             }
         }
+        "tray.instant" => {
+            if de {
+                "Sofort-GIF"
+            } else {
+                "Instant GIF"
+            }
+        }
         "tray.editor" => {
             if de {
                 "Editor öffnen"

@@ -3,7 +3,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Annotation } from "$lib/bindings/Annotation";
 import type { Effects } from "$lib/bindings/Effects";
 import type { FrameOp } from "$lib/bindings/FrameOp";
-import type { ExportOptions } from "$lib/stores/settings";
+import type { ExportOptions, InstantGif } from "$lib/stores/settings";
 import type { Overlays } from "$lib/bindings/Overlays";
 import type { ImageOp } from "$lib/bindings/ImageOp";
 import type { TransitionOp } from "$lib/bindings/TransitionOp";
@@ -39,8 +39,9 @@ export interface CaptureInfo {
   height: number;
   /** Other apps' windows in image pixels, topmost first (empty on Wayland). */
   windows: { x: number; y: number; w: number; h: number }[];
-  /** "record": the overlay chooses the area of a recording. */
-  mode: "screenshot" | "record";
+  /** "record": the overlay chooses the area of a recording; "instant": the same, and the
+   * recording starts as soon as the area is chosen (instant GIF). */
+  mode: "screenshot" | "record" | "instant";
   /** A single window can be recorded via the system dialog (Wayland). */
   windowPicker: boolean;
   /** The overlay covers all monitors (Windows): no fullscreen request. */
@@ -117,8 +118,8 @@ export interface RecorderSetup {
   compact: boolean;
   /** The window covers all monitors (Windows): no fullscreen request. */
   span: boolean;
-  /** Quick recording by shortcut: start without waiting for the start button. */
-  autostart: boolean;
+  /** Instant GIF: start right away with these settings; saved and copied when stopped. */
+  instant: InstantGif | null;
 }
 
 /** The frozen screen image of the area selection, shown behind the frame on Wayland. */
