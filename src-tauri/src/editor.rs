@@ -322,6 +322,36 @@ pub fn editor_undo(app: AppHandle, redo: bool) -> Result<EditorView, String> {
 const FORMAT_KEY: &str = "recordingFormat";
 /// Settings key for the export options (quality, lossy, loops, scale).
 const OPTIONS_KEY: &str = "exportOptions";
+/// Settings key: put a saved recording on the clipboard as a file (default on).
+const COPY_KEY: &str = "copyRecording";
+
+/// The format and options for saving without asking, from the settings.
+pub fn saved_choice(app: &AppHandle) -> (ExportFormat, ExportOptions) {
+    let saved = |key: &str| app.store("settings.json").ok().and_then(|s| s.get(key));
+    let format = saved(FORMAT_KEY).and_then(|v| serde_json::from_value(v).ok()).unwrap_or(ExportFormat::Gif);
+    let options = saved(OPTIONS_KEY).and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    (format, options)
+}
+
+/// After a recording was saved: copies the file to the clipboard (if switched on) and tells the
+/// user where it is.
+pub async fn announce_saved(app: &AppHandle, path: &std::path::Path) {
+    let copy = app.store("settings.json").ok().and_then(|s| s.get(COPY_KEY)).and_then(|v| v.as_bool()).unwrap_or(true);
+    let copied = copy
+        && match crate::clipboard::copy_file(app, path.to_owned()).await {
+            Ok(()) => true,
+            Err(err) => {
+                tracing::warn!(%err, "could not copy the recording to the clipboard");
+                false
+            }
+        };
+    let shown = path.display().to_string();
+    tracing::info!(path = %shown, copied, "recording saved");
+    let text = if copied { t("save.recordingCopied") } else { t("save.recordingDone") };
+    if let Err(err) = app.notification().builder().title("FrameNab").body(format!("{text}\n{shown}")).show() {
+        tracing::warn!(%err, "could not show notification");
+    }
+}
 
 /// Estimated file size in bytes of saving the open project in `format` with `options`.
 #[tauri::command]
@@ -357,11 +387,9 @@ pub async fn editor_export(
         let open = guard.as_ref().ok_or("no project open")?;
         (open.store.clone(), open.project.clone())
     };
-    let saved = |key: &str| app.store("settings.json").ok().and_then(|s| s.get(key));
-    let format =
-        format.or_else(|| saved(FORMAT_KEY).and_then(|v| serde_json::from_value(v).ok())).unwrap_or(ExportFormat::Gif);
-    let options =
-        options.or_else(|| saved(OPTIONS_KEY).and_then(|v| serde_json::from_value(v).ok())).unwrap_or_default();
+    let (saved_format, saved_options) = saved_choice(&app);
+    let format = format.unwrap_or(saved_format);
+    let options = options.unwrap_or(saved_options);
     let config = settings::save_settings(&app);
     let name = framenab_export::still::file_name_now(&config.template);
     let (path, format) = if ask {
@@ -405,14 +433,8 @@ pub async fn editor_export(
     app.state::<EditorState>().export.lock().expect("export lock").take();
     result.map_err(|e| e.to_string())?;
 
-    let shown = path.display().to_string();
-    tracing::info!(path = %shown, ?format, "recording saved");
-    if let Err(err) =
-        app.notification().builder().title("FrameNab").body(format!("{}\n{shown}", t("save.recordingDone"))).show()
-    {
-        tracing::warn!(%err, "could not show notification");
-    }
-    Ok(Some(shown))
+    announce_saved(&app, &path).await;
+    Ok(Some(path.display().to_string()))
 }
 
 fn format_for_extension(ext: &str) -> Option<ExportFormat> {

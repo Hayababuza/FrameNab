@@ -28,6 +28,7 @@
     DEFAULT_HOTKEYS,
     DEFAULT_TEMPLATE,
     getSetting,
+    type Hotkeys,
     type ImageFormat,
     type RecordingFormat,
     setSetting,
@@ -56,20 +57,26 @@
     | { kind: "found"; update: Update }
     | { kind: "error"; error: string }
   >({ kind: "idle" });
-  let hotkeys = $state({ ...DEFAULT_HOTKEYS } as { screenshot: string | null; record: string | null });
+  let hotkeys = $state<Hotkeys>({ ...DEFAULT_HOTKEYS });
+  const hotkeyRows = [
+    ["screenshot", "settings.hotkeyScreenshot"],
+    ["record", "settings.hotkeyRecord"],
+    ["recordNow", "settings.hotkeyRecordNow"],
+  ] as const;
   let hotkeyProblems = $state<HotkeyProblem[]>([]);
   /** Windows 11 takes the Print Screen key; `released`: switched off, effective after signing in. */
   let printScreen = $state<"windows" | "free" | "released" | null>(null);
   let printScreenError = $state<string | null>(null);
-  const usesPrintScreen = $derived(
-    [hotkeys.screenshot, hotkeys.record].some((h) => h?.split("+").includes("PrintScreen")),
-  );
+  // Windows only takes the plain key, not combinations like Shift+PrintScreen.
+  const usesPrintScreen = $derived(Object.values(hotkeys).includes("PrintScreen"));
   let autostart = $state(false);
   let saveDirectory = $state<string | null>(null);
   let defaultDirectory = $state("");
   let template = $state(DEFAULT_TEMPLATE);
   let imageFormat = $state<ImageFormat>("png");
   let recordingFormat = $state<RecordingFormat>("gif");
+  let afterRecording = $state<"editor" | "save">("editor");
+  let copyRecording = $state(true);
   let available = $state<ExportFormat[]>(["gif"]);
   const recordingLabels: Record<RecordingFormat, string> = {
     gif: "GIF",
@@ -100,7 +107,10 @@
     updateCheck = await getSetting("updateCheck");
     cleanup = await getSetting("recordingCleanup");
     version = (await appInfo()).version;
-    hotkeys = await getSetting("hotkeys");
+    // Shortcuts added in later versions are missing from older settings.
+    hotkeys = { ...DEFAULT_HOTKEYS, ...(await getSetting("hotkeys")) };
+    afterRecording = await getSetting("afterRecording");
+    copyRecording = await getSetting("copyRecording");
     printScreen = await printScreenOwner().catch(() => null);
     autostart = await autostartEnabled().catch(() => false);
     saveDirectory = await getSetting("saveDirectory");
@@ -118,7 +128,7 @@
     await emit("settings-changed", { locale: value });
   }
 
-  async function setHotkey(action: "screenshot" | "record", value: string | null) {
+  async function setHotkey(action: keyof Hotkeys, value: string | null) {
     hotkeys = { ...hotkeys, [action]: value };
     await setSetting("hotkeys", hotkeys);
     hotkeyProblems = await applyHotkeys();
@@ -286,8 +296,12 @@
         <span>{t("settings.hotkeyRecord")}</span>
         <code>framenab record</code>
       </div>
+      <div class="row">
+        <span>{t("settings.hotkeyRecordNow")}</span>
+        <code>framenab record-now</code>
+      </div>
     {:else}
-      {#each [["screenshot", "settings.hotkeyScreenshot"], ["record", "settings.hotkeyRecord"]] as const as [action, title] (action)}
+      {#each hotkeyRows as [action, title] (action)}
         <div class="row">
           <span>{t(title)}</span>
           <div class="dir">
@@ -341,6 +355,27 @@
         <code>sudo usermod -aG input $USER</code>
       </p>
     {/if}
+    <label class="row">
+      <span>
+        {t("settings.afterRecording")}
+        <small class="help-inline">{t("settings.afterRecordingHelp")}</small>
+      </span>
+      <select bind:value={afterRecording} onchange={() => setSetting("afterRecording", afterRecording)}>
+        <option value="editor">{t("settings.afterRecordingEditor")}</option>
+        <option value="save">{t("settings.afterRecordingSave")}</option>
+      </select>
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.copyRecording")}
+        <small class="help-inline">{t("settings.copyRecordingHelp")}</small>
+      </span>
+      <input
+        type="checkbox"
+        bind:checked={copyRecording}
+        onchange={() => setSetting("copyRecording", copyRecording)}
+      />
+    </label>
   </section>
 
   <h2>{t("settings.saving")}</h2>

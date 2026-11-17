@@ -26,6 +26,20 @@ pub fn t(key: &str) -> &'static str {
                 "Recording saved:"
             }
         }
+        "save.recordingCopied" => {
+            if de {
+                "Aufnahme gespeichert und in die Zwischenablage kopiert – mit Strg+V einfügen:"
+            } else {
+                "Recording saved and copied – paste it with Ctrl+V:"
+            }
+        }
+        "save.recordingFailed" => {
+            if de {
+                "Die Aufnahme konnte nicht direkt gespeichert werden; sie ist im Editor geöffnet."
+            } else {
+                "The recording could not be saved directly; it is open in the editor."
+            }
+        }
         "save.recordingTitle" => {
             if de {
                 "Aufnahme speichern"

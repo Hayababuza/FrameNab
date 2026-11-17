@@ -110,6 +110,9 @@ pub struct StreamOptions {
     pub cursor: bool,
     /// Wayland: token from a previous session, so the screen-sharing dialog is skipped.
     pub restore_token: Option<String>,
+    /// Frames per second the recording samples; sources that poll (Windows) grab this often.
+    /// 0 = the source decides.
+    pub fps: u32,
 }
 
 /// A running capture source (one monitor).

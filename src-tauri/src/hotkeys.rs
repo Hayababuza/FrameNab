@@ -24,11 +24,17 @@ const KEY: &str = "hotkeys";
 pub struct Hotkeys {
     pub screenshot: Option<String>,
     pub record: Option<String>,
+    /// Start recording the last area right away.
+    pub record_now: Option<String>,
 }
 
 impl Default for Hotkeys {
     fn default() -> Self {
-        Self { screenshot: Some("PrintScreen".into()), record: Some("Shift+PrintScreen".into()) }
+        Self {
+            screenshot: Some("PrintScreen".into()),
+            record: Some("Shift+PrintScreen".into()),
+            record_now: Some("Ctrl+Shift+PrintScreen".into()),
+        }
     }
 }
 
@@ -40,7 +46,7 @@ pub struct HotkeyState(Mutex<Vec<(Shortcut, Action)>>);
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HotkeyProblem {
-    /// `screenshot` or `record`.
+    /// `screenshot`, `record` or `recordNow`.
     pub action: &'static str,
     pub shortcut: String,
     /// Invalid, or already taken by another program.
@@ -87,9 +93,11 @@ pub fn register(app: &AppHandle) -> Vec<HotkeyProblem> {
     let _ = shortcuts.unregister_all();
     let mut registered = Vec::new();
     let mut problems = Vec::new();
-    for (name, action, accelerator) in
-        [("screenshot", Action::Screenshot, hotkeys.screenshot), ("record", Action::Record, hotkeys.record)]
-    {
+    for (name, action, accelerator) in [
+        ("screenshot", Action::Screenshot, hotkeys.screenshot),
+        ("record", Action::Record, hotkeys.record),
+        ("recordNow", Action::RecordNow, hotkeys.record_now),
+    ] {
         let Some(accelerator) = accelerator.filter(|a| !a.trim().is_empty()) else { continue };
         let result = Shortcut::from_str(&accelerator)
             .map_err(|e| e.to_string())
@@ -119,10 +127,22 @@ mod tests {
     #[test]
     fn defaults_and_stored_values_parse() {
         let defaults = Hotkeys::default();
-        for accelerator in [defaults.screenshot.unwrap(), defaults.record.unwrap(), "Ctrl+Alt+KeyA".into()] {
+        for accelerator in [
+            defaults.screenshot.unwrap(),
+            defaults.record.unwrap(),
+            defaults.record_now.unwrap(),
+            "Ctrl+Alt+KeyA".into(),
+        ] {
             assert!(Shortcut::from_str(&accelerator).is_ok(), "{accelerator}");
         }
         let stored: Hotkeys = serde_json::from_str(r#"{"screenshot":null}"#).unwrap();
-        assert_eq!(stored, Hotkeys { screenshot: None, record: Some("Shift+PrintScreen".into()) });
+        assert_eq!(
+            stored,
+            Hotkeys {
+                screenshot: None,
+                record: Some("Shift+PrintScreen".into()),
+                record_now: Some("Ctrl+Shift+PrintScreen".into())
+            }
+        );
     }
 }

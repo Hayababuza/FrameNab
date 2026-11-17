@@ -76,7 +76,8 @@ Update packages are signed in the workflow with the repository secrets `TAURI_SI
 
 ```bash
 framenab gui        # screenshot overlay
-framenab record     # recording
+framenab record     # recording (choose the area)
+framenab record-now # record the last area right away (again: stop)
 framenab edit <file> # open a recording folder, its project.json or a .framenab.zip
 framenab editor     # editor
 framenab settings   # settings

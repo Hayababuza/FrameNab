@@ -12,7 +12,7 @@ import type { Project } from "$lib/bindings/Project";
 
 export type Platform = "windows" | "macOs" | "linuxX11" | "linuxWayland" | "unknown";
 export type ExportFormat = "gif" | "apng" | "webp" | "pngSequence" | "mp4" | "webm";
-export type Action = "screenshot" | "record" | "recordScreen" | "editor" | "settings";
+export type Action = "screenshot" | "record" | "recordScreen" | "recordNow" | "editor" | "settings";
 
 export interface AppInfo {
   version: string;
@@ -43,6 +43,8 @@ export interface CaptureInfo {
   mode: "screenshot" | "record";
   /** A single window can be recorded via the system dialog (Wayland). */
   windowPicker: boolean;
+  /** The overlay covers all monitors (Windows): no fullscreen request. */
+  span: boolean;
 }
 
 /** Selection in image pixels. */
@@ -113,6 +115,10 @@ export interface RecorderSetup {
   background: boolean;
   /** Wayland: shrink to a compact bar while recording (no transparent fullscreen there). */
   compact: boolean;
+  /** The window covers all monitors (Windows): no fullscreen request. */
+  span: boolean;
+  /** Quick recording by shortcut: start without waiting for the start button. */
+  autostart: boolean;
 }
 
 /** The frozen screen image of the area selection, shown behind the frame on Wayland. */
@@ -137,11 +143,16 @@ export interface RecordingSummary {
   width: number;
   height: number;
   dropped: number;
+  /** Saved right away (setting "after recording: save"): the file. */
+  saved: string | null;
 }
 
 export const recorderInfo = () => invoke<RecorderSetup | null>("recorder_info");
-export const recorderPrepare = (cursor: boolean) => invoke<void>("recorder_prepare", { cursor });
-export const recorderStart = (fps: number) => invoke<void>("recorder_start", { fps });
+export const recorderPrepare = (cursor: boolean, fps: number) =>
+  invoke<void>("recorder_prepare", { cursor, fps });
+/** `showKeys`: show the pressed keys in the result. */
+export const recorderStart = (fps: number, showKeys: boolean) =>
+  invoke<void>("recorder_start", { fps, showKeys });
 export const recorderPause = (paused: boolean) => invoke<void>("recorder_pause", { paused });
 export const recorderStatus = () => invoke<RecorderStatus>("recorder_status");
 export const recorderStop = () => invoke<RecordingSummary>("recorder_stop");
@@ -219,7 +230,7 @@ export const editorSetEffects = (effects: Effects) => invoke<EditorView>("editor
 export const inputSupport = () => invoke<"available" | "noPermission" | "unsupported">("input_support");
 
 export interface HotkeyProblem {
-  action: "screenshot" | "record";
+  action: "screenshot" | "record" | "recordNow";
   shortcut: string;
   error: string;
 }

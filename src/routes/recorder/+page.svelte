@@ -16,7 +16,10 @@
   import { toolbarPosition } from "$lib/annotations/selection";
   import { t } from "$lib/i18n/index.svelte";
   import {
+    inputSupport,
     loadRecorderBackground,
+    recordingFormats,
+    type ExportFormat,
     recorderInfo,
     recorderPause,
     recorderPrepare,
@@ -28,7 +31,7 @@
     type RecorderSetup,
     type RecordingSummary,
   } from "$lib/ipc";
-  import { getSetting, setSetting } from "$lib/stores/settings";
+  import { getSetting, setSetting, type RecordingFormat } from "$lib/stores/settings";
 
   type Phase = "setup" | "preparing" | "countdown" | "recording" | "saving" | "done";
 
@@ -60,6 +63,19 @@
   let fps = $state(15);
   let delay = $state(3);
   let cursor = $state(true);
+  /** Show the pressed keys; only possible when clicks and keys are recorded. */
+  let keys = $state(true);
+  let keysAvailable = $state(false);
+  let format = $state<RecordingFormat>("gif");
+  let formats = $state<ExportFormat[]>(["gif"]);
+  const FORMAT_LABELS: Record<RecordingFormat, string> = {
+    gif: "GIF",
+    apng: "APNG",
+    webp: "WebP",
+    pngSequence: "PNG (ZIP)",
+    mp4: "MP4",
+    webm: "WebM",
+  };
 
   let canvas: HTMLCanvasElement | undefined = $state();
   let background: ImageBitmap | null = null;
@@ -70,8 +86,9 @@
   /** Recorded area in CSS pixels (null = a window chosen in the system dialog). */
   const area = $derived.by((): Rect | null => {
     if (!setup?.region) return null;
-    // Image pixels per CSS pixel of the monitor (the window may be smaller when maximized).
-    const scale = setup.imageWidth / (window.screen.width || view.w);
+    // Image pixels per CSS pixel: the window covers the image (one monitor, or all of them on
+    // Windows); when maximized on Wayland it is smaller, so take the monitor's width there.
+    const scale = setup.imageWidth / ((live ? window.screen.width : view.w) || view.w);
     const r = setup.region;
     // When maximized on Wayland, the window does not start at the screen's corner.
     const o = live ? offset : { x: 0, y: 0 };
@@ -95,11 +112,17 @@
 
   onMount(() => {
     (async () => {
-      [fps, delay, cursor] = await Promise.all([
+      let recordInput: boolean;
+      [fps, delay, cursor, keys, format, recordInput] = await Promise.all([
         getSetting("recorderFps"),
         getSetting("recorderCountdown"),
         getSetting("recorderCursor"),
+        getSetting("recorderKeys"),
+        getSetting("recordingFormat"),
+        getSetting("recordInput"),
       ]);
+      keysAvailable = recordInput && (await inputSupport()) === "available";
+      formats = await recordingFormats();
       setup = await recorderInfo();
       if (!setup) return void win.close();
       if (setup.background) {
@@ -111,12 +134,14 @@
       if (setup.compact && !setup.background) {
         // Nothing to show behind a frame (e.g. a window chosen in the system dialog): bar only.
         await enterCompact();
-      } else {
+      } else if (!setup.span) {
         // Some compositors (GNOME/Wayland) ignore fullscreen requests for hidden windows.
         await win.setFullscreen(true);
       }
       await win.setFocus();
       await updateInputRegion();
+      // Quick recording by shortcut: go straight to the countdown.
+      if (setup.autostart) await record();
     })().catch((e) => (error = String(e)));
 
     const unlisten = listen("recorder-stop-requested", () => stop());
@@ -223,7 +248,7 @@
     summary = null;
     phase = "preparing";
     try {
-      await recorderPrepare(cursor);
+      await recorderPrepare(cursor, fps);
     } catch (e) {
       error = String(e);
       phase = "setup";
@@ -243,7 +268,7 @@
     await tick();
     await new Promise((resolve) => setTimeout(resolve, 250));
     try {
-      await recorderStart(fps);
+      await recorderStart(fps, keys && keysAvailable);
     } catch (e) {
       error = String(e);
       phase = "setup";
@@ -362,6 +387,30 @@
         disabled={phase !== "setup"}
       />
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l13 7-6 1.5L9.5 18z" /></svg>
+      {t("recorder.cursorShort")}
+    </label>
+    <label class="check" title={keysAvailable ? t("recorder.keys") : t("recorder.keysOff")}>
+      <input
+        type="checkbox"
+        bind:checked={keys}
+        onchange={() => setSetting("recorderKeys", keys)}
+        disabled={phase !== "setup" || !keysAvailable}
+      />
+      <svg viewBox="0 0 24 24" aria-hidden="true"
+        ><path d="M3 7h18v10H3zM7 11h.01M11 11h.01M15 11h.01M8 14h8" /></svg
+      >
+      {t("recorder.keysShort")}
+    </label>
+    <label title={t("recorder.format")}>
+      <select
+        bind:value={format}
+        onchange={() => setSetting("recordingFormat", format)}
+        disabled={phase !== "setup"}
+      >
+        {#each Object.entries(FORMAT_LABELS) as [value, label] (value)}
+          {#if formats.includes(value as ExportFormat)}<option {value}>{label}</option>{/if}
+        {/each}
+      </select>
     </label>
     <span class="sep"></span>
     <button class="primary" onclick={record} disabled={phase !== "setup"}>

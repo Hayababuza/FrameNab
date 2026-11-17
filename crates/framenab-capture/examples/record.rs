@@ -48,6 +48,7 @@ fn main() {
     let options = StreamOptions {
         cursor: args.iter().any(|a| a == "--cursor"),
         restore_token: token_file.as_ref().and_then(|f| std::fs::read_to_string(f).ok()),
+        fps,
     };
 
     let opened = Instant::now();

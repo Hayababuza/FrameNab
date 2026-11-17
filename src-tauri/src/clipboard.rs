@@ -34,3 +34,46 @@ pub async fn copy_image(_app: &AppHandle, image: RgbaImage) -> Result<(), String
     let data = arboard::ImageData { width: w as usize, height: h as usize, bytes: image.into_raw().into() };
     arboard::Clipboard::new().and_then(|mut c| c.set_image(data)).map_err(|e| e.to_string())
 }
+
+/// Puts a file on the clipboard (like "Copy" in the file manager), so a saved GIF or video can be
+/// pasted into chats, mails and documents with Ctrl+V.
+#[cfg(target_os = "linux")]
+pub async fn copy_file(app: &AppHandle, path: std::path::PathBuf) -> Result<(), String> {
+    use gtk::{TargetEntry, TargetFlags};
+
+    let uri = gtk::glib::filename_to_uri(&path, None).map_err(|e| e.to_string())?.to_string();
+    let text = path.display().to_string();
+    let (tx, rx) = tauri::async_runtime::channel(1);
+    app.run_on_main_thread(move || {
+        // GNOME/Nautilus, then the generic file list, then the path as text.
+        let targets = [
+            TargetEntry::new("x-special/gnome-copied-files", TargetFlags::empty(), 0),
+            TargetEntry::new("text/uri-list", TargetFlags::empty(), 1),
+            TargetEntry::new("UTF8_STRING", TargetFlags::empty(), 2),
+            TargetEntry::new("text/plain;charset=utf-8", TargetFlags::empty(), 2),
+        ];
+        let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
+        let ok = clipboard.set_with_data(&targets, move |_, data, info| match info {
+            0 => data.set(&data.target(), 8, format!("copy\n{uri}").as_bytes()),
+            1 => {
+                data.set_uris(&[uri.as_str()]);
+            }
+            _ => {
+                data.set_text(&text);
+            }
+        });
+        let _ = tx.try_send(ok);
+    })
+    .map_err(|e| e.to_string())?;
+    let mut rx = rx;
+    match rx.recv().await {
+        Some(true) => Ok(()),
+        Some(false) => Err("the clipboard did not accept the file".into()),
+        None => Err("clipboard task was dropped".into()),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub async fn copy_file(_app: &AppHandle, path: std::path::PathBuf) -> Result<(), String> {
+    arboard::Clipboard::new().and_then(|mut c| c.set().file_list(&[path])).map_err(|e| e.to_string())
+}

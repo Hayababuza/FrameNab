@@ -30,8 +30,15 @@ export interface Settings {
   recorderFps: number;
   /** Seconds before the recording starts. */
   recorderCountdown: number;
+  /** Draw the mouse pointer into the recording. */
   recorderCursor: boolean;
-  /** Format for saving recordings from the editor. */
+  /** Show the pressed keys in the recording (they are recorded either way, if allowed). */
+  recorderKeys: boolean;
+  /** After a recording: open it in the editor, or save it right away (format and name from here). */
+  afterRecording: "editor" | "save";
+  /** Put a saved recording on the clipboard as a file, to paste it with Ctrl+V. */
+  copyRecording: boolean;
+  /** Format for saving recordings (editor "Save", and saving right away). */
   recordingFormat: RecordingFormat;
   /** Wayland session: use native Wayland windows instead of XWayland (applies after a restart). */
   nativeWayland: boolean;
@@ -44,10 +51,21 @@ export interface Settings {
   /** Check for a new version when the app starts. */
   updateCheck: boolean;
   /** Global shortcuts as accelerators (`Shift+PrintScreen`); `null` = off. Not on Wayland. */
-  hotkeys: { screenshot: string | null; record: string | null };
+  hotkeys: Hotkeys;
 }
 
-export const DEFAULT_HOTKEYS = { screenshot: "PrintScreen", record: "Shift+PrintScreen" };
+export interface Hotkeys {
+  screenshot: string | null;
+  record: string | null;
+  /** Start recording the last area right away. */
+  recordNow: string | null;
+}
+
+export const DEFAULT_HOTKEYS: Hotkeys = {
+  screenshot: "PrintScreen",
+  record: "Shift+PrintScreen",
+  recordNow: "Ctrl+Shift+PrintScreen",
+};
 
 export const DEFAULT_TEMPLATE = "FrameNab_{yyyy-MM-dd_HH-mm-ss}";
 
@@ -60,6 +78,9 @@ const defaults: Settings = {
   recorderFps: 15,
   recorderCountdown: 3,
   recorderCursor: true,
+  recorderKeys: true,
+  afterRecording: "editor",
+  copyRecording: true,
   recordingFormat: "gif",
   nativeWayland: false,
   recordInput: true,

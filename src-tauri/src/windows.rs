@@ -73,6 +73,10 @@ pub fn run(app: &AppHandle, action: Action) {
             record_screen(app);
             Ok(())
         }
+        Action::RecordNow => {
+            crate::recorder::record_now(app);
+            Ok(())
+        }
         Action::Editor => {
             show_main(app);
             Ok(())
@@ -102,11 +106,21 @@ fn record_screen(app: &AppHandle) {
     if crate::recorder::is_recording(app) {
         return crate::recorder::request_stop(app);
     }
-    let monitor = app.primary_monitor().ok().flatten().or_else(|| app.available_monitors().ok()?.into_iter().next());
-    let Some(monitor) = monitor else { return };
-    let size = monitor.size();
-    let region = crate::recorder::Region { x: 0, y: 0, w: size.width, h: size.height };
-    crate::recorder::open(app, Some(region), (size.width, size.height), None, None);
+    let Some(monitor) = monitor_at(app, None) else { return };
+    let region = crate::recorder::Region { x: 0, y: 0, w: monitor.width, h: monitor.height };
+    let portal = framenab_capture::Platform::detect().requires_portal();
+    crate::recorder::open(
+        app,
+        crate::recorder::Open {
+            region: Some(region),
+            size: (monitor.width, monitor.height),
+            origin: if portal { (0, 0) } else { (monitor.x, monitor.y) },
+            background: None,
+            restore: None,
+            placement: Some(monitor),
+            autostart: false,
+        },
+    );
 }
 
 pub fn show_main(app: &AppHandle) {
@@ -139,58 +153,133 @@ pub fn close_overlay(app: &AppHandle) {
     }
 }
 
-/// Screenshot overlay: borderless, always on top, covering the whole screen. It starts hidden
-/// and shows itself once the frozen screen image is drawn, to avoid a white flash.
-pub fn open_overlay(app: &AppHandle) -> tauri::Result<()> {
-    close_overlay(app);
-    let mut builder = WebviewWindowBuilder::new(app, OVERLAY, WebviewUrl::App(OVERLAY.into()));
-    // Start at the full monitor size: on Linux, WebKitGTK does not always resize its viewport
-    // when the window switches to fullscreen afterwards.
-    // Wayland has no notion of a primary monitor, so fall back to the first one.
-    let monitor = app.primary_monitor().ok().flatten().or_else(|| app.available_monitors().ok()?.into_iter().next());
-    if let Some(monitor) = monitor {
-        let size = monitor.size().to_logical::<f64>(monitor.scale_factor());
-        let pos = monitor.position().to_logical::<f64>(monitor.scale_factor());
-        tracing::debug!(?size, ?pos, scale = monitor.scale_factor(), "overlay monitor");
-        builder = builder.inner_size(size.width, size.height).position(pos.x, pos.y);
-    } else {
-        tracing::warn!("no monitor information available for the overlay");
+/// Where the overlay and the recorder go, in physical pixels of the desktop.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Placement {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub scale: f64,
+    /// One window across all monitors (Windows with several monitors) instead of a fullscreen
+    /// window on one monitor.
+    pub span: bool,
+}
+
+impl Placement {
+    pub fn of(monitor: &tauri::Monitor) -> Self {
+        let (pos, size) = (monitor.position(), monitor.size());
+        Self { x: pos.x, y: pos.y, width: size.width, height: size.height, scale: monitor.scale_factor(), span: false }
     }
-    builder
-        .title("FrameNab – Screenshot")
-        .decorations(false)
-        .always_on_top(true)
-        // Keep a taskbar/dock entry: the main window may be hidden while the overlay is open,
-        // and FrameNab should not look as if it had quit.
-        .resizable(false)
-        .fullscreen(true)
-        .visible(false)
-        .build()?;
+
+    pub fn contains(&self, x: i32, y: i32) -> bool {
+        x >= self.x && y >= self.y && x < self.x + self.width as i32 && y < self.y + self.height as i32
+    }
+}
+
+/// The overlay/recorder placement: on Windows with several monitors one window across all of them
+/// (so an area can be chosen on any monitor, or across them); elsewhere fullscreen on the monitor
+/// under the mouse (`at`: a desktop point to use instead), else the primary one.
+///
+/// Spanning is Windows-only: macOS keeps windows on one display, X11 window managers and Wayland
+/// do not reliably allow a window across monitors.
+pub fn placement(app: &AppHandle, at: Option<(i32, i32)>) -> Option<Placement> {
+    let monitors = app.available_monitors().ok().filter(|m| !m.is_empty())?;
+    if cfg!(windows) && monitors.len() > 1 {
+        let all: Vec<Placement> = monitors.iter().map(Placement::of).collect();
+        let min_x = all.iter().map(|p| p.x).min()?;
+        let min_y = all.iter().map(|p| p.y).min()?;
+        let max_x = all.iter().map(|p| p.x + p.width as i32).max()?;
+        let max_y = all.iter().map(|p| p.y + p.height as i32).max()?;
+        let scale = app.primary_monitor().ok().flatten().map_or(1.0, |m| m.scale_factor());
+        return Some(Placement {
+            x: min_x,
+            y: min_y,
+            width: (max_x - min_x) as u32,
+            height: (max_y - min_y) as u32,
+            scale,
+            span: true,
+        });
+    }
+    monitor_at(app, at)
+}
+
+/// The monitor at `at` (a desktop point), else the one under the mouse, else the primary one.
+pub fn monitor_at(app: &AppHandle, at: Option<(i32, i32)>) -> Option<Placement> {
+    let all: Vec<Placement> = app.available_monitors().ok()?.iter().map(Placement::of).collect();
+    let point = at.or_else(|| app.cursor_position().ok().map(|p| (p.x as i32, p.y as i32)));
+    let under = point.and_then(|(x, y)| all.iter().find(|p| p.contains(x, y)).copied());
+    let primary = app.primary_monitor().ok().flatten().map(|m| Placement::of(&m));
+    under.or(primary).or(all.first().copied())
+}
+
+/// Sizes and positions a window built hidden by [`builder_at`] to its placement.
+fn place(window: &WebviewWindow, placement: &Placement) -> tauri::Result<()> {
+    if placement.span {
+        // Physical units: with mixed DPI the logical size depends on the monitor. Position first:
+        // moving to another monitor may change the window's scale and size.
+        window.set_position(tauri::PhysicalPosition::new(placement.x, placement.y))?;
+        window.set_size(tauri::PhysicalSize::new(placement.width, placement.height))?;
+    }
     Ok(())
 }
 
-/// Recorder: borderless, transparent and fullscreen; the page draws the frame and controls and
-/// makes everything else click-through. Starts hidden until the page has laid itself out.
-pub fn open_recorder(app: &AppHandle) -> tauri::Result<()> {
+/// Builder for a borderless, always-on-top window on `placement`: fullscreen on its monitor, or
+/// (spanning) a plain window across the desktop, sized after it was built (see [`place`]).
+fn builder_at<'a>(
+    app: &'a AppHandle,
+    label: &str,
+    placement: Option<&Placement>,
+) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
+    let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(label.into()))
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(false)
+        .visible(false);
+    match placement {
+        Some(p) if p.span => {
+            builder = builder.shadow(false);
+        }
+        Some(p) => {
+            // Start at the full monitor size: on Linux, WebKitGTK does not always resize its
+            // viewport when the window switches to fullscreen afterwards.
+            let size = tauri::PhysicalSize::new(p.width, p.height).to_logical::<f64>(p.scale);
+            let pos = tauri::PhysicalPosition::new(p.x, p.y).to_logical::<f64>(p.scale);
+            tracing::debug!(?size, ?pos, scale = p.scale, "window monitor");
+            builder = builder.inner_size(size.width, size.height).position(pos.x, pos.y).fullscreen(true);
+        }
+        None => {
+            tracing::warn!("no monitor information available for the window");
+            builder = builder.fullscreen(true);
+        }
+    }
+    builder
+}
+
+/// Screenshot overlay: borderless, always on top, covering the screen(s). It starts hidden and
+/// shows itself once the frozen screen image is drawn, to avoid a white flash.
+// Keeps a taskbar/dock entry: the main window may be hidden while the overlay is open, and
+// FrameNab should not look as if it had quit.
+pub fn open_overlay(app: &AppHandle, placement: Option<&Placement>) -> tauri::Result<()> {
+    close_overlay(app);
+    let window = builder_at(app, OVERLAY, placement).title("FrameNab – Screenshot").build()?;
+    if let Some(p) = placement {
+        place(&window, p)?;
+    }
+    Ok(())
+}
+
+/// Recorder: borderless, transparent and covering the screen(s); the page draws the frame and
+/// controls and makes everything else click-through. Starts hidden until the page has laid
+/// itself out.
+pub fn open_recorder(app: &AppHandle, placement: Option<&Placement>) -> tauri::Result<()> {
     if let Some(w) = app.get_webview_window(RECORDER) {
         let _ = w.close();
     }
-    let mut builder = WebviewWindowBuilder::new(app, RECORDER, WebviewUrl::App(RECORDER.into()));
-    let monitor = app.primary_monitor().ok().flatten().or_else(|| app.available_monitors().ok()?.into_iter().next());
-    if let Some(monitor) = monitor {
-        let size = monitor.size().to_logical::<f64>(monitor.scale_factor());
-        let pos = monitor.position().to_logical::<f64>(monitor.scale_factor());
-        builder = builder.inner_size(size.width, size.height).position(pos.x, pos.y);
+    let window = builder_at(app, RECORDER, placement).title("FrameNab – Recording").transparent(true).build()?;
+    if let Some(p) = placement {
+        place(&window, p)?;
     }
-    builder
-        .title("FrameNab – Recording")
-        .decorations(false)
-        .transparent(true)
-        .always_on_top(true)
-        .resizable(false)
-        .fullscreen(true)
-        .visible(false)
-        .build()?;
     Ok(())
 }
 

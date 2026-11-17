@@ -5,7 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
+- Quick recording: a shortcut (default `Ctrl+Shift+PrintScreen`, CLI `framenab record-now`) records the last recorded area again – or the monitor under the mouse – and starts right away after the countdown; pressing it again stops
+- Recorder bar: switches for the mouse pointer and the pressed keys, and the format for saving, with labels, before the recording starts
+- After recording: "Save right away" (Settings → Recording) saves the file without the editor, with the file name from the template and the format from the settings; the project stays under recent recordings for later edits
+- Saved recordings are put on the clipboard as a file (can be switched off), so they can be pasted with Ctrl+V into chats, mails and documents
+- Several monitors: on Windows the screenshot overlay and the recorder cover all monitors, so an area can be chosen (and recorded) on any monitor or across them; on the other systems they open on the monitor under the mouse instead of always the primary one
 - Windows 11: Settings → Shortcuts notices when Windows takes the Print Screen key for its own screen capture (Snipping Tool) and offers to hand it to FrameNab (switches that Windows option off for the current user, effective after signing in again) or to open the Windows setting
+
+### Fixed
+- Windows: the second recording in a session failed with "The parameter is incorrect (0x80070057)" until FrameNab was restarted – the screen capture library kept the monitor locked after a recording. Recordings now copy the area with GDI (like ScreenToGif), which also records areas across monitors
+- Windows: the mouse pointer was missing from recordings; it is now drawn in (switch "Pointer" in the recorder bar)
 
 ## [0.4.2] - 2026-11-12
 

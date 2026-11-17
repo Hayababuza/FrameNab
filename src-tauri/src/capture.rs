@@ -39,6 +39,8 @@ pub struct CaptureState {
     busy: AtomicBool,
     /// The main window was hidden for the capture and should come back afterwards.
     restore: windows::Restore,
+    /// Where the overlay was opened (the recorder opens at the same place).
+    placement: Mutex<Option<windows::Placement>>,
 }
 
 struct Capture {
@@ -48,6 +50,9 @@ struct Capture {
     windows: Vec<WindowRect>,
     /// Already cropped to the overlay's monitor.
     fitted: bool,
+    /// Desktop position of the image's top-left corner (physical pixels), once fitted. (0, 0) on
+    /// Wayland, where positions are relative to the monitor the screen cast shows.
+    origin: (i32, i32),
 }
 
 /// A window's frame in image pixels, for snapping the selection to it.
@@ -69,6 +74,8 @@ pub struct CaptureInfo {
     mode: CaptureMode,
     /// Whether the platform can record a single window chosen in a system dialog (Wayland).
     window_picker: bool,
+    /// The overlay covers all monitors (no fullscreen request).
+    span: bool,
 }
 
 /// Selection in image pixels.
@@ -133,8 +140,11 @@ pub fn start(app: &AppHandle, hide: Option<String>, mode: CaptureMode) {
                 let id = state.next_id.fetch_add(1, Ordering::SeqCst) + 1;
                 tracing::info!(id, width = image.width(), height = image.height(), "screenshot captured");
                 *state.current.lock().expect("capture lock") =
-                    Some(Capture { id, image: Arc::new(image), windows, fitted: false });
-                if let Err(err) = windows::open_overlay(&app) {
+                    Some(Capture { id, image: Arc::new(image), windows, fitted: false, origin: (0, 0) });
+                let placement = windows::placement(&app, None);
+                tracing::debug!(?placement, "overlay placement");
+                *state.placement.lock().expect("placement lock") = placement;
+                if let Err(err) = windows::open_overlay(&app, placement.as_ref()) {
                     tracing::error!(%err, "failed to open overlay");
                     finish(&app);
                 }
@@ -202,27 +212,36 @@ fn show_error(app: &AppHandle, detail: &str) {
         .show(|_| {});
 }
 
-/// Crops a screenshot of the whole virtual desktop to the monitor the overlay is shown on.
-/// Returns the cropped image and the offset of the crop within the original.
-fn fit_to_monitor(app: &AppHandle, image: &RgbaImage) -> Option<(RgbaImage, i32, i32)> {
-    let overlay = windows::overlay(app)?;
-    let monitor = overlay.current_monitor().ok().flatten()?;
-    let monitors = app.available_monitors().ok()?;
-    if monitors.len() < 2 {
-        return None;
+/// Fits a screenshot of the whole virtual desktop to the overlay: crops it to the overlay's
+/// monitor, unless the overlay spans all monitors. Returns the cropped image (`None`: unchanged),
+/// the offset of the crop within the original, and the desktop position of the result's top-left.
+fn fit_to_overlay(app: &AppHandle, image: &RgbaImage, span: bool) -> (Option<RgbaImage>, (i32, i32), (i32, i32)) {
+    // Wayland: the recording is relative to the monitor of the screen cast, not the desktop.
+    let portal = framenab_capture::Platform::detect().requires_portal();
+    let monitors = app.available_monitors().unwrap_or_default();
+    let (Some(min_x), Some(min_y), Some(max_x), Some(max_y)) = (
+        monitors.iter().map(|m| m.position().x).min(),
+        monitors.iter().map(|m| m.position().y).min(),
+        monitors.iter().map(|m| m.position().x + m.size().width as i32).max(),
+        monitors.iter().map(|m| m.position().y + m.size().height as i32).max(),
+    ) else {
+        return (None, (0, 0), (0, 0));
+    };
+    let desktop = if portal { (0, 0) } else { (min_x, min_y) };
+    if monitors.len() < 2 || span {
+        return (None, (0, 0), desktop);
     }
-    let min_x = monitors.iter().map(|m| m.position().x).min()?;
-    let min_y = monitors.iter().map(|m| m.position().y).min()?;
-    let max_x = monitors.iter().map(|m| m.position().x + m.size().width as i32).max()?;
-    let max_y = monitors.iter().map(|m| m.position().y + m.size().height as i32).max()?;
     if (image.width(), image.height()) != ((max_x - min_x) as u32, (max_y - min_y) as u32) {
         tracing::warn!("screenshot does not match the monitor layout; showing it unscaled");
-        return None;
+        return (None, (0, 0), desktop);
     }
-    let pos = monitor.position();
-    let size = monitor.size();
+    let Some(monitor) = windows::overlay(app).and_then(|o| o.current_monitor().ok().flatten()) else {
+        return (None, (0, 0), desktop);
+    };
+    let (pos, size) = (monitor.position(), monitor.size());
     let (ox, oy) = (pos.x - min_x, pos.y - min_y);
-    Some((framenab_capture::crop(image, ox, oy, size.width, size.height), ox, oy))
+    let origin = if portal { (0, 0) } else { (pos.x, pos.y) };
+    (Some(framenab_capture::crop(image, ox, oy, size.width, size.height)), (ox, oy), origin)
 }
 
 #[tauri::command]
@@ -230,15 +249,18 @@ pub fn capture_info(app: AppHandle) -> Option<CaptureInfo> {
     let state = app.state::<CaptureState>();
     let mut guard = state.current.lock().expect("capture lock");
     let capture = guard.as_mut()?;
+    let span = state.placement.lock().expect("placement lock").is_some_and(|p| p.span);
     if !capture.fitted {
         capture.fitted = true;
-        if let Some((fitted, ox, oy)) = fit_to_monitor(&app, &capture.image) {
+        let (fitted, (ox, oy), origin) = fit_to_overlay(&app, &capture.image, span);
+        if let Some(fitted) = fitted {
             capture.image = Arc::new(fitted);
             for w in &mut capture.windows {
                 w.x -= ox;
                 w.y -= oy;
             }
         }
+        capture.origin = origin;
     }
     Some(CaptureInfo {
         id: capture.id,
@@ -247,6 +269,7 @@ pub fn capture_info(app: AppHandle) -> Option<CaptureInfo> {
         windows: capture.windows.clone(),
         mode: *state.mode.lock().expect("mode lock"),
         window_picker: framenab_capture::Platform::detect().requires_portal(),
+        span,
     })
 }
 
@@ -277,16 +300,27 @@ pub async fn record_window(app: AppHandle) -> Result<(), String> {
 }
 
 fn open_recorder(app: &AppHandle, region: Option<recorder::Region>) {
-    let image = {
-        let state = app.state::<CaptureState>();
+    let state = app.state::<CaptureState>();
+    let (image, origin) = {
         let guard = state.current.lock().expect("capture lock");
-        guard.as_ref().map(|c| Arc::clone(&c.image))
+        (guard.as_ref().map(|c| Arc::clone(&c.image)), guard.as_ref().map_or((0, 0), |c| c.origin))
     };
     let size = image.as_ref().map_or((1, 1), |i| (i.width(), i.height()));
+    // Same place as the overlay: across all monitors, or on the overlay's monitor.
+    let placement = match *state.placement.lock().expect("placement lock") {
+        Some(p) if p.span => Some(p),
+        other => windows::overlay(app)
+            .and_then(|o| o.current_monitor().ok().flatten())
+            .map(|m| windows::Placement::of(&m))
+            .or(other),
+    };
     // The recorder takes over bringing the main window back.
-    let restore = app.state::<CaptureState>().restore.take();
+    let restore = state.restore.take();
     windows::close_overlay(app);
-    recorder::open(app, region, size, image, restore);
+    recorder::open(
+        app,
+        recorder::Open { region, size, origin, background: image, restore, placement, autostart: false },
+    );
 }
 
 /// Crops the current capture to `selection` and renders the annotations into it.

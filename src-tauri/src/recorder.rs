@@ -23,8 +23,9 @@ use crate::windows;
 /// Store key for the Wayland screen-sharing restore token.
 const TOKEN_KEY: &str = "screencastRestoreToken";
 
-/// Area to record, in pixels of the screenshot the overlay showed (= the monitor's pixels).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// Area to record, in pixels of the screenshot the overlay showed (= the pixels of the recorder
+/// window, which covers the same monitor(s)). Add [`Setup`]'s origin for desktop coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Region {
     pub x: i32,
     pub y: i32,
@@ -45,6 +46,13 @@ pub struct Setup {
     background: bool,
     /// Wayland: the window has to shrink to a compact bar while recording.
     compact: bool,
+    /// The window covers all monitors (no fullscreen request).
+    span: bool,
+    /// Start right away (quick recording by shortcut), without waiting for the start button.
+    autostart: bool,
+    /// Desktop position of the region's coordinate origin, in physical pixels.
+    #[serde(skip)]
+    origin: (i32, i32),
 }
 
 #[derive(Default)]
@@ -55,6 +63,8 @@ struct Inner {
     project_dir: Option<PathBuf>,
     /// Records clicks and keys while recording (dropping it stops it).
     input: Option<framenab_capture::input::InputListener>,
+    /// Show the pressed keys in the result (chosen in the recorder bar).
+    show_keys: bool,
 }
 
 #[derive(Default)]
@@ -79,29 +89,102 @@ impl RecorderState {
     }
 }
 
-/// Opens the recorder window for `region` (or a window chosen later, if `None`). `background` is
-/// the frozen screen image of the area selection, if there was one.
-pub fn open(
-    app: &AppHandle,
-    region: Option<Region>,
-    (image_width, image_height): (u32, u32),
-    background: Option<Arc<RgbaImage>>,
-    restore: Option<String>,
-) {
+/// What the recorder window is opened with.
+pub struct Open {
+    /// `None`: a window chosen later in the system dialog (Wayland).
+    pub region: Option<Region>,
+    /// Size of the screenshot the region refers to (= the window's size in physical pixels).
+    pub size: (u32, u32),
+    /// Desktop position of the region's coordinate origin.
+    pub origin: (i32, i32),
+    /// The frozen screen image of the area selection, if there was one.
+    pub background: Option<Arc<RgbaImage>>,
+    /// Window to show again when the recorder closes.
+    pub restore: Option<String>,
+    pub placement: Option<windows::Placement>,
+    pub autostart: bool,
+}
+
+/// Opens the recorder window.
+pub fn open(app: &AppHandle, open: Open) {
     let state = app.state::<RecorderState>();
     // Native Wayland windows cannot be transparent in fullscreen nor stay on top.
     let compact = crate::display::native_wayland();
-    let background = background.filter(|_| compact);
+    let background = open.background.filter(|_| compact);
+    let span = open.placement.is_some_and(|p| p.span);
     {
         let mut inner = state.lock();
         *inner = Inner::default();
-        inner.setup = Some(Setup { region, image_width, image_height, background: background.is_some(), compact });
+        inner.setup = Some(Setup {
+            region: open.region,
+            image_width: open.size.0,
+            image_height: open.size.1,
+            background: background.is_some(),
+            compact,
+            span,
+            autostart: open.autostart,
+            origin: open.origin,
+        });
     }
     *state.background.lock().expect("background lock") = background;
-    state.restore.set(restore);
-    if let Err(err) = windows::open_recorder(app) {
+    state.restore.set(open.restore);
+    if let Err(err) = windows::open_recorder(app, open.placement.as_ref()) {
         tracing::error!(%err, "failed to open the recorder window");
     }
+}
+
+/// Settings key: the last recorded area, in desktop pixels (relative to the monitor on Wayland).
+const LAST_AREA_KEY: &str = "lastRecordArea";
+
+/// Quick recording (shortcut, `framenab record-now`): records the last recorded area again, or
+/// the whole monitor under the mouse, and starts right away (after the countdown). Stops a
+/// running recording instead.
+pub fn record_now(app: &AppHandle) {
+    if is_recording(app) {
+        return request_stop(app);
+    }
+    if let Some(w) = app.get_webview_window(windows::RECORDER) {
+        let _ = w.set_focus();
+        return;
+    }
+    let last: Option<Region> =
+        app.store("settings.json").ok().and_then(|s| s.get(LAST_AREA_KEY)).and_then(|v| serde_json::from_value(v).ok());
+    let portal = framenab_capture::Platform::detect().requires_portal();
+    let center = last.map(|r| (r.x + r.w as i32 / 2, r.y + r.h as i32 / 2));
+    let Some(placement) = windows::placement(app, center.filter(|_| !portal)) else {
+        tracing::warn!("no monitor found for a quick recording");
+        return;
+    };
+    // Region coordinates are relative to the window; on Wayland the stored area already is.
+    let origin = if portal { (0, 0) } else { (placement.x, placement.y) };
+    let fits = |r: &Region| {
+        let (x, y) = (r.x - origin.0, r.y - origin.1);
+        x >= 0 && y >= 0 && x as u32 + r.w <= placement.width && y as u32 + r.h <= placement.height
+    };
+    let region = match last.filter(fits) {
+        Some(r) => Region { x: r.x - origin.0, y: r.y - origin.1, w: r.w, h: r.h },
+        None => {
+            // The whole monitor under the mouse (within a window that spans all of them).
+            let monitor = windows::monitor_at(app, None).filter(|_| placement.span && !portal);
+            match monitor {
+                Some(m) => Region { x: m.x - origin.0, y: m.y - origin.1, w: m.width, h: m.height },
+                None => Region { x: 0, y: 0, w: placement.width, h: placement.height },
+            }
+        }
+    };
+    tracing::info!(?region, ?placement, "quick recording");
+    open(
+        app,
+        Open {
+            region: Some(region),
+            size: (placement.width, placement.height),
+            origin,
+            background: None,
+            restore: None,
+            placement: Some(placement),
+            autostart: true,
+        },
+    );
 }
 
 /// Is a recording running (used by the tray/shortcut to stop it)?
@@ -124,14 +207,18 @@ pub fn cleanup(app: &AppHandle) {
     if let Some(stream) = stream {
         stream.stop();
     }
-    state.lock().input.take();
+    let show_keys = {
+        let mut inner = state.lock();
+        inner.input.take();
+        inner.show_keys
+    };
     if let Some(recording) = recording {
         // Closed while recording: keep what was recorded.
         let (sink, end, _, input) = recording.stop();
         match (sink.finish(end), dir) {
             (Err(err), _) => tracing::warn!(%err, "could not finish the recording"),
             (Ok((project, _)), Some(dir)) => {
-                if let Err(err) = save_input(&dir, project, &input) {
+                if let Err(err) = save_input(&dir, project, &input, show_keys) {
                     tracing::warn!(%err, "could not save the recorded input");
                 }
                 tracing::info!(path = %dir.display(), "recording kept after the recorder was closed");
@@ -151,17 +238,17 @@ pub fn recorder_info(app: AppHandle) -> Option<Setup> {
 /// Opens the capture stream. On Wayland this may show the screen-sharing dialog (once for
 /// monitors: the choice is remembered in the settings).
 #[tauri::command]
-pub async fn recorder_prepare(app: AppHandle, cursor: bool) -> Result<(), String> {
+pub async fn recorder_prepare(app: AppHandle, cursor: bool, fps: u32) -> Result<(), String> {
     let setup = app.state::<RecorderState>().lock().setup.clone().ok_or("recorder is not set up")?;
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
     let restore_token = store.get(TOKEN_KEY).and_then(|v| v.as_str().map(str::to_owned));
     let target = match setup.region {
-        Some(r) => CaptureTarget::Region { x: r.x, y: r.y, width: r.w, height: r.h },
+        Some(r) => CaptureTarget::Region { x: r.x + setup.origin.0, y: r.y + setup.origin.1, width: r.w, height: r.h },
         None => CaptureTarget::Window(0),
     };
 
     let stream = tauri::async_runtime::spawn_blocking(move || {
-        framenab_capture::backend().open_stream(&target, &StreamOptions { cursor, restore_token })
+        framenab_capture::backend().open_stream(&target, &StreamOptions { cursor, restore_token, fps })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -179,19 +266,25 @@ pub async fn recorder_prepare(app: AppHandle, cursor: bool) -> Result<(), String
     Ok(())
 }
 
-/// Starts sampling the prepared stream into a new project folder.
+/// Starts sampling the prepared stream into a new project folder. `show_keys`: show the pressed
+/// keys in the result (they are recorded either way, if allowed, to switch on in the editor).
 #[tauri::command]
-pub fn recorder_start(app: AppHandle, fps: u32) -> Result<(), String> {
+pub fn recorder_start(app: AppHandle, fps: u32, show_keys: bool) -> Result<(), String> {
     let state = app.state::<RecorderState>();
     let mut inner = state.lock();
     let stream = inner.stream.take().ok_or("the stream is not prepared")?;
     let origin = stream.origin();
-    let crop = inner.setup.as_ref().and_then(|s| s.region).map(|r| Crop {
-        x: r.x - origin.0,
-        y: r.y - origin.1,
-        width: r.w,
-        height: r.h,
-    });
+    let setup = inner.setup.clone();
+    let area = setup.as_ref().and_then(|s| s.region.map(|r| (r, s.origin)));
+    let crop = area.map(|(r, o)| Crop { x: r.x + o.0 - origin.0, y: r.y + o.1 - origin.1, width: r.w, height: r.h });
+    // Remembered for the quick recording.
+    if let Some((r, o)) = area
+        && let Ok(store) = app.store("settings.json")
+        && let Ok(value) = serde_json::to_value(Region { x: r.x + o.0, y: r.y + o.1, ..r })
+    {
+        store.set(LAST_AREA_KEY, value);
+    }
+    inner.show_keys = show_keys;
     let dir = recordings_dir(&app)
         .join(format!("{}.framenab", framenab_export::still::file_name_now(framenab_export::still::DEFAULT_TEMPLATE)));
     let sink = ProjectRecorder::create(&dir).map_err(|e| e.to_string())?;
@@ -240,29 +333,63 @@ pub struct Summary {
     width: u32,
     height: u32,
     dropped: u64,
+    /// Saved right away (setting "after recording: save"): where the file is.
+    saved: Option<String>,
 }
+
+/// Settings key: what happens after a recording, `"editor"` (default) or `"save"` (save in the
+/// format from the settings, copy, done).
+const AFTER_KEY: &str = "afterRecording";
 
 #[tauri::command]
 pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
-    let (recording, dir) = {
+    let (recording, dir, show_keys) = {
         let state = app.state::<RecorderState>();
         let mut inner = state.lock();
         inner.input.take();
-        (inner.recording.take().ok_or("not recording")?, inner.project_dir.clone().ok_or("no project folder")?)
+        (
+            inner.recording.take().ok_or("not recording")?,
+            inner.project_dir.clone().ok_or("no project folder")?,
+            inner.show_keys,
+        )
     };
     let target = dir.clone();
     let (project, stats) = tauri::async_runtime::spawn_blocking(move || {
         let (sink, end, _, input) = recording.stop();
         let (project, stats) = sink.finish(end).map_err(|e| e.to_string())?;
-        let project = save_input(&target, project, &input)?;
+        let project = save_input(&target, project, &input, show_keys)?;
         Ok::<_, String>((project, stats))
     })
     .await
     .map_err(|e| e.to_string())??;
     tracing::info!(path = %dir.display(), frames = stats.frames, dropped = stats.dropped, "recording finished");
-    // Continue in the editor; it takes over bringing the main window back.
     let restore = app.state::<RecorderState>().restore.take();
-    crate::editor::open(&app, dir.clone(), restore)?;
+    let direct = app.store("settings.json").ok().and_then(|s| s.get(AFTER_KEY)).is_some_and(|v| v == "save");
+    let saved = if direct {
+        match save_directly(&app, &dir, &project).await {
+            Ok(path) => Some(path.display().to_string()),
+            Err(err) => {
+                tracing::error!(%err, "saving the recording directly failed");
+                use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                app.dialog()
+                    .message(format!("{}\n\n{err}", crate::i18n::t("save.recordingFailed")))
+                    .title("FrameNab")
+                    .kind(MessageDialogKind::Error)
+                    .show(|_| {});
+                None
+            }
+        }
+    } else {
+        None
+    };
+    if saved.is_some() {
+        if let Some(label) = restore {
+            windows::show_window(&app, &label);
+        }
+    } else {
+        // Continue in the editor; it takes over bringing the main window back.
+        crate::editor::open(&app, dir.clone(), restore)?;
+    }
     Ok(Summary {
         path: dir.display().to_string(),
         frames: project.frames.len(),
@@ -270,7 +397,33 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
         width: project.width,
         height: project.height,
         dropped: stats.dropped,
+        saved,
     })
+}
+
+/// Saves a finished recording into the save folder (file name from the template, format and
+/// options from the settings) and copies it; the project stays in the recordings for later edits.
+async fn save_directly(
+    app: &AppHandle,
+    dir: &std::path::Path,
+    project: &framenab_core::Project,
+) -> Result<PathBuf, String> {
+    use framenab_export::animation::{ExportControl, export_animation};
+    use framenab_export::still::{file_name_now, unique_path};
+
+    let (format, options) = crate::editor::saved_choice(app);
+    let config = crate::settings::save_settings(app);
+    let path = unique_path(&config.directory, &file_name_now(&config.template), format.extension());
+    let (dir, project, target) = (dir.to_owned(), project.clone(), path.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = framenab_core::FrameStore::create(&dir).map_err(|e| e.to_string())?;
+        export_animation(&store, &project, &target, format, &options, &ExportControl::default())
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    crate::editor::announce_saved(app, &path).await;
+    Ok(path)
 }
 
 /// Settings key: record clicks and keys (default on).
@@ -281,12 +434,13 @@ fn save_input(
     dir: &std::path::Path,
     mut project: framenab_core::Project,
     input: &framenab_core::InputEvents,
+    show_keys: bool,
 ) -> Result<framenab_core::Project, String> {
     let store = framenab_core::FrameStore::create(dir).map_err(|e| e.to_string())?;
     store.save_input(input).map_err(|e| e.to_string())?;
     project.effects.cursor = !input.cursor.is_empty();
     project.effects.clicks = !input.clicks.is_empty();
-    project.effects.keys = !input.keys.is_empty();
+    project.effects.keys = show_keys && !input.keys.is_empty();
     store.save_project(&project).map_err(|e| e.to_string())?;
     Ok(project)
 }

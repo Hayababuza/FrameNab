@@ -2,11 +2,16 @@
 
 use image::RgbaImage;
 
+#[cfg(not(windows))]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(not(windows))]
 use std::sync::{Arc, mpsc};
+#[cfg(not(windows))]
 use std::thread::{self, JoinHandle};
+#[cfg(not(windows))]
 use std::time::Duration;
 
+#[cfg(not(windows))]
 use crate::recording::{LatestFrame, SourceFrame};
 use crate::{
     CaptureBackend, CaptureError, CaptureTarget, FrameStream, MonitorInfo, Platform, Result, StreamOptions, WindowInfo,
@@ -95,6 +100,27 @@ impl CaptureBackend for XcapBackend {
         Ok(windows.into_iter().map(|(_, w)| w).collect())
     }
 
+    #[cfg(windows)]
+    fn open_stream(&self, target: &CaptureTarget, options: &StreamOptions) -> Result<Box<dyn FrameStream>> {
+        // GDI instead of xcap's DXGI recorder (see `backends::gdi`): grab just the rectangle,
+        // which may span monitors.
+        let (x, y, width, height) = match target {
+            CaptureTarget::Region { x, y, width, height } => (*x, *y, *width, *height),
+            other => {
+                let monitors = self.monitors()?;
+                let monitor = match other {
+                    CaptureTarget::Monitor(id) => monitors.iter().find(|m| m.id == *id),
+                    _ => monitors.iter().find(|m| m.is_primary).or(monitors.first()),
+                }
+                .ok_or(CaptureError::MonitorNotFound(0))?;
+                (monitor.x, monitor.y, monitor.width, monitor.height)
+            }
+        };
+        let stream = super::gdi::GdiStream::start(x, y, width, height, options.fps, options.cursor)?;
+        Ok(Box::new(stream))
+    }
+
+    #[cfg(not(windows))]
     fn open_stream(&self, target: &CaptureTarget, _options: &StreamOptions) -> Result<Box<dyn FrameStream>> {
         let monitors = xcap::Monitor::all().map_err(map_err)?;
         let monitor = match target {
@@ -113,12 +139,14 @@ impl CaptureBackend for XcapBackend {
     }
 }
 
+#[cfg(not(windows))]
 fn origin(monitor: &xcap::Monitor) -> Result<(i32, i32)> {
     Ok((monitor.x().map_err(map_err)?, monitor.y().map_err(map_err)?))
 }
 
-/// Recording through xcap's video recorder (DXGI on Windows, ScreenCaptureKit on macOS, XShm on
-/// X11). The recorder lives entirely on its own thread: on macOS it is not `Send`.
+/// Recording through xcap's video recorder (ScreenCaptureKit on macOS, XShm on X11; Windows uses
+/// `backends::gdi`). The recorder lives entirely on its own thread: on macOS it is not `Send`.
+#[cfg(not(windows))]
 struct XcapStream {
     latest: Arc<LatestFrame>,
     origin: (i32, i32),
@@ -126,6 +154,7 @@ struct XcapStream {
     thread: Option<JoinHandle<()>>,
 }
 
+#[cfg(not(windows))]
 impl XcapStream {
     fn start(monitor_id: u32, origin: (i32, i32)) -> Result<Self> {
         let latest = Arc::new(LatestFrame::default());
@@ -173,6 +202,7 @@ impl XcapStream {
     }
 }
 
+#[cfg(not(windows))]
 impl FrameStream for XcapStream {
     fn latest(&self) -> Arc<LatestFrame> {
         Arc::clone(&self.latest)

@@ -114,8 +114,9 @@
       draw();
       const win = getCurrentWindow();
       await win.show();
-      // Some compositors (GNOME/Wayland) ignore fullscreen requests for hidden windows.
-      await win.setFullscreen(true);
+      // Some compositors (GNOME/Wayland) ignore fullscreen requests for hidden windows. A window
+      // across all monitors is already sized; fullscreen would shrink it to one monitor.
+      if (!info.span) await win.setFullscreen(true);
       await win.setFocus();
       canvas.focus();
     } catch (e) {
