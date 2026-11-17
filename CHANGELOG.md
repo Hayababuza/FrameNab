@@ -4,6 +4,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-17
+
+Feedback from the first tests on Windows: quick recording, options before recording, several monitors, copying to the clipboard.
+
 ### Added
 - Quick recording: a shortcut (default `Ctrl+Shift+PrintScreen`, CLI `framenab record-now`) records the last recorded area again – or the monitor under the mouse – and starts right away after the countdown; pressing it again stops
 - Recorder bar: switches for the mouse pointer and the pressed keys, and the format for saving, with labels, before the recording starts
@@ -113,7 +117,8 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Hayababuza/FrameNab/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/Hayababuza/FrameNab/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/Hayababuza/FrameNab/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Hayababuza/FrameNab/compare/v0.3.0...v0.4.0

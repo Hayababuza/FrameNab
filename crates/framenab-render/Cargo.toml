@@ -11,7 +11,7 @@ workspace = true
 
 [dependencies]
 cosmic-text = "0.19.0"
-framenab-core = { version = "0.4.2", path = "../framenab-core" }
+framenab-core = { version = "0.5.0", path = "../framenab-core" }
 image = "0.25.9"
 thiserror = "2.0.21"
 tiny-skia = "0.12.0"
