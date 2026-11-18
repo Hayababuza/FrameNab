@@ -385,12 +385,6 @@ pub async fn editor_export(
     format: Option<ExportFormat>,
     options: Option<ExportOptions>,
 ) -> Result<Option<String>, String> {
-    let (store, project) = {
-        let state = app.state::<EditorState>();
-        let guard = state.lock();
-        let open = guard.as_ref().ok_or("no project open")?;
-        (open.store.clone(), open.project.clone())
-    };
     let (saved_format, saved_options) = saved_choice(&app);
     let format = format.unwrap_or(saved_format);
     let options = options.unwrap_or(saved_options);
@@ -405,7 +399,59 @@ pub async fn editor_export(
     } else {
         (framenab_export::still::unique_path(&config.directory, &name, format.extension()), format)
     };
+    export_open_project(&app, &path, format, options).await?;
+    announce_saved(&app, &path, copy_setting(&app)).await;
+    Ok(Some(path.display().to_string()))
+}
 
+/// Saves the open project as a GIF and puts the file on the clipboard, to paste it right away.
+/// The file goes to the app's cache (`clipboard/`, files older than a day are removed), not the
+/// save folder. Progress as with [`editor_export`]. Resolves to the file.
+#[tauri::command]
+pub async fn editor_copy(app: AppHandle) -> Result<String, String> {
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("clipboard");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    remove_older_than(&dir, Duration::from_secs(24 * 3600));
+    let (_, options) = saved_choice(&app);
+    let config = settings::save_settings(&app);
+    let name = framenab_export::still::file_name_now(&config.template);
+    let path = framenab_export::still::unique_path(&dir, &name, ExportFormat::Gif.extension());
+    export_open_project(&app, &path, ExportFormat::Gif, options).await?;
+    crate::clipboard::copy_file(&app, path.clone()).await?;
+    tracing::info!(path = %path.display(), "recording copied to the clipboard");
+    Ok(path.display().to_string())
+}
+
+/// Removes the files in `dir` that were not changed for `age`.
+fn remove_older_than(dir: &std::path::Path, age: Duration) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let old = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|e| e > age);
+        if old {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// Exports the open project to `path`, reporting progress to the editor (`export-progress`,
+/// `[done, total]`); can be cancelled with `editor_cancel_export`.
+async fn export_open_project(
+    app: &AppHandle,
+    path: &std::path::Path,
+    format: ExportFormat,
+    options: ExportOptions,
+) -> Result<(), String> {
+    let (store, project) = {
+        let state = app.state::<EditorState>();
+        let guard = state.lock();
+        let open = guard.as_ref().ok_or("no project open")?;
+        (open.store.clone(), open.project.clone())
+    };
     let control = ExportControl::default();
     *app.state::<EditorState>().export.lock().expect("export lock") = Some(control.clone());
     let total = project.frames.len();
@@ -425,7 +471,7 @@ pub async fn editor_export(
         })
     };
 
-    let target = path.clone();
+    let target = path.to_owned();
     let worker_control = control.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         export_animation(&store, &project, &target, format, &options, &worker_control)
@@ -435,10 +481,7 @@ pub async fn editor_export(
     control.done.store(total, Ordering::Relaxed);
     let _ = ticker.await;
     app.state::<EditorState>().export.lock().expect("export lock").take();
-    result.map_err(|e| e.to_string())?;
-
-    announce_saved(&app, &path, copy_setting(&app)).await;
-    Ok(Some(path.display().to_string()))
+    result.map_err(|e| e.to_string())
 }
 
 fn format_for_extension(ext: &str) -> Option<ExportFormat> {

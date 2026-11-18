@@ -38,6 +38,8 @@ export interface Settings {
   afterRecording: "editor" | "save";
   /** Put a saved recording on the clipboard as a file, to paste it with Ctrl+V. */
   copyRecording: boolean;
+  /** Close the editor after "Copy to clipboard". */
+  closeEditorAfterCopy: boolean;
   /** Format for saving recordings (editor "Save", and saving right away). */
   recordingFormat: RecordingFormat;
   /** Wayland session: use native Wayland windows instead of XWayland (applies after a restart). */
@@ -109,6 +111,7 @@ const defaults: Settings = {
   recorderKeys: true,
   afterRecording: "editor",
   copyRecording: true,
+  closeEditorAfterCopy: true,
   recordingFormat: "gif",
   nativeWayland: false,
   recordInput: true,

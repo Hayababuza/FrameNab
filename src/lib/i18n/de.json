@@ -288,5 +288,10 @@
   "instant.cursor": "Mauszeiger zeigen",
   "instant.keys": "Gedrückte Tasten zeigen",
   "instant.copy": "In die Zwischenablage kopieren (Strg+V)",
-  "instant.start": "Sofort-GIF jetzt starten"
+  "instant.start": "Sofort-GIF jetzt starten",
+  "editor.copyGif": "In Zwischenablage",
+  "editor.copyGifTitle": "Als GIF mit allen Anmerkungen in die Zwischenablage kopieren – danach mit Strg+V einfügen (Strg+Umschalt+C)",
+  "editor.copiedGif": "GIF in der Zwischenablage – mit Strg+V einfügen.",
+  "settings.closeEditorAfterCopy": "Editor nach „In Zwischenablage“ schließen",
+  "settings.closeEditorAfterCopyHelp": "damit du das GIF gleich irgendwo einfügen kannst"
 }

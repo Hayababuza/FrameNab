@@ -91,6 +91,7 @@ pub fn run() {
             editor::editor_pick_watermark,
             recorder::input_support,
             editor::editor_export,
+            editor::editor_copy,
             editor::editor_cancel_export,
             editor::editor_export_project,
             editor::editor_estimate,

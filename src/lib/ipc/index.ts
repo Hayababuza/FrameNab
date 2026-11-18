@@ -199,6 +199,8 @@ export const thumbUrl = (frameId: string, project: string) => frameUrl("thumb", 
 export const previewUrl = (frameId: string, project: string) => frameUrl("preview", frameId, project);
 export const openProject = (path: string) => invoke<void>("open_project", { path });
 /** Exports the open project as `*.framenab.zip`; `null` if the dialog was cancelled. */
+/** Saves the open project as a GIF and puts the file on the clipboard; resolves to the file. */
+export const editorCopy = () => invoke<string>("editor_copy");
 export const editorExportProject = () => invoke<string | null>("editor_export_project");
 export const editorSetOverlays = (overlays: Overlays) =>
   invoke<EditorView>("editor_set_overlays", { overlays });

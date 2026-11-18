@@ -288,5 +288,10 @@
   "instant.cursor": "Show the mouse pointer",
   "instant.keys": "Show pressed keys",
   "instant.copy": "Copy to the clipboard (Ctrl+V)",
-  "instant.start": "Start an instant GIF now"
+  "instant.start": "Start an instant GIF now",
+  "editor.copyGif": "Copy",
+  "editor.copyGifTitle": "Copy as a GIF with all annotations to the clipboard – then paste it with Ctrl+V (Ctrl+Shift+C)",
+  "editor.copiedGif": "GIF on the clipboard – paste it with Ctrl+V.",
+  "settings.closeEditorAfterCopy": "Close the editor after “Copy”",
+  "settings.closeEditorAfterCopyHelp": "so you can paste the GIF somewhere right away"
 }

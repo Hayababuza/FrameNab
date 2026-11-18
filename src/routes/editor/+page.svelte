@@ -4,6 +4,7 @@
    * annotations over frame ranges, undo/redo, and saving the result into the save folder.
    */
   import { listen } from "@tauri-apps/api/event";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
   import type { Annotation } from "$lib/bindings/Annotation";
@@ -15,6 +16,7 @@
   import { t } from "$lib/i18n/index.svelte";
   import {
     editorCancelExport,
+    editorCopy,
     editorExport,
     editorExportProject,
     editorFrames,
@@ -651,6 +653,30 @@
     save(ask, chosen, options);
   }
 
+  /** Copies the recording (with annotations and effects) as a GIF to the clipboard, then closes
+   * the editor if that is switched on in the settings. */
+  async function copyToClipboard() {
+    if (progress || !frames.length) return;
+    stop();
+    error = null;
+    saved = null;
+    info = null;
+    progress = [0, frames.length];
+    try {
+      await editorCopy();
+      if (await getSetting("closeEditorAfterCopy")) {
+        await getCurrentWindow().close();
+        return;
+      }
+      info = t("editor.copiedGif");
+    } catch (e) {
+      const message = String(e);
+      if (!message.toLowerCase().includes("cancel")) error = message;
+    } finally {
+      progress = null;
+    }
+  }
+
   async function copyPath() {
     if (!saved) return;
     try {
@@ -685,6 +711,7 @@
       [ctrl && key === "z", () => undo(e.shiftKey)],
       [ctrl && key === "y", () => undo(true)],
       [ctrl && key === "s", () => (e.shiftKey ? (exportDialog = true) : save())],
+      [ctrl && e.shiftKey && key === "c", () => copyToClipboard()],
       [ctrl && key === "a", () => (selected = new Set(frames.map((_, i) => i)))],
       [ctrl && key === "d", () => duplicate()],
       [e.key === "Delete" || e.key === "Backspace", () => (selectedId ? deleteAnnotation() : deleteFrames())],
@@ -870,6 +897,14 @@
             disabled={busy}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v12H4zM3 4h18v4H3zM10 12h4" /></svg>
+          </button>
+          <button title={t("editor.copyGifTitle")} onclick={copyToClipboard}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M9 4h6v3H9zM8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2"
+              />
+            </svg>
+            {t("editor.copyGif")}
           </button>
           <button title={t("editor.saveAs")} onclick={() => (stop(), (exportDialog = true))}>
             <svg viewBox="0 0 24 24" aria-hidden="true">

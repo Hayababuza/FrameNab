@@ -85,6 +85,7 @@
   const INSTANT_COUNTDOWNS = [0, 1, 2, 3, 5];
   const INSTANT_SIZES = [1, 0.75, 0.5, 0.25];
   let copyRecording = $state(true);
+  let closeEditorAfterCopy = $state(true);
   let available = $state<ExportFormat[]>(["gif"]);
   const recordingLabels: Record<RecordingFormat, string> = {
     gif: "GIF",
@@ -120,6 +121,7 @@
     afterRecording = await getSetting("afterRecording");
     instant = { ...DEFAULT_INSTANT_GIF, ...(await getSetting("instantGif")) };
     copyRecording = await getSetting("copyRecording");
+    closeEditorAfterCopy = await getSetting("closeEditorAfterCopy");
     printScreen = await printScreenOwner().catch(() => null);
     autostart = await autostartEnabled().catch(() => false);
     saveDirectory = await getSetting("saveDirectory");
@@ -383,6 +385,17 @@
         type="checkbox"
         bind:checked={copyRecording}
         onchange={() => setSetting("copyRecording", copyRecording)}
+      />
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.closeEditorAfterCopy")}
+        <small class="help-inline">{t("settings.closeEditorAfterCopyHelp")}</small>
+      </span>
+      <input
+        type="checkbox"
+        bind:checked={closeEditorAfterCopy}
+        onchange={() => setSetting("closeEditorAfterCopy", closeEditorAfterCopy)}
       />
     </label>
   </section>
