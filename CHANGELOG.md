@@ -4,6 +4,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-18
+
+### Added
+- Editor: "Copy" (Ctrl+Shift+C) puts the recording as a GIF – with annotations, effects and overlays – on the clipboard, to paste it anywhere with Ctrl+V. The editor then closes (Settings → Saving, on by default)
+
+### Fixed
+- Windows/macOS: from the second recording after starting FrameNab on, the programs behind the recorder could not be used (clicks did not get through, the tray menu stayed empty), because the click-through for the new recorder window never started
+
 ## [0.5.1] - 2026-11-18
 
 ### Changed
@@ -123,7 +131,8 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/Hayababuza/FrameNab/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Hayababuza/FrameNab/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Hayababuza/FrameNab/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/Hayababuza/FrameNab/compare/v0.4.1...v0.4.2
