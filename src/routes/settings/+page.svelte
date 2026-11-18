@@ -81,7 +81,7 @@
   let afterRecording = $state<"editor" | "save">("editor");
   let instant = $state<InstantGif>({ ...DEFAULT_INSTANT_GIF });
   const saveInstant = () => setSetting("instantGif", $state.snapshot(instant));
-  const INSTANT_FPS = [5, 10, 15, 20, 25, 30];
+  const INSTANT_FPS = [5, 10, 15, 20, 25, 30, 60];
   const INSTANT_COUNTDOWNS = [0, 1, 2, 3, 5];
   const INSTANT_SIZES = [1, 0.75, 0.5, 0.25];
   let copyRecording = $state(true);

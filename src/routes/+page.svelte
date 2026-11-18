@@ -48,11 +48,6 @@
     if (!(await ask(t("home.deleteConfirm"), { kind: "warning" }))) return;
     await deleteProject(path).catch(() => {});
     loadRecent();
-    // Once per start, a few seconds in (not in development builds).
-    if (!import.meta.env.DEV)
-      setTimeout(async () => {
-        if (await getSetting("updateCheck")) update = await findUpdate().catch(() => null);
-      }, 4000);
   }
 
   const duration = (ms: number) => {
@@ -69,6 +64,11 @@
     appInfo().then((i) => (info = i));
     loadSaveDirectory();
     loadRecent();
+    // Once per start, a few seconds in (not in development builds).
+    if (!import.meta.env.DEV)
+      setTimeout(async () => {
+        if (await getSetting("updateCheck")) update = await findUpdate().catch(() => null);
+      }, 4000);
     // Recordings come and go while the window is hidden; refresh when it is shown again.
     window.addEventListener("focus", loadRecent);
     const unlisten = listen("save-settings-changed", loadSaveDirectory);

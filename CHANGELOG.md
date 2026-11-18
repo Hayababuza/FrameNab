@@ -8,8 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Added
 - Editor: "Copy" (Ctrl+Shift+C) puts the recording as a GIF – with annotations, effects and overlays – on the clipboard, to paste it anywhere with Ctrl+V. The editor then closes (Settings → Saving, on by default)
+- Settings → Instant GIF: 60 fps as frame rate
 
 ### Fixed
+- The automatic update check at start never ran (it was only triggered after deleting a recent recording); now the start page shows a new version a few seconds after starting
 - Windows/macOS: from the second recording after starting FrameNab on, the programs behind the recorder could not be used (clicks did not get through, the tray menu stayed empty), because the click-through for the new recorder window never started
 
 ## [0.5.1] - 2026-11-18
