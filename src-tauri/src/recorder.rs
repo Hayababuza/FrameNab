@@ -49,6 +49,9 @@ pub struct Setup {
     compact: bool,
     /// The window covers all monitors (no fullscreen request).
     span: bool,
+    /// Linux (X11/XWayland): while recording, leave fullscreen and shrink the window to the frame
+    /// and the bar. GNOME hides its panels (and with them the tray) for fullscreen windows.
+    boxed: bool,
     /// Instant GIF: start right away with these settings, save and copy when stopped.
     instant: Option<InstantGif>,
     /// Desktop position of the region's coordinate origin, in physical pixels.
@@ -171,6 +174,7 @@ pub fn open(app: &AppHandle, open: Open) {
             background: background.is_some(),
             compact,
             span,
+            boxed: cfg!(target_os = "linux") && !compact && !span,
             instant: open.instant,
             origin: open.origin,
         });
@@ -501,6 +505,49 @@ pub fn set_input_region(app: AppHandle, window: WebviewWindow, rects: Vec<InputR
                 generation,
             );
         }
+    }
+}
+
+/// Linux (X11/XWayland): leaves fullscreen and shrinks the window to `width`×`height` at `x`,`y`
+/// (physical pixels relative to the window's current position), so GNOME shows its panels again.
+/// Resolves to the window's new position relative to the old one, once the window manager placed
+/// it.
+#[tauri::command]
+pub async fn recorder_shrink(window: WebviewWindow, x: i32, y: i32, width: i32, height: i32) -> Option<(i32, i32)> {
+    #[cfg(target_os = "linux")]
+    {
+        use gtk::prelude::*;
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            let Ok(gtk_window) = target.gtk_window() else { return };
+            let (left, top) = gtk_window.position();
+            let scale = gtk_window.scale_factor().max(1);
+            // tao pins the size of non-resizable windows with a size request: lift it.
+            gtk_window.set_resizable(true);
+            gtk_window.set_size_request(1, 1);
+            gtk_window.unfullscreen();
+            gtk_window.resize(width / scale, height / scale);
+            gtk_window.move_(left + x / scale, top + y / scale);
+            let _ = tx.send((left, top, scale));
+        });
+        let (left, top, scale) = rx.await.ok()?;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            let Ok(gtk_window) = target.gtk_window() else { return };
+            let _ = tx.send((gtk_window.position(), gtk_window.size()));
+        });
+        let ((nx, ny), size) = rx.await.ok()?;
+        tracing::debug!(from = ?(left, top), to = ?(nx, ny), ?size, wanted = ?(x, y, width, height), "recorder window shrunk");
+        Some(((nx - left) * scale, (ny - top) * scale))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (window, x, y, width, height);
+        None
     }
 }
 

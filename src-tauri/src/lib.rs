@@ -78,6 +78,7 @@ pub fn run() {
             recorder::recorder_status,
             recorder::recorder_stop,
             recorder::set_input_region,
+            recorder::recorder_shrink,
             recorder::locate_marker,
             editor::editor_view,
             editor::editor_frames,

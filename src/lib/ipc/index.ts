@@ -118,6 +118,8 @@ export interface RecorderSetup {
   compact: boolean;
   /** The window covers all monitors (Windows): no fullscreen request. */
   span: boolean;
+  /** Linux (X11/XWayland): shrink the window to the frame and the bar while recording. */
+  boxed: boolean;
   /** Instant GIF: start right away with these settings; saved and copied when stopped. */
   instant: InstantGif | null;
 }
@@ -129,6 +131,11 @@ export async function loadRecorderBackground(setup: RecorderSetup): Promise<Imag
   const pixels = new Uint8ClampedArray(await response.arrayBuffer());
   return createImageBitmap(new ImageData(pixels, setup.imageWidth, setup.imageHeight));
 }
+
+/** Linux (X11/XWayland): leaves fullscreen and shrinks the recorder window to the given rect
+ * (physical pixels relative to its position); resolves to where the window really went. */
+export const recorderShrink = (x: number, y: number, width: number, height: number) =>
+  invoke<[number, number] | null>("recorder_shrink", { x, y, width, height });
 
 export interface RecorderStatus {
   recording: boolean;

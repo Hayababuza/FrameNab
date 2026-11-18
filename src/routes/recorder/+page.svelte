@@ -23,6 +23,7 @@
     recorderInfo,
     recorderPause,
     recorderPrepare,
+    recorderShrink,
     recorderStart,
     recorderStatus,
     locateMarker,
@@ -54,6 +55,16 @@
   let calibrating = $state(false);
   /** Top-left corner of the maximized window on screen, in CSS pixels. */
   let offset = $state({ x: 0, y: 0 });
+  /**
+   * Linux (X11/XWayland) while recording: the window left fullscreen and only covers the frame
+   * and the bar (GNOME hides its panels for fullscreen windows). `scale` and `view` are those of
+   * the fullscreen window; `offset` is where the window now starts in it, in CSS pixels.
+   */
+  let boxed = $state<{
+    scale: number;
+    view: { w: number; h: number };
+    offset: { x: number; y: number };
+  } | null>(null);
   let paused = $state(false);
   let elapsedMs = $state(0);
   let countdown = $state(0);
@@ -88,10 +99,10 @@
     if (!setup?.region) return null;
     // Image pixels per CSS pixel: the window covers the image (one monitor, or all of them on
     // Windows); when maximized on Wayland it is smaller, so take the monitor's width there.
-    const scale = setup.imageWidth / ((live ? window.screen.width : view.w) || view.w);
+    const scale = boxed?.scale ?? setup.imageWidth / ((live ? window.screen.width : view.w) || view.w);
     const r = setup.region;
-    // When maximized on Wayland, the window does not start at the screen's corner.
-    const o = live ? offset : { x: 0, y: 0 };
+    // When maximized on Wayland or shrunk to the frame, the window does not start at the corner.
+    const o = boxed?.offset ?? (live ? offset : { x: 0, y: 0 });
     return { x: r.x / scale - o.x, y: r.y / scale - o.y, w: r.w / scale, h: r.h / scale };
   });
 
@@ -104,8 +115,14 @@
   const barStyle = $derived.by(() => {
     if (compact) return "left: 0; top: 0;";
     if (frame) {
-      const p = toolbarPosition(frame, barSize, view);
-      return `left: ${p.x}px; top: ${p.y}px;`;
+      // Placed on the whole screen, also when the window is shrunk to the frame.
+      const o = boxed?.offset ?? { x: 0, y: 0 };
+      const p = toolbarPosition(
+        { ...frame, x: frame.x + o.x, y: frame.y + o.y },
+        barSize,
+        boxed?.view ?? view,
+      );
+      return `left: ${p.x - o.x}px; top: ${p.y - o.y}px;`;
     }
     return `left: ${(view.w - barSize.w) / 2}px; bottom: 48px;`;
   });
@@ -143,6 +160,12 @@
         await win.setFullscreen(true);
       }
       await win.setFocus();
+      if (setup.boxed) {
+        // Wait until the bar is measured and placed, then leave fullscreen (GNOME's panels).
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await tick();
+        await enterBoxed();
+      }
       await updateInputRegion();
       // Instant GIF: go straight to the countdown.
       if (setup.instant) await record();
@@ -224,6 +247,32 @@
     }
   }
 
+  /** Shrinks the fullscreen window to the frame and the bar, at the same place on screen. */
+  async function enterBoxed() {
+    if (!bar || !frame || !setup) return;
+    const b = bar.getBoundingClientRect();
+    const pad = 8;
+    const left = Math.max(0, Math.floor(Math.min(frame.x, b.left) - pad));
+    const top = Math.max(0, Math.floor(Math.min(frame.y, b.top) - pad));
+    const right = Math.min(view.w, Math.ceil(Math.max(frame.x + frame.w, b.right) + pad));
+    const bottom = Math.min(view.h, Math.ceil(Math.max(frame.y + frame.h, b.bottom) + pad));
+    if (right - left >= view.w && bottom - top >= view.h) return; // the area is the whole screen
+    const dpr = window.devicePixelRatio || 1;
+    boxed = { scale: setup.imageWidth / view.w, view: { ...view }, offset: { x: left, y: top } };
+    try {
+      const at = await recorderShrink(
+        Math.round(left * dpr),
+        Math.round(top * dpr),
+        Math.round((right - left) * dpr),
+        Math.round((bottom - top) * dpr),
+      );
+      // The window manager may adjust the position: draw the frame where the window really is.
+      if (at) boxed.offset = { x: at[0] / dpr, y: at[1] / dpr };
+    } catch (e) {
+      console.warn("could not shrink the recorder window:", e);
+    }
+  }
+
   async function enterCompact() {
     compact = true;
     await tick();
@@ -261,6 +310,8 @@
     // Wayland: show the live screen; the countdown runs in the bar, so there is time to drag the
     // bar out of the recorded area.
     if (setup?.compact && !compact && !live) await enterLive();
+    // X11/XWayland: leave fullscreen so the panels (and the tray) stay usable.
+    if (setup?.boxed && !boxed) await enterBoxed();
     phase = "countdown";
     for (countdown = delay; countdown > 0; countdown--) {
       await new Promise((resolve) => setTimeout(resolve, 1000));

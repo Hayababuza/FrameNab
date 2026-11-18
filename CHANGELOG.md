@@ -11,6 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - Settings → Instant GIF: 60 fps as frame rate
 
 ### Fixed
+- Linux (X11/XWayland, e.g. GNOME): the recorder no longer covers the screen as a fullscreen window – it shrinks to the frame and its bar, so the panels and the tray stay visible and usable while recording
 - The automatic update check at start never ran (it was only triggered after deleting a recent recording); now the start page shows a new version a few seconds after starting
 - Windows/macOS: from the second recording after starting FrameNab on, the programs behind the recorder could not be used (clicks did not get through, the tray menu stayed empty), because the click-through for the new recorder window never started
 
