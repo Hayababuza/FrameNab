@@ -10,7 +10,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-framenab-core = { version = "0.5.2", path = "../framenab-core" }
+framenab-core = { version = "0.5.3", path = "../framenab-core" }
 image = "0.25.9"
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"
