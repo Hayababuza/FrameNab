@@ -9,6 +9,7 @@
 //! `recorder_stop` (writes `project.json`, returns a summary).
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use framenab_capture::{CaptureTarget, Crop, FrameStream, Recording, StreamOptions, record};
@@ -76,6 +77,11 @@ pub struct RecorderState {
     /// Click-through: only these rects (logical pixels) take mouse input (non-Linux).
     #[cfg_attr(target_os = "linux", allow(dead_code))]
     interactive: Arc<Mutex<Vec<InputRect>>>,
+    /// Counts the recorder windows; a click-through poller ends when its window is replaced.
+    window_generation: Arc<AtomicU64>,
+    /// The generation that already has a poller running.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    polled_generation: AtomicU64,
 }
 
 impl RecorderState {
@@ -170,6 +176,9 @@ pub fn open(app: &AppHandle, open: Open) {
         });
     }
     *state.background.lock().expect("background lock") = background;
+    // A new window: its poller starts with its first input region (the old one ends).
+    state.interactive.lock().expect("input lock").clear();
+    state.window_generation.fetch_add(1, Ordering::SeqCst);
     state.restore.set(open.restore);
     if let Err(err) = windows::open_recorder(app, open.placement.as_ref()) {
         tracing::error!(%err, "failed to open the recorder window");
@@ -479,14 +488,18 @@ pub fn set_input_region(app: AppHandle, window: WebviewWindow, rects: Vec<InputR
     #[cfg(not(target_os = "linux"))]
     {
         let state = app.state::<RecorderState>();
-        let first = {
-            let mut interactive = state.interactive.lock().expect("input lock");
-            let first = interactive.is_empty();
-            *interactive = rects;
-            first
-        };
-        if first {
-            poll_click_through(window, Arc::clone(&state.interactive));
+        *state.interactive.lock().expect("input lock") = rects;
+        // One poller per recorder window. (It used to start only while the list was empty, which
+        // it never was again after the first recording: from the second recording on, the
+        // fullscreen window swallowed every click.)
+        let generation = state.window_generation.load(Ordering::SeqCst);
+        if state.polled_generation.swap(generation, Ordering::SeqCst) != generation {
+            poll_click_through(
+                window,
+                Arc::clone(&state.interactive),
+                Arc::clone(&state.window_generation),
+                generation,
+            );
         }
     }
 }
@@ -515,11 +528,19 @@ fn set_input_shape(window: &WebviewWindow, rects: Vec<InputRect>) {
 /// Windows/macOS: there is no per-region click-through, so follow the cursor and let the whole
 /// window ignore the mouse unless the cursor is over an interactive rect.
 #[cfg(not(target_os = "linux"))]
-fn poll_click_through(window: WebviewWindow, interactive: Arc<Mutex<Vec<InputRect>>>) {
+fn poll_click_through(
+    window: WebviewWindow,
+    interactive: Arc<Mutex<Vec<InputRect>>>,
+    current: Arc<AtomicU64>,
+    generation: u64,
+) {
     std::thread::spawn(move || {
         let mut ignoring = None;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(40));
+            if current.load(Ordering::SeqCst) != generation {
+                break; // a new recorder window took over
+            }
             let (Ok(cursor), Ok(origin), Ok(scale)) =
                 (window.cursor_position(), window.inner_position(), window.scale_factor())
             else {
