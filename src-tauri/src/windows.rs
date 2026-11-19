@@ -33,13 +33,41 @@ impl Restore {
     }
 }
 
+/// Brings `window` to the front with the keyboard focus.
+///
+/// X11/XWayland (GNOME): opened from the tray, a second launch or a shortcut, there is no recent
+/// input event of FrameNab's own, so GNOME's focus-stealing prevention only shows a "FrameNab is
+/// ready" notification instead of the window. Presenting it with the X server's current time
+/// counts as a fresh request.
+pub fn focus(window: &WebviewWindow) {
+    #[cfg(target_os = "linux")]
+    {
+        use gtk::glib::Cast;
+        use gtk::prelude::*;
+
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            let Ok(gtk_window) = target.gtk_window() else { return };
+            let x11 = gtk_window.window().and_then(|w| w.downcast::<gdkx11::X11Window>().ok());
+            match x11 {
+                Some(x11) => gtk_window.present_with_time(gdkx11::functions::x11_get_server_time(&x11)),
+                None => gtk_window.present(),
+            }
+        });
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = window.set_focus();
+    }
+}
+
 pub fn show_window(app: &AppHandle, label: &str) {
     if label == MAIN {
         return show_main(app);
     }
     if let Some(w) = app.get_webview_window(label) {
         let _ = w.show();
-        let _ = w.set_focus();
+        focus(&w);
     }
 }
 
@@ -95,7 +123,7 @@ pub fn record(app: &AppHandle, hide: Option<String>) {
     if crate::recorder::is_recording(app) {
         crate::recorder::request_stop(app);
     } else if let Some(w) = app.get_webview_window(RECORDER) {
-        let _ = w.set_focus();
+        focus(&w);
     } else {
         crate::capture::start(app, hide, crate::capture::CaptureMode::Record);
     }
@@ -107,7 +135,7 @@ pub fn instant_gif(app: &AppHandle, hide: Option<String>) {
     if crate::recorder::is_recording(app) {
         crate::recorder::request_stop(app);
     } else if let Some(w) = app.get_webview_window(RECORDER) {
-        let _ = w.set_focus();
+        focus(&w);
     } else {
         crate::capture::start(app, hide, crate::capture::CaptureMode::Instant);
     }
@@ -139,7 +167,7 @@ pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(MAIN) {
         let _ = w.show();
         let _ = w.unminimize();
-        let _ = w.set_focus();
+        focus(&w);
     }
 }
 
@@ -155,7 +183,7 @@ pub fn overlay(app: &AppHandle) -> Option<WebviewWindow> {
 
 pub fn focus_overlay(app: &AppHandle) {
     if let Some(w) = overlay(app) {
-        let _ = w.set_focus();
+        focus(&w);
     }
 }
 
@@ -328,10 +356,11 @@ where
 {
     if let Some(w) = app.get_webview_window(label) {
         w.show()?;
-        w.set_focus()?;
+        focus(&w);
         return Ok(());
     }
     let window = configure(WebviewWindowBuilder::new(app, label, WebviewUrl::App(label.into()))).build()?;
     fix_titlebar(&window);
+    focus(&window);
     Ok(())
 }

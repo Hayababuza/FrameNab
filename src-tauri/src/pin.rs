@@ -66,7 +66,7 @@ pub fn open(app: &AppHandle, image: RgbaImage, scale: f64, restore: Option<Strin
         .build()?;
     windows::fix_titlebar(&window);
     lock_aspect(&window, w / h);
-    let _ = window.set_focus();
+    windows::focus(&window);
     tracing::info!(id, "pinned screenshot");
     Ok(())
 }

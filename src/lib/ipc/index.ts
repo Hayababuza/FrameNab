@@ -137,6 +137,9 @@ export async function loadRecorderBackground(setup: RecorderSetup): Promise<Imag
 export const recorderShrink = (x: number, y: number, width: number, height: number) =>
   invoke<[number, number] | null>("recorder_shrink", { x, y, width, height });
 
+/** Brings the calling window to the front (also where GNOME would only say "FrameNab is ready"). */
+export const focusWindow = () => invoke<void>("focus_window");
+
 export interface RecorderStatus {
   recording: boolean;
   paused: boolean;

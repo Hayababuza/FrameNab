@@ -1619,6 +1619,7 @@ dependencies = [
  "framenab-core",
  "framenab-export",
  "framenab-render",
+ "gdkx11",
  "gtk",
  "image",
  "serde",

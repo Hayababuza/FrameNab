@@ -31,6 +31,7 @@
     setInputRegion,
     type RecorderSetup,
     type RecordingSummary,
+    focusWindow,
   } from "$lib/ipc";
   import { getSetting, setSetting, type RecordingFormat } from "$lib/stores/settings";
 
@@ -159,7 +160,7 @@
         // Some compositors (GNOME/Wayland) ignore fullscreen requests for hidden windows.
         await win.setFullscreen(true);
       }
-      await win.setFocus();
+      await focusWindow();
       if (setup.boxed) {
         // Wait until the bar is measured and placed, then leave fullscreen (GNOME's panels).
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

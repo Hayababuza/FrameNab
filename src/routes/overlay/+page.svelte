@@ -47,6 +47,7 @@
     recordWindow,
     saveSelection,
     type CaptureInfo,
+    focusWindow,
   } from "$lib/ipc";
   import { History } from "$lib/stores/history";
   import { getSetting } from "$lib/stores/settings";
@@ -117,7 +118,7 @@
       // Some compositors (GNOME/Wayland) ignore fullscreen requests for hidden windows. A window
       // across all monitors is already sized; fullscreen would shrink it to one monitor.
       if (!info.span) await win.setFullscreen(true);
-      await win.setFocus();
+      await focusWindow();
       canvas.focus();
     } catch (e) {
       error = String(e);

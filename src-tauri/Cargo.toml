@@ -45,6 +45,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+gdkx11 = "0.18"
 
 [target.'cfg(windows)'.dependencies]
 windows-registry = "0.6.1"

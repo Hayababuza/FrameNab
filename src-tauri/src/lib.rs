@@ -60,6 +60,7 @@ pub fn run() {
         .manage(hotkeys::HotkeyState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
+            commands::focus_window,
             commands::run_action,
             hotkeys::apply_hotkeys,
             printscreen::print_screen_owner,

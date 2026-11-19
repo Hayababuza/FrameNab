@@ -70,7 +70,7 @@ pub fn open(app: &AppHandle, path: PathBuf, restore: Option<String>) -> Result<(
     if let Some(w) = app.get_webview_window(LABEL) {
         let _ = w.emit("editor-reload", ());
         let _ = w.show();
-        let _ = w.set_focus();
+        windows::focus(&w);
         return Ok(());
     }
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App(LABEL.into()))
@@ -80,6 +80,7 @@ pub fn open(app: &AppHandle, path: PathBuf, restore: Option<String>) -> Result<(
         .build()
         .map_err(|e| e.to_string())?;
     windows::fix_titlebar(&window);
+    windows::focus(&window);
     Ok(())
 }
 

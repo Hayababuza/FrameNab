@@ -430,7 +430,7 @@ async fn ask_save_path(
         tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file()).await.map_err(|e| e.to_string())?;
     if let Some(w) = &overlay {
         let _ = w.set_always_on_top(true);
-        let _ = w.set_focus();
+        crate::windows::focus(w);
     }
     picked.map(|p| p.into_path().map_err(|e| e.to_string())).transpose()
 }

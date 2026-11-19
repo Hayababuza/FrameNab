@@ -20,6 +20,12 @@ pub struct AppInfo {
     export_formats: Vec<ExportFormat>,
 }
 
+/// Brings the calling window to the front (see [`windows::focus`]).
+#[tauri::command]
+pub fn focus_window(window: WebviewWindow) {
+    windows::focus(&window);
+}
+
 #[tauri::command]
 pub fn app_info() -> AppInfo {
     let platform = Platform::detect();
