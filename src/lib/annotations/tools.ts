@@ -17,7 +17,9 @@ export type Tool =
   | "counter"
   | "click"
   | "pixelate"
-  | "blur";
+  | "blur"
+  | "measure"
+  | "picker";
 
 /** SVG path data (24×24 viewBox) and keyboard shortcut per tool. */
 export const tools: { id: Tool; key: string; icon: string }[] = [
@@ -33,6 +35,9 @@ export const tools: { id: Tool; key: string; icon: string }[] = [
   { id: "click", key: "k", icon: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0" },
   { id: "pixelate", key: "x", icon: "M4 4h5v5H4zM9 9h6v6H9zM15 4h5v5h-5zM4 15h5v5H4zM15 15h5v5h-5z" },
   { id: "blur", key: "b", icon: "M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z" },
+  // Inspection: measure an area (with zoom) and read colors; they draw nothing into the image.
+  { id: "measure", key: "m", icon: "M3 17L17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2" },
+  { id: "picker", key: "i", icon: "M14.5 5.5l4 4M17 3l4 4-3 3-4-4zM14 6L4.5 15.5 4 20l4.5-.5L18 10" },
 ];
 
 export const toolForKey = (key: string): Tool | undefined => tools.find((t) => t.key === key)?.id;
@@ -61,7 +66,8 @@ export function fromHex(hex: string): Rgba {
 }
 
 /** Tools that create a shape by dragging (all except select, text and counter). */
-export const isDragTool = (tool: Tool) => !["select", "text", "counter", "click"].includes(tool);
+export const isDragTool = (tool: Tool) =>
+  !["select", "text", "counter", "click", "measure", "picker"].includes(tool);
 
 /** Shape created by dragging from `start` to `end` (`points` = the whole path, for pens). */
 export function shapeFromDrag(

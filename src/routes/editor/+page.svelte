@@ -12,6 +12,8 @@
   import { colors, type Tool, toolForKey, widths } from "$lib/annotations/tools";
   import AnnotationLayer from "$lib/components/AnnotationLayer.svelte";
   import AnnotationTools from "$lib/components/AnnotationTools.svelte";
+  import ColorReadout from "$lib/components/ColorReadout.svelte";
+  import { isInspectTool } from "$lib/annotations/inspect";
   import ExportDialog from "$lib/components/ExportDialog.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
@@ -31,6 +33,7 @@
     inputSupport,
     editorUndo,
     editorView,
+    pixelsUrl,
     previewUrl,
     runAction,
     thumbUrl,
@@ -104,6 +107,8 @@
 
   // Annotations
   let tool = $state<Tool>("select");
+  /** The color read with the color picker. */
+  let picked = $state<Rgba | null>(null);
   let color = $state<Rgba>(colors[0]);
   let strokeWidth = $state(widths[1]);
   let selectedId = $state<string | null>(null);
@@ -715,7 +720,8 @@
       [ctrl && key === "a", () => (selected = new Set(frames.map((_, i) => i)))],
       [ctrl && key === "d", () => duplicate()],
       [e.key === "Delete" || e.key === "Backspace", () => (selectedId ? deleteAnnotation() : deleteFrames())],
-      [e.key === " ", () => play()],
+      // With the measure or color picker tool, Space+drag pans the zoomed view instead.
+      [e.key === " " && !isInspectTool(tool), () => play()],
       [e.key === "ArrowLeft", () => (stop(), goTo(current - 1))],
       [e.key === "ArrowRight", () => (stop(), goTo(current + 1))],
       [e.key === "Home", () => (stop(), goTo(0))],
@@ -930,6 +936,12 @@
 
     <div class="annotate">
       <AnnotationTools bind:tool bind:color bind:width={strokeWidth} onstyle={restyle} disabled={playing} />
+      {#if tool === "picker" && picked}
+        <ColorReadout color={picked} onuse={(c) => (color = c)} />
+      {:else if tool === "picker" || tool === "measure"}
+        <span class="inspect-hint">{t(tool === "picker" ? "inspect.pickerHint" : "inspect.measureHint")}</span
+        >
+      {/if}
       <span class="spacer"></span>
       {#if selectedAnnotation}
         <span class="range">
@@ -1248,6 +1260,8 @@
           frame={current}
           {range}
           {tool}
+          pixelsSrc={pixelsUrl(frames[current].id, view.path)}
+          onpick={(c) => (picked = c)}
           {color}
           {strokeWidth}
           bind:selectedId
@@ -1461,6 +1475,10 @@
     height: 10px;
     border-radius: 50%;
     background: var(--accent);
+  }
+  .inspect-hint {
+    color: var(--text-muted);
+    font-size: 12px;
   }
   .spacer {
     flex: 1;

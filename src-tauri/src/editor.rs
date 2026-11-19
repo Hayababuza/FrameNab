@@ -601,6 +601,19 @@ const THUMB_HEIGHT: u32 = 90;
 /// Largest preview size in pixels.
 const PREVIEW_MAX: (u32, u32) = (1600, 900);
 
+/// Serves `pixels/<frame id>`: the frame's raw RGBA pixels at full size (color picker and zoom of
+/// the editor need the exact pixels, the preview is a scaled JPEG).
+pub fn serve_pixels<R: tauri::Runtime>(app: &AppHandle<R>, id: &str) -> Option<Vec<u8>> {
+    let (store, frame) = {
+        let state = app.state::<EditorState>();
+        let guard = state.lock();
+        let open = guard.as_ref()?;
+        let frame = open.project.frames.iter().find(|f| f.id == id)?.clone();
+        (open.store.clone(), frame)
+    };
+    Some(store.load_frame(&frame).ok()?.into_raw())
+}
+
 /// Serves `thumb/<frame id>` and `preview/<frame id>` as JPEG for the editor.
 pub fn serve<R: tauri::Runtime>(app: &AppHandle<R>, path: &str) -> Option<Vec<u8>> {
     let (kind, id) = path.split_once('/')?;

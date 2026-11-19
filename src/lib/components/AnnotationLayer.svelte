@@ -19,6 +19,16 @@
     shapeFromDrag,
     type Tool,
   } from "$lib/annotations/tools";
+  import {
+    isInspectTool,
+    measureRect,
+    NO_ZOOM,
+    panBy,
+    pixelAt,
+    type Zoom,
+    zoomAt,
+  } from "$lib/annotations/inspect";
+  import Magnifier from "$lib/components/Magnifier.svelte";
   import { t } from "$lib/i18n/index.svelte";
 
   interface Props {
@@ -45,6 +55,10 @@
     watermark?: { src: string; rect: Rect; opacity: number } | null;
     /** Drawn last, not editable (the progress bar). */
     top?: Annotation[];
+    /** Raw RGBA pixels of the frame at full size, for the measure and color picker tools. */
+    pixelsSrc?: string | null;
+    /** The color picker read a color. */
+    onpick?: (color: Rgba) => void;
     onchange: (annotations: Annotation[]) => void;
   }
 
@@ -64,6 +78,8 @@
     crop = $bindable(null),
     watermark = null,
     top = [],
+    pixelsSrc = null,
+    onpick,
     onchange,
   }: Props = $props();
 
@@ -76,16 +92,56 @@
     | { kind: "draw"; start: Point; points: Point[] }
     | { kind: "move"; id: string; last: Point; moved: boolean }
     | { kind: "crop"; mode: "new" | "move" | "corner"; anchor: Point; start: Rect; from: Point }
+    | { kind: "measure"; start: Point }
+    | { kind: "pan"; last: Point }
     | null = null;
   /** While dragging an annotation, its moved copy (committed on release). */
   let moving = $state<Annotation[] | null>(null);
   let textEdit = $state<{ at: Point; fontSize: number; value: string } | null>(null);
   let seq = 0;
 
-  /** Where the frame is drawn: fitted into the box, centered. `k` = CSS pixels per image pixel. */
+  // ---- inspection (measure, color picker) -------------------------------------------------------
+
+  const inspecting = $derived(isInspectTool(tool) && !crop && !readonly);
+  let zoom = $state<Zoom>(NO_ZOOM);
+  /** Measured area in image pixels. */
+  let measure = $state<Rect | null>(null);
+  let panning = $state(false);
+  /** Space is held: dragging pans the zoomed view. */
+  let spaceHeld = $state(false);
+  /** Cursor (client coordinates) and the image pixel under it, for the loupe. */
+  let pointer = $state<{ client: Point; image: Point } | null>(null);
+  /** The frame at full size with exact colors, while inspecting. */
+  let full = $state<{ pixels: Uint8ClampedArray; bitmap: ImageBitmap } | null>(null);
+
+  $effect(() => {
+    if (inspecting) return;
+    zoom = NO_ZOOM;
+    measure = null;
+  });
+
+  $effect(() => {
+    const src = inspecting ? pixelsSrc : null;
+    if (!src) return void (full = null);
+    let current = true;
+    (async () => {
+      const response = await fetch(src);
+      if (!response.ok) throw new Error(`frame pixels: HTTP ${response.status}`);
+      const pixels = new Uint8ClampedArray(await response.arrayBuffer());
+      if (pixels.length !== width * height * 4) throw new Error("frame pixels: unexpected size");
+      const bitmap = await createImageBitmap(new ImageData(pixels, width, height));
+      if (current) full = { pixels, bitmap };
+    })().catch((e) => console.warn(e));
+    return () => (current = false);
+  });
+
+  /** Where the frame is drawn: fitted into the box and centered, then zoomed. `k` = CSS pixels
+   * per image pixel. */
   const fit = $derived.by(() => {
     const k = Math.min(box.w / Math.max(1, width), box.h / Math.max(1, height));
-    return { k, x: (box.w - width * k) / 2, y: (box.h - height * k) / 2 };
+    const x = (box.w - width * k) / 2;
+    const y = (box.h - height * k) / 2;
+    return { k: k * zoom.z, x: x * zoom.z + zoom.x, y: y * zoom.z + zoom.y };
   });
 
   const shown = $derived((moving ?? annotations).filter((a) => a.frameStart <= frame && frame <= a.frameEnd));
@@ -108,7 +164,7 @@
 
   $effect(() => {
     void [image, shown, draft, selectedId, fit, box, extra, crop?.x, crop?.y, crop?.w, crop?.h];
-    void [markImage, watermark, top];
+    void [markImage, watermark, top, full, measure];
     draw();
   });
 
@@ -120,9 +176,12 @@
     const ctx = canvas.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, box.w, box.h);
-    if (image) {
+    if (full || image) {
+      // Zoomed in: sharp pixels.
+      ctx.imageSmoothingEnabled = fit.k < 2;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(image, fit.x, fit.y, width * fit.k, height * fit.k);
+      ctx.drawImage((full?.bitmap ?? image)!, fit.x, fit.y, width * fit.k, height * fit.k);
+      ctx.imageSmoothingEnabled = true;
     }
     ctx.save();
     ctx.setTransform(dpr * fit.k, 0, 0, dpr * fit.k, dpr * fit.x, dpr * fit.y);
@@ -141,6 +200,51 @@
     if (selected && !crop) drawSelectionFrame(ctx, selected, 1 / fit.k);
     ctx.restore();
     if (crop) drawCrop(ctx, crop);
+    if (measure && inspecting) {
+      const r = measureBox(measure);
+      ctx.fillStyle = "rgb(46 200 255 / 14%)";
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = "rgb(0 0 0 / 60%)";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = "#2ec8ff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+    }
+  }
+
+  /** `r` (image pixels) in the layer's CSS pixels. */
+  const measureBox = (r: Rect): Rect => ({
+    x: fit.x + r.x * fit.k,
+    y: fit.y + r.y * fit.k,
+    w: r.w * fit.k,
+    h: r.h * fit.k,
+  });
+
+  const measureLabel = $derived.by(() => {
+    if (!measure || !inspecting) return null;
+    const r = measureBox(measure);
+    const below = r.y + r.h + 6;
+    const top = below + 28 <= box.h ? below : Math.max(4, r.y - 32);
+    return { left: Math.min(Math.max(4, r.x), Math.max(4, box.w - 180)), top };
+  });
+
+  function onwheel(e: WheelEvent) {
+    if (!inspecting || drag) return;
+    const r = canvas.getBoundingClientRect();
+    zoom = zoomAt(zoom, e.deltaY < 0 ? 1.25 : 0.8, { x: e.clientX - r.left, y: e.clientY - r.top }, box);
+  }
+
+  function onwindowkey(e: KeyboardEvent) {
+    if (!inspecting || e.ctrlKey || e.metaKey || e.altKey) return;
+    if ((e.target as HTMLElement).closest("input, select, textarea, [contenteditable]")) return;
+    const center = { x: box.w / 2, y: box.h / 2 };
+    if (e.key === " ") spaceHeld = true;
+    else if (e.key === "+" || e.key === "=") zoom = zoomAt(zoom, 1.5, center, box);
+    else if (e.key === "-") zoom = zoomAt(zoom, 1 / 1.5, center, box);
+    else if (e.key === "0") zoom = NO_ZOOM;
+    else return;
+    e.preventDefault();
   }
 
   /** Dims everything outside the crop area and draws its frame, corner handles and size. */
@@ -249,11 +353,26 @@
   // ---- pointer -------------------------------------------------------------------------------
 
   function onpointerdown(e: PointerEvent) {
-    if (readonly || e.button !== 0) return;
+    if (readonly) return;
+    // Inspection tools: the middle button, Space+drag or Shift+drag pans the zoomed view.
+    if (inspecting && (e.button === 1 || (e.button === 0 && (e.shiftKey || spaceHeld)))) {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      drag = { kind: "pan", last: { x: e.clientX, y: e.clientY } };
+      panning = true;
+      return;
+    }
+    if (e.button !== 0) return;
     if (textEdit) return commitText();
     const p = toImage(e);
     canvas.setPointerCapture(e.pointerId);
-    if (crop) {
+    if (inspecting && tool === "measure") {
+      drag = { kind: "measure", start: p };
+      measure = measureRect(p, p, width, height);
+    } else if (inspecting && tool === "picker") {
+      const c = full && pixelAt(full.pixels, width, height, p);
+      if (c) onpick?.(c);
+    } else if (crop) {
       cropDown(p);
     } else if (tool === "select") {
       const hit = annotationAt(p);
@@ -271,9 +390,15 @@
   }
 
   function onpointermove(e: PointerEvent) {
-    if (!drag) return;
     const p = toImage(e);
-    if (drag.kind === "crop") {
+    pointer = inspecting ? { client: { x: e.clientX, y: e.clientY }, image: p } : null;
+    if (!drag) return;
+    if (drag.kind === "measure") {
+      measure = measureRect(drag.start, p, width, height);
+    } else if (drag.kind === "pan") {
+      zoom = panBy(zoom, e.clientX - drag.last.x, e.clientY - drag.last.y, box);
+      drag.last = { x: e.clientX, y: e.clientY };
+    } else if (drag.kind === "crop") {
       cropMove(p);
     } else if (drag.kind === "draw") {
       drag.points.push(p);
@@ -299,6 +424,7 @@
     draft = null;
     moving = null;
     drag = null;
+    panning = false;
   }
 
   function ondblclick(e: MouseEvent) {
@@ -337,17 +463,32 @@
   }
 
   const cursor = $derived(
-    crop
-      ? "crosshair"
-      : readonly
-        ? "default"
-        : tool === "select"
-          ? "default"
-          : tool === "text"
-            ? "text"
-            : "crosshair",
+    panning
+      ? "grabbing"
+      : inspecting && spaceHeld
+        ? "grab"
+        : crop
+          ? "crosshair"
+          : readonly
+            ? "default"
+            : tool === "select"
+              ? "default"
+              : tool === "text"
+                ? "text"
+                : "crosshair",
   );
 </script>
+
+<svelte:window
+  onkeydown={onwindowkey}
+  onkeyup={(e) => {
+    if (e.key === " ") {
+      spaceHeld = false;
+      if (inspecting) e.preventDefault();
+    }
+  }}
+  onblur={() => (spaceHeld = false)}
+/>
 
 <div class="layer" bind:clientWidth={box.w} bind:clientHeight={box.h}>
   <canvas
@@ -359,7 +500,30 @@
     {onpointermove}
     {onpointerup}
     {ondblclick}
+    {onwheel}
+    onpointerleave={() => (pointer = null)}
   ></canvas>
+  {#if measure && measureLabel}
+    <div class="measure" style:left="{measureLabel.left}px" style:top="{measureLabel.top}px">
+      <span aria-hidden="true">↔</span>
+      {measure.w} × {measure.h}
+      <span aria-hidden="true">↕</span>
+      <small>px</small>
+    </div>
+  {/if}
+  {#if inspecting && zoom.z !== 1}
+    <div class="zoom">{t("inspect.zoom", { percent: Math.round(zoom.z * 100) })}</div>
+  {/if}
+  {#if inspecting && tool === "picker" && pointer && full && !panning}
+    <Magnifier
+      pixels={full.pixels}
+      imageWidth={width}
+      imageHeight={height}
+      at={pointer.image}
+      cursor={pointer.client}
+      screen={{ w: window.innerWidth, h: window.innerHeight }}
+    />
+  {/if}
   {#if textEdit}
     <div
       class="text-edit"
@@ -395,6 +559,31 @@
     inset: 0;
     display: block;
     touch-action: none;
+  }
+  .measure,
+  .zoom {
+    position: absolute;
+    pointer-events: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgb(20 20 24 / 85%);
+    color: #fff;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .measure {
+    border: 1px solid #2ec8ff;
+  }
+  .measure span {
+    color: #2ec8ff;
+  }
+  .measure small {
+    opacity: 0.7;
+  }
+  .zoom {
+    top: 8px;
+    left: 8px;
+    font-size: 12px;
   }
   .text-edit {
     position: absolute;

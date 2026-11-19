@@ -34,6 +34,18 @@
     tools,
     widths,
   } from "$lib/annotations/tools";
+  import {
+    isInspectTool,
+    measureRect,
+    NO_ZOOM,
+    panBy,
+    pixelAt,
+    unzoomed,
+    type Zoom,
+    zoomAt,
+    zoomed,
+  } from "$lib/annotations/inspect";
+  import ColorReadout from "$lib/components/ColorReadout.svelte";
   import Magnifier from "$lib/components/Magnifier.svelte";
   import { t } from "$lib/i18n/index.svelte";
   import {
@@ -55,7 +67,9 @@
   type Interaction =
     | { kind: "area"; drag: Drag }
     | { kind: "draw"; start: Point; points: Point[] }
-    | { kind: "move"; id: string; last: Point; recorded: boolean };
+    | { kind: "move"; id: string; last: Point; recorded: boolean }
+    | { kind: "measure"; start: Point }
+    | { kind: "pan"; last: Point };
 
   let canvas: HTMLCanvasElement;
   let textEl: HTMLDivElement | undefined = $state();
@@ -92,9 +106,20 @@
   let historyVersion = $state(0);
   let nextId = 0;
 
+  /** Measure and color picker: zoom of the view, the measured area (image pixels), the color read. */
+  let zoom = $state<Zoom>(NO_ZOOM);
+  let measure = $state<Rect | null>(null);
+  let picked = $state<Rgba | null>(null);
+  /** Space is held: dragging pans the zoomed view. */
+  let spaceHeld = $state(false);
+  const inspecting = $derived(isInspectTool(tool));
+
   /** Image pixels per CSS pixel. */
   let scale = $state(1);
-  const toImage = (p: Point): Point => ({ x: p.x * scale, y: p.y * scale });
+  const toImage = (p: Point): Point => {
+    const u = unzoomed(zoom, p);
+    return { x: u.x * scale, y: u.y * scale };
+  };
 
   const imageSelection = $derived(selection && info ? toImagePixels(selection, scale, info) : null);
 
@@ -132,13 +157,16 @@
     canvas.width = Math.round(size.w * dpr);
     canvas.height = Math.round(size.h * dpr);
     const ctx = canvas.getContext("2d")!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Zoomed (measure, color picker): enlarged, with sharp pixels.
+    const z = zoom;
+    ctx.setTransform(dpr * z.z, 0, 0, dpr * z.z, dpr * z.x, dpr * z.y);
+    ctx.imageSmoothingEnabled = z.z < 2;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bitmap, 0, 0, size.w, size.h);
 
     // Annotations are in image pixels.
     ctx.save();
-    ctx.setTransform(dpr / scale, 0, 0, dpr / scale, 0, 0);
+    ctx.setTransform((dpr * z.z) / scale, 0, 0, (dpr * z.z) / scale, dpr * z.x, dpr * z.y);
     for (const a of annotations) drawAnnotation(ctx, a);
     if (draft) drawAnnotation(ctx, draft);
     const selected = annotations.find((a) => a.id === selectedId);
@@ -163,7 +191,7 @@
 
     if (selection) {
       ctx.strokeStyle = "#ff6369";
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1 / z.z;
       ctx.strokeRect(selection.x + 0.5, selection.y + 0.5, selection.w - 1, selection.h - 1);
       if (showHandles) {
         ctx.fillStyle = "#ffffff";
@@ -174,7 +202,28 @@
         }
       }
     }
+
+    if (measureBox) {
+      const { x, y, w, h } = measureBox;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "rgb(46 200 255 / 14%)";
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = "rgb(0 0 0 / 60%)";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x, y, w, h);
+      ctx.strokeStyle = "#2ec8ff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, w, h);
+    }
   }
+
+  /** The measured area on screen (CSS pixels). */
+  const measureBox = $derived.by(() => {
+    if (!measure) return null;
+    const a = zoomed(zoom, { x: measure.x / scale, y: measure.y / scale });
+    const b = zoomed(zoom, { x: (measure.x + measure.w) / scale, y: (measure.y + measure.h) / scale });
+    return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+  });
 
   const hoverWindow = $derived(
     tool === "select" && !selection && pointer && info?.windows.length && (!interaction || clickPending)
@@ -185,7 +234,7 @@
   const showHandles = $derived(tool === "select" && (!interaction || interaction.kind === "area"));
 
   $effect(() => {
-    void [selection, size, annotations, draft, selectedId, showHandles, hoverWindow];
+    void [selection, size, annotations, draft, selectedId, showHandles, hoverWindow, zoom, measureBox];
     draw();
   });
 
@@ -279,6 +328,14 @@
     commitText();
     tool = next;
     if (next !== "select") selectedId = null;
+    // Zoom belongs to the inspection tools; the others work on the normal view.
+    if (!isInspectTool(next)) zoom = NO_ZOOM;
+    if (next !== "measure") measure = null;
+    if (next !== "picker") picked = null;
+  }
+
+  function zoomBy(factor: number, at: Point = { x: size.w / 2, y: size.h / 2 }) {
+    zoom = zoomAt(zoom, factor, at, size);
   }
 
   function setColor(next: Rgba) {
@@ -307,14 +364,31 @@
   function onpointerdown(e: PointerEvent) {
     if (busy) return;
     if (e.button === 2) return void cancelCapture();
+    const c = point(e);
+    // Inspection tools: the middle button, Space+drag or Shift+drag pans the zoomed view.
+    if (inspecting && (e.button === 1 || (e.button === 0 && (e.shiftKey || spaceHeld)))) {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      interaction = { kind: "pan", last: c };
+      return;
+    }
     if (e.button !== 0) return;
     if (textEdit) {
       commitText();
       return;
     }
-    const c = point(e);
     const p = toImage(c);
     canvas.setPointerCapture(e.pointerId);
+
+    if (tool === "measure" && info) {
+      interaction = { kind: "measure", start: p };
+      measure = measureRect(p, p, info.width, info.height);
+      return;
+    }
+    if (tool === "picker") {
+      if (pixels && info) picked = pixelAt(pixels, info.width, info.height, p) ?? picked;
+      return;
+    }
 
     if (tool === "select") {
       const hit = annotationAt(p);
@@ -358,6 +432,13 @@
         draft = shape ? newAnnotation(shape) : null;
         break;
       }
+      case "measure":
+        if (info) measure = measureRect(interaction.start, p, info.width, info.height);
+        break;
+      case "pan":
+        zoom = panBy(zoom, c.x - interaction.last.x, c.y - interaction.last.y, size);
+        interaction.last = c;
+        break;
       case "move": {
         const { id, last } = interaction;
         if (!interaction.recorded) {
@@ -469,7 +550,11 @@
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      if (!interaction) cancelCapture();
+      // Inspecting: Esc first leaves the zoom and the measurement, then closes.
+      if (inspecting && (zoom.z !== 1 || measure)) {
+        zoom = NO_ZOOM;
+        measure = null;
+      } else if (!interaction) cancelCapture();
     } else if (recordMode) {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -491,6 +576,18 @@
     } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       deleteSelected();
+    } else if (inspecting && e.key === " ") {
+      e.preventDefault();
+      spaceHeld = true;
+    } else if (inspecting && !ctrl && (e.key === "+" || e.key === "=")) {
+      e.preventDefault();
+      zoomBy(1.5);
+    } else if (inspecting && !ctrl && e.key === "-") {
+      e.preventDefault();
+      zoomBy(1 / 1.5);
+    } else if (inspecting && !ctrl && e.key === "0") {
+      e.preventDefault();
+      zoom = NO_ZOOM;
     } else if (!ctrl && !e.altKey && selection) {
       const next = toolForKey(e.key.toLowerCase());
       if (next) setTool(next);
@@ -500,7 +597,22 @@
   function onresize() {
     size = { w: window.innerWidth, h: window.innerHeight };
     if (info) scale = info.width / size.w;
+    zoom = NO_ZOOM;
   }
+
+  function onwheel(e: WheelEvent) {
+    if (!inspecting || interaction) return;
+    zoomBy(e.deltaY < 0 ? 1.25 : 0.8, point(e));
+  }
+
+  /** The measured size next to the measured area: below it, or above if there is no room. */
+  const measureLabelStyle = $derived.by(() => {
+    if (!measureBox) return "";
+    const below = measureBox.y + measureBox.h + 6;
+    const top = below + 28 <= size.h ? below : Math.max(4, measureBox.y - 32);
+    const left = Math.min(Math.max(4, measureBox.x), size.w - 180);
+    return `left: ${left}px; top: ${top}px;`;
+  });
 
   // ---- layout --------------------------------------------------------------------------------
 
@@ -537,25 +649,32 @@
   );
 
   // The loupe helps while choosing the area: before there is one, and while drawing/resizing it.
+  // The color picker shows it all the time (it also reads the color under the cursor).
   const showLoupe = $derived(
-    tool === "select" &&
-      pointer !== null &&
+    pointer !== null &&
       pixels !== null &&
-      (interaction
-        ? interaction.kind === "area" && interaction.drag.kind !== "move"
-        : !selection && !hovering),
+      (tool === "picker"
+        ? interaction?.kind !== "pan"
+        : tool === "select" &&
+          (interaction
+            ? interaction.kind === "area" && interaction.drag.kind !== "move"
+            : !selection && !hovering)),
   );
 
   const cursor = $derived(
-    resizeHandle
-      ? handleCursor[resizeHandle]
-      : tool === "select"
-        ? hovering
-          ? "move"
-          : "crosshair"
-        : tool === "text"
-          ? "text"
-          : "crosshair",
+    interaction?.kind === "pan"
+      ? "grabbing"
+      : inspecting && spaceHeld
+        ? "grab"
+        : resizeHandle
+          ? handleCursor[resizeHandle]
+          : tool === "select"
+            ? hovering
+              ? "move"
+              : "crosshair"
+            : tool === "text"
+              ? "text"
+              : "crosshair",
   );
   const sameColor = (a: Rgba, b: Rgba) => a.r === b.r && a.g === b.g && a.b === b.b;
 </script>
@@ -564,6 +683,13 @@
      the surface, and the loupe must follow the mouse everywhere. -->
 <svelte:window
   {onkeydown}
+  onkeyup={(e) => {
+    if (e.key === " ") {
+      spaceHeld = false;
+      if (inspecting) e.preventDefault();
+    }
+  }}
+  onblur={() => (spaceHeld = false)}
   {onresize}
   oncontextmenu={(e) => e.preventDefault()}
   onpointermove={(e) => (pointer = point(e))}
@@ -581,6 +707,7 @@
   style:height="{size.h}px"
   style:cursor
   onpointerleave={() => (pointer = null)}
+  {onwheel}
 ></canvas>
 
 {#if showLoupe && pointer && pixels && info}
@@ -610,8 +737,19 @@
   </div>
 {/if}
 
+{#if measure && measureBox}
+  <div class="size measure" style={measureLabelStyle}>
+    <span aria-hidden="true">↔</span>
+    {measure.w} × {measure.h}
+    <span aria-hidden="true">↕</span>
+    <small>px</small>
+  </div>
+{/if}
+
 {#if selection && imageSelection}
-  <div class="size" style={labelStyle}>{imageSelection.width} × {imageSelection.height}</div>
+  {#if zoom.z === 1}
+    <div class="size" style={labelStyle}>{imageSelection.width} × {imageSelection.height}</div>
+  {/if}
   {#if !interaction && recordMode}
     <div
       class="toolbar"
@@ -780,6 +918,19 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>
+      {#if inspecting}
+        <div class="row inspect">
+          {#if tool === "picker" && picked}
+            <ColorReadout color={picked} onuse={setColor} />
+          {:else}
+            <span class="muted">{t(tool === "picker" ? "inspect.pickerHint" : "inspect.measureHint")}</span>
+          {/if}
+          <span class="spacer"></span>
+          {#if zoom.z !== 1}
+            <span class="muted">{t("inspect.zoom", { percent: Math.round(zoom.z * 100) })}</span>
+          {/if}
+        </div>
+      {/if}
     </div>
   {/if}
 {:else if !error && recordMode && !interaction}
@@ -877,6 +1028,26 @@
   .size {
     padding: 2px 8px;
     font-variant-numeric: tabular-nums;
+  }
+  .size.measure {
+    padding: 4px 10px;
+    font-size: 14px;
+    border: 1px solid #2ec8ff;
+  }
+  .size.measure span {
+    color: #2ec8ff;
+  }
+  .size.measure small {
+    opacity: 0.7;
+  }
+  .row.inspect {
+    min-height: 32px;
+    padding: 0 4px;
+    flex-wrap: wrap;
+  }
+  .muted {
+    color: rgb(255 255 255 / 65%);
+    font-size: 12px;
   }
   .error {
     top: 50%;

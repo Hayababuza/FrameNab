@@ -207,6 +207,8 @@ const frameUrl = (kind: string, frameId: string, project: string) =>
   `${convertFileSrc(`${kind}/${frameId}`, "framenapper")}?p=${encodeURIComponent(project)}`;
 export const thumbUrl = (frameId: string, project: string) => frameUrl("thumb", frameId, project);
 export const previewUrl = (frameId: string, project: string) => frameUrl("preview", frameId, project);
+/** Raw RGBA pixels of a frame at full size (color picker, zoom). */
+export const pixelsUrl = (frameId: string, project: string) => frameUrl("pixels", frameId, project);
 export const openProject = (path: string) => invoke<void>("open_project", { path });
 /** Exports the open project as `*.framenapper.zip`; `null` if the dialog was cancelled. */
 /** Saves the open project as a GIF and puts the file on the clipboard; resolves to the file. */

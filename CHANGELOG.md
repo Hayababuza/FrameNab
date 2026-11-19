@@ -4,6 +4,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+### Added
+- **Measure** tool (`M`) in the screenshot mode and the editor: drag an area to see its size in pixels (↔ width × height ↕); the measurement is only shown, not drawn into the image
+- **Color picker** (`I`) in the screenshot mode and the editor: a loupe follows the mouse, a click shows the color as HEX and RGB – each copyable – and "Use for drawing" makes it the color for arrows, text …; the editor reads the exact pixels of the frame
+- With both tools the view zooms (mouse wheel or `+`/`−`, up to 3200 % with sharp pixels) and pans (Space+drag, Shift+drag or the middle mouse button); `0` resets it. In the editor, Space pans instead of playing while one of them is active
 ## [0.6.1] - 2026-11-19
 
 ### Changed

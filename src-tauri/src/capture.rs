@@ -482,6 +482,12 @@ pub fn protocol<R: Runtime>(app: &AppHandle<R>, request: &Request<Vec<u8>>) -> R
             None => respond(StatusCode::NOT_FOUND, Vec::new()),
         };
     }
+    if let Some(id) = path.strip_prefix("pixels/") {
+        return match crate::editor::serve_pixels(app, id) {
+            Some(rgba) => respond(StatusCode::OK, rgba),
+            None => respond(StatusCode::NOT_FOUND, Vec::new()),
+        };
+    }
     if path.starts_with("thumb/") || path.starts_with("preview/") {
         return match crate::editor::serve(app, path) {
             Some(jpeg) => respond_as(StatusCode::OK, "image/jpeg", jpeg),
