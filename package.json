@@ -1,6 +1,6 @@
 {
   "name": "framenab",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Cross-platform screenshots and GIF recordings with annotations",
   "type": "module",
   "scripts": {

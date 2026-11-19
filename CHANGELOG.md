@@ -4,6 +4,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-11-19
+
+### Fixed
+- Linux (X11/XWayland, e.g. GNOME): windows opened from the tray, the app grid while FrameNab already runs, or a shortcut now come to the front right away instead of only showing a "FrameNab is ready" notification
+
 ## [0.5.3] - 2026-11-18
 
 ### Fixed
@@ -138,7 +143,8 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNab/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/Hayababuza/FrameNab/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/Hayababuza/FrameNab/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/Hayababuza/FrameNab/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Hayababuza/FrameNab/compare/v0.5.0...v0.5.1
