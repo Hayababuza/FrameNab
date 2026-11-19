@@ -141,6 +141,16 @@ trait CaptureBackend {
 - Auto-updater (Tauri updater, signed)
 - Accessibility: keyboard control in the editor, sufficient contrast
 
+### From user feedback (v0.5 – v0.7) ✅
+- **Instant GIF:** a shortcut, tray entry or `framenapper instant-gif` opens the area selection; recording starts right away and stopping saves and copies the file, without the editor (format, FPS, countdown, size, pointer and keys in the settings)
+- Options in the recorder bar before starting (mouse pointer, pressed keys, format); save recordings right away instead of opening the editor
+- Several monitors: overlay and recorder cover all monitors on Windows, elsewhere the monitor under the mouse
+- Saved files go to the clipboard as a file (switchable); editor button "Copy" puts the GIF with all annotations on the clipboard and closes the editor (switchable)
+- **Measure tool** (size of an area in pixels) and **color picker** (HEX/RGB, copy, use as drawing color) in the screenshot mode and the editor, with zoom (mouse wheel, sharp pixels) and panning
+- The last annotation color and stroke width are remembered; a setting decides whether a right click cancels the screenshot
+- Windows: the PrintScreen key can be taken over from the Snipping Tool; Linux/GNOME: panels and tray stay usable while recording, windows come to the front instead of a "ready" notice
+- Renamed from FrameNab to FrameNapper (v0.6.0), with migration of settings, recordings and installations
+
 ### After v1.0 (goal: cover as much of ScreenToGif and Flameshot as possible)
 - Webcam recording and sketch board mode (as in ScreenToGif)
 - Audio for video export
