@@ -1,6 +1,6 @@
 {
   "name": "framenapper",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Cross-platform screenshots and GIF recordings with annotations",
   "type": "module",
   "scripts": {

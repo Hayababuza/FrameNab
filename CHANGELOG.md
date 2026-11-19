@@ -4,6 +4,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-19
+
+### Changed
+- Windows: installing FrameNapper removes FrameNab first, as on Linux – the setup `.exe` quits and silently uninstalls it (settings and recordings are kept and taken over), the `.msi` replaces the FrameNab `.msi`. Before, both stayed installed side by side
+
 ## [0.6.0] - 2026-11-19
 
 ### Changed
@@ -15,7 +20,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ### Upgrading from FrameNab
 - On the first start, settings, recent recordings and logs are taken over from FrameNab, and an autostart entry is moved over
 - Linux: the `.deb`/`.rpm` replaces the old FrameNab package. After an update from within FrameNab, start FrameNapper once by hand (the old program it would restart is gone)
-- Windows and macOS: FrameNapper is installed as a new app next to FrameNab; uninstall FrameNab afterwards (Windows: Settings → Apps). macOS asks again for the screen recording permission
+- Windows and macOS: FrameNapper is installed as a new app next to FrameNab; uninstall FrameNab afterwards (Windows: Settings → Apps; done automatically from 0.6.1 on). macOS asks again for the screen recording permission
 
 ## [0.5.4] - 2026-11-19
 
@@ -156,7 +161,8 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNapper/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNapper/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/Hayababuza/FrameNapper/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Hayababuza/FrameNapper/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/Hayababuza/FrameNapper/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/Hayababuza/FrameNapper/compare/v0.5.2...v0.5.3
