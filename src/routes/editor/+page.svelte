@@ -111,6 +111,18 @@
   let picked = $state<Rgba | null>(null);
   let color = $state<Rgba>(colors[0]);
   let strokeWidth = $state(widths[1]);
+  /** The color and width chosen last time (shared with the screenshot overlay). */
+  let styleLoaded = false;
+  const loadStyle = () =>
+    getSetting("annotationStyle").then((style) => {
+      color = style.color;
+      if (widths.includes(style.width)) strokeWidth = style.width;
+      styleLoaded = true;
+    });
+  $effect(() => {
+    const style = { color: $state.snapshot(color), width: strokeWidth };
+    if (styleLoaded) void setSetting("annotationStyle", style).catch(() => {});
+  });
   let selectedId = $state<string | null>(null);
 
   const frames = $derived(view?.project.frames ?? []);
@@ -221,10 +233,12 @@
 
   onMount(() => {
     load();
+    loadStyle();
     getSetting("recordingFormat").then((f) => (format = f));
     getSetting("exportOptions").then((o) => (exportOptions = { ...exportOptions, ...o }));
     const unlisteners = [
       listen("editor-reload", () => {
+        loadStyle(); // it may have changed in the screenshot overlay meanwhile
         stop();
         selected = new Set();
         current = 0;

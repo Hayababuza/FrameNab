@@ -62,7 +62,7 @@
     focusWindow,
   } from "$lib/ipc";
   import { History } from "$lib/stores/history";
-  import { getSetting } from "$lib/stores/settings";
+  import { getSetting, setSetting } from "$lib/stores/settings";
 
   type Interaction =
     | { kind: "area"; drag: Drag }
@@ -127,6 +127,11 @@
   let saveDirectory = $state("");
 
   onMount(async () => {
+    // The color and width chosen last time (also in the editor).
+    getSetting("annotationStyle").then((style) => {
+      color = style.color;
+      if (widths.includes(style.width)) width = style.width;
+    });
     Promise.all([getSetting("saveDirectory"), defaultSaveDirectory()]).then(
       ([custom, fallback]) => (saveDirectory = custom ?? fallback),
     );
@@ -341,12 +346,17 @@
   function setColor(next: Rgba) {
     color = next;
     restyleSelected({ stroke: next });
+    rememberStyle();
   }
 
   function setWidth(next: number) {
     width = next;
     restyleSelected({ width: next * scale });
+    rememberStyle();
   }
+
+  const rememberStyle = () =>
+    void setSetting("annotationStyle", { color: $state.snapshot(color), width }).catch(() => {});
 
   /** Changing color/width while an annotation is selected applies it to that annotation. */
   function restyleSelected(change: Partial<Annotation["style"]>) {

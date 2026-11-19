@@ -1,5 +1,6 @@
 /** Persistent settings via tauri-plugin-store (`settings.json` in the app data folder). */
 import { load, type Store } from "@tauri-apps/plugin-store";
+import type { Rgba } from "$lib/bindings/Rgba";
 import type { Locale } from "$lib/i18n/translate";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
@@ -56,6 +57,8 @@ export interface Settings {
   instantGif: InstantGif;
   /** Global shortcuts as accelerators (`Shift+PrintScreen`); `null` = off. Not on Wayland. */
   hotkeys: Hotkeys;
+  /** Last chosen color and stroke width (CSS pixels) for annotations, in the overlay and editor. */
+  annotationStyle: { color: Rgba; width: number };
 }
 
 /** Mirrors `InstantGif` in `src-tauri/src/recorder.rs`. */
@@ -120,6 +123,7 @@ const defaults: Settings = {
   updateCheck: true,
   recordingCleanup: { enabled: false, days: 30 },
   instantGif: { ...DEFAULT_INSTANT_GIF },
+  annotationStyle: { color: { r: 0xff, g: 0x3b, b: 0x30, a: 255 }, width: 4 },
 };
 
 let store: Promise<Store> | undefined;
