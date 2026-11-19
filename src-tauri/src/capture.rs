@@ -2,16 +2,16 @@
 //! selects and annotates an area → copy, save or pin it.
 //!
 //! The frozen image is kept in [`CaptureState`] and served to the overlay as raw RGBA through
-//! the `framenab://` protocol, so no pixel data travels through JSON IPC.
+//! the `framenapper://` protocol, so no pixel data travels through JSON IPC.
 
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use framenab_capture::{CaptureError, CaptureTarget};
-use framenab_core::Annotation;
-use framenab_export::still::{self, StillFormat};
+use framenapper_capture::{CaptureError, CaptureTarget};
+use framenapper_core::Annotation;
+use framenapper_export::still::{self, StillFormat};
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use tauri::http::{Request, Response, StatusCode};
@@ -111,7 +111,7 @@ pub fn start(app: &AppHandle, hide: Option<String>, mode: CaptureMode) {
                 // Give the compositor time to actually remove the window from the screen.
                 std::thread::sleep(Duration::from_millis(300));
             }
-            let backend = framenab_capture::backend();
+            let backend = framenapper_capture::backend();
             let image = match backend.screenshot(&CaptureTarget::AllMonitors) {
                 Err(CaptureError::AccessRequired) => {
                     request_access(&app_for_access)?;
@@ -122,7 +122,7 @@ pub fn start(app: &AppHandle, hide: Option<String>, mode: CaptureMode) {
             };
             // Window frames are in desktop coordinates; the image starts at the desktop's top-left.
             let (min_x, min_y, _, _) =
-                framenab_capture::bounds(&backend.monitors().unwrap_or_default()).unwrap_or_default();
+                framenapper_capture::bounds(&backend.monitors().unwrap_or_default()).unwrap_or_default();
             let windows = backend
                 .windows()
                 .unwrap_or_else(|err| {
@@ -168,17 +168,17 @@ pub fn start(app: &AppHandle, hide: Option<String>, mode: CaptureMode) {
     });
 }
 
-/// The first screenshot of the installed app on GNOME: the system asks once whether FrameNab may
-/// take screenshots, but only lets the focused app ask. Brings FrameNab to the front, explains
+/// The first screenshot of the installed app on GNOME: the system asks once whether FrameNapper may
+/// take screenshots, but only lets the focused app ask. Brings FrameNapper to the front, explains
 /// what comes next (the click on OK gives it the focus), asks through the portal while it is
 /// focused, and hides it again. Afterwards the permission is stored and no dialog appears.
 fn request_access(app: &AppHandle) -> Result<(), CaptureError> {
     use tauri_plugin_dialog::MessageDialogButtons;
 
-    tracing::info!("screenshot permission missing; asking with FrameNab in front");
+    tracing::info!("screenshot permission missing; asking with FrameNapper in front");
     windows::show_main(app);
     let mut dialog =
-        app.dialog().message(t("capture.accessExplain")).title("FrameNab").kind(MessageDialogKind::Info).buttons(
+        app.dialog().message(t("capture.accessExplain")).title("FrameNapper").kind(MessageDialogKind::Info).buttons(
             MessageDialogButtons::OkCancelCustom(t("capture.accessContinue").into(), t("capture.accessCancel").into()),
         );
     if let Some(main) = app.get_webview_window(windows::MAIN) {
@@ -188,8 +188,8 @@ fn request_access(app: &AppHandle) -> Result<(), CaptureError> {
         let _ = windows::hide_window(app, windows::MAIN);
         return Err(CaptureError::PermissionDenied);
     }
-    // While FrameNab has the focus, the portal may show its access dialog.
-    let granted = framenab_capture::backend().screenshot(&CaptureTarget::AllMonitors);
+    // While FrameNapper has the focus, the portal may show its access dialog.
+    let granted = framenapper_capture::backend().screenshot(&CaptureTarget::AllMonitors);
     let _ = windows::hide_window(app, windows::MAIN);
     match granted {
         Ok(_) => Ok(()),
@@ -209,7 +209,7 @@ pub fn finish(app: &AppHandle) {
 fn show_error(app: &AppHandle, detail: &str) {
     app.dialog()
         .message(format!("{}\n\n{detail}", t("capture.failed")))
-        .title("FrameNab")
+        .title("FrameNapper")
         .kind(MessageDialogKind::Error)
         .show(|_| {});
 }
@@ -219,7 +219,7 @@ fn show_error(app: &AppHandle, detail: &str) {
 /// the offset of the crop within the original, and the desktop position of the result's top-left.
 fn fit_to_overlay(app: &AppHandle, image: &RgbaImage, span: bool) -> (Option<RgbaImage>, (i32, i32), (i32, i32)) {
     // Wayland: the recording is relative to the monitor of the screen cast, not the desktop.
-    let portal = framenab_capture::Platform::detect().requires_portal();
+    let portal = framenapper_capture::Platform::detect().requires_portal();
     let monitors = app.available_monitors().unwrap_or_default();
     let (Some(min_x), Some(min_y), Some(max_x), Some(max_y)) = (
         monitors.iter().map(|m| m.position().x).min(),
@@ -243,7 +243,7 @@ fn fit_to_overlay(app: &AppHandle, image: &RgbaImage, span: bool) -> (Option<Rgb
     let (pos, size) = (monitor.position(), monitor.size());
     let (ox, oy) = (pos.x - min_x, pos.y - min_y);
     let origin = if portal { (0, 0) } else { (pos.x, pos.y) };
-    (Some(framenab_capture::crop(image, ox, oy, size.width, size.height)), (ox, oy), origin)
+    (Some(framenapper_capture::crop(image, ox, oy, size.width, size.height)), (ox, oy), origin)
 }
 
 #[tauri::command]
@@ -270,7 +270,7 @@ pub fn capture_info(app: AppHandle) -> Option<CaptureInfo> {
         height: capture.image.height(),
         windows: capture.windows.clone(),
         mode: *state.mode.lock().expect("mode lock"),
-        window_picker: framenab_capture::Platform::detect().requires_portal(),
+        window_picker: framenapper_capture::Platform::detect().requires_portal(),
         span,
     })
 }
@@ -338,12 +338,12 @@ async fn render_selection(
     };
     let Selection { x, y, width, height } = selection;
     tauri::async_runtime::spawn_blocking(move || {
-        let mut cropped = framenab_capture::crop(&image, x as i32, y as i32, width.max(1), height.max(1));
+        let mut cropped = framenapper_capture::crop(&image, x as i32, y as i32, width.max(1), height.max(1));
         // Annotations are in screen-image coordinates; move them into the cropped area.
         let (dx, dy) = (-(x as f32), -(y as f32));
         let moved: Vec<Annotation> =
             annotations.into_iter().map(|a| Annotation { shape: a.shape.translated(dx, dy), ..a }).collect();
-        framenab_render::render_annotations(&mut cropped, &moved).map(|()| cropped)
+        framenapper_render::render_annotations(&mut cropped, &moved).map(|()| cropped)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -394,7 +394,8 @@ pub async fn save_selection(
     windows::close_overlay(&app);
 
     let shown = path.display().to_string();
-    if let Err(err) = app.notification().builder().title("FrameNab").body(format!("{}\n{shown}", t("save.done"))).show()
+    if let Err(err) =
+        app.notification().builder().title("FrameNapper").body(format!("{}\n{shown}", t("save.done"))).show()
     {
         tracing::warn!(%err, "could not show notification");
     }
@@ -457,8 +458,8 @@ pub fn cancel_capture(app: AppHandle) {
     windows::close_overlay(&app);
 }
 
-/// Serves raw RGBA pixels: `framenab://localhost/<id>` for the current capture and
-/// `framenab://localhost/pin/<id>` for pinned screenshots.
+/// Serves raw RGBA pixels: `framenapper://localhost/<id>` for the current capture and
+/// `framenapper://localhost/pin/<id>` for pinned screenshots.
 ///
 /// Runs off the main thread (registered as an asynchronous protocol), so decoding and encoding
 /// images never blocks the UI.

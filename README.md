@@ -1,27 +1,27 @@
-# FrameNab
+# FrameNapper
 
 **Screenshots and GIF recordings with annotations, for Windows, macOS and Linux.**
 
-FrameNab combines two tools in one app:
+FrameNapper combines two tools in one app:
 
 - **Screenshot mode:** press a shortcut, select an area, annotate it right away (arrows, text, markers, blur …), then copy or save.
 - **Recording mode:** record an area of the screen, then trim it, adjust timing and annotate it in the frame editor, and export as GIF, APNG, WebP or MP4.
 
 Both modes share the same annotation tools. Internally a screenshot is a project with exactly one frame and can be opened in the editor at any time.
 
-> **Status:** v0.5.4 – screenshot mode, recorder, frame editor, export formats and installers (phases 1–5) are done; next are the extras after 1.0 (webcam, audio, upload, OCR). See the [roadmap](docs/PROJECT-PLAN.md#4-features-by-phase).
+> **Status:** v0.6.0 – screenshot mode, recorder, frame editor, export formats and installers (phases 1–5) are done; next are the extras after 1.0 (webcam, audio, upload, OCR). See the [roadmap](docs/PROJECT-PLAN.md#4-features-by-phase).
 
 ## Installation
 
-Download the installer for your system from the [releases](https://github.com/Hayababuza/FrameNab/releases):
+Download the installer for your system from the [releases](https://github.com/Hayababuza/FrameNapper/releases):
 
 | System | File |
 |---|---|
-| Windows 10/11 | `FrameNab_…_x64-setup.exe` (or `.msi`) |
-| macOS 11+ (Apple Silicon and Intel) | `FrameNab_…_universal.dmg` – not notarized yet: right-click → *Open* the first time |
-| Debian, Ubuntu | `FrameNab_…_amd64.deb` |
-| Fedora, openSUSE | `FrameNab-…-1.x86_64.rpm` |
-| Other Linux | `FrameNab_…_amd64.AppImage` |
+| Windows 10/11 | `FrameNapper_…_x64-setup.exe` (or `.msi`) |
+| macOS 11+ (Apple Silicon and Intel) | `FrameNapper_…_universal.dmg` – not notarized yet: right-click → *Open* the first time |
+| Debian, Ubuntu | `FrameNapper_…_amd64.deb` |
+| Fedora, openSUSE | `FrameNapper-…-1.x86_64.rpm` |
+| Other Linux | `FrameNapper_…_amd64.AppImage` |
 
 [FFmpeg](https://ffmpeg.org) is optional: with it, recordings can also be saved as MP4, WebM and lossy WebP.
 
@@ -53,7 +53,7 @@ FFmpeg is optional and only needed for MP4/WebM export and lossy WebP.
 Raise the version in `package.json`, `src-tauri/tauri.conf.json` and `Cargo.toml` (and the path dependencies), add the release to `CHANGELOG.md`, then push a tag:
 
 ```bash
-git tag -a v0.4.0 -m "FrameNab 0.4.0" && git push && git push --tags
+git tag -a v0.4.0 -m "FrameNapper 0.4.0" && git push && git push --tags
 ```
 
 The [release workflow](.github/workflows/release.yml) builds the installers for all three systems and attaches them to a **draft** release; check it on GitHub and publish it.
@@ -75,18 +75,18 @@ Update packages are signed in the workflow with the repository secrets `TAURI_SI
 ## Command line
 
 ```bash
-framenab gui        # screenshot overlay
-framenab record     # recording (choose the area)
-framenab instant-gif # instant GIF: choose an area, records right away, saved and copied on stop
-framenab edit <file> # open a recording folder, its project.json or a .framenab.zip
-framenab editor     # editor
-framenab settings   # settings
-framenab --hidden   # start in the tray only
+framenapper gui        # screenshot overlay
+framenapper record     # recording (choose the area)
+framenapper instant-gif # instant GIF: choose an area, records right away, saved and copied on stop
+framenapper edit <file> # open a recording folder, its project.json or a .framenapper.zip
+framenapper editor     # editor
+framenapper settings   # settings
+framenapper --hidden   # start in the tray only
 ```
 
-If FrameNab is already running, the command is passed on to the running instance.
+If FrameNapper is already running, the command is passed on to the running instance.
 
-**Wayland (GNOME, KDE …):** apps are not allowed to register global shortcuts there. Create a custom shortcut in your system settings instead, e.g. `Print` → `framenab gui`. Details: [docs/wayland.md](docs/wayland.md).
+**Wayland (GNOME, KDE …):** apps are not allowed to register global shortcuts there. Create a custom shortcut in your system settings instead, e.g. `Print` → `framenapper gui`. Details: [docs/wayland.md](docs/wayland.md).
 
 ## Project structure
 
@@ -94,10 +94,10 @@ If FrameNab is already running, the command is passed on to the running instance
 src/              Frontend (SvelteKit): one route per window, lib/ for logic
 src-tauri/        Tauri app: windows, tray, hotkeys, commands (glue code only)
 crates/
-  framenab-core     Project model, frame store, frame operations, undo
-  framenab-capture  Screen capture per platform
-  framenab-render   Rendering annotations into frames
-  framenab-export   GIF/APNG/WebP/video export
+  framenapper-core     Project model, frame store, frame operations, undo
+  framenapper-capture  Screen capture per platform
+  framenapper-render   Rendering annotations into frames
+  framenapper-export   GIF/APNG/WebP/video export
 docs/             Plan, architecture, platform notes
 ```
 
@@ -105,4 +105,4 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## License
 
-[MIT](LICENSE). FrameNab is inspired by ScreenToGif and Flameshot but contains no code from either project.
+[MIT](LICENSE). FrameNapper is inspired by ScreenToGif and Flameshot but contains no code from either project.

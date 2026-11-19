@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { InputEvents } from "$lib/bindings/InputEvents";
 import { cursorAt, effectAnnotations } from "./effects";
 
-// Same cases as the Rust tests in framenab-core/src/input.rs.
+// Same cases as the Rust tests in framenapper-core/src/input.rs.
 const input: InputEvents = {
   cursor: [
     { t: 0, x: 0, y: 0 },

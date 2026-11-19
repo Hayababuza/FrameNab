@@ -1,7 +1,7 @@
 //! Tauri commands the frontend calls via `invoke` (wrapped type-safely in `src/lib/ipc`).
 
-use framenab_capture::Platform;
-use framenab_export::ExportFormat;
+use framenapper_capture::Platform;
+use framenapper_export::ExportFormat;
 use serde::Serialize;
 use tauri::{AppHandle, WebviewWindow};
 
@@ -15,7 +15,7 @@ pub struct AppInfo {
     platform: Platform,
     requires_portal: bool,
     ffmpeg_available: bool,
-    /// Wayland session, FrameNab windows running on XWayland.
+    /// Wayland session, FrameNapper windows running on XWayland.
     xwayland: bool,
     export_formats: Vec<ExportFormat>,
 }
@@ -33,9 +33,9 @@ pub fn app_info() -> AppInfo {
         version: env!("CARGO_PKG_VERSION"),
         platform,
         requires_portal: platform.requires_portal(),
-        ffmpeg_available: framenab_export::find_ffmpeg().is_some(),
+        ffmpeg_available: framenapper_export::find_ffmpeg().is_some(),
         xwayland: crate::display::xwayland(),
-        export_formats: framenab_export::available_formats(),
+        export_formats: framenapper_export::available_formats(),
     }
 }
 

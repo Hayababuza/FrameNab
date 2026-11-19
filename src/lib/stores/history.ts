@@ -1,5 +1,5 @@
 /**
- * Undo/redo via snapshots, mirroring `framenab_core::History`.
+ * Undo/redo via snapshots, mirroring `framenapper_core::History`.
  * Used for annotations in the editor and the screenshot overlay.
  */
 export class History<T> {

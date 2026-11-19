@@ -1,4 +1,4 @@
-//! Tauri layer of FrameNab. Only glue code lives here (windows, tray, hotkeys, commands);
+//! Tauri layer of FrameNapper. Only glue code lives here (windows, tray, hotkeys, commands);
 //! the actual logic is in `crates/*`.
 
 mod capture;
@@ -14,6 +14,7 @@ mod logging;
 mod pin;
 mod printscreen;
 mod recorder;
+mod rename;
 mod settings;
 mod tray;
 mod windows;
@@ -24,11 +25,13 @@ pub use cli::Action;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before anything creates the app folders under the new name.
+    let renamed = rename::migrate_folders();
     display::choose_backend();
     let initial = cli::parse(std::env::args().skip(1));
 
     tauri::Builder::default()
-        // Must be registered as the first plugin: a second launch (e.g. `framenab gui` from a
+        // Must be registered as the first plugin: a second launch (e.g. `framenapper gui` from a
         // system shortcut) forwards its arguments to the running instance.
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             let args = cli::parse(argv.into_iter().skip(1));
@@ -49,7 +52,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
-        .register_asynchronous_uri_scheme_protocol("framenab", |ctx, request, responder| {
+        .register_asynchronous_uri_scheme_protocol("framenapper", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             tauri::async_runtime::spawn_blocking(move || responder.respond(capture::protocol(&app, &request)));
         })
@@ -113,13 +116,17 @@ pub fn run() {
             app.manage(logging::init(&log_dir));
             tracing::info!(
                 version = env!("CARGO_PKG_VERSION"),
-                platform = %framenab_capture::Platform::detect(),
+                platform = %framenapper_capture::Platform::detect(),
                 xwayland = display::xwayland(),
-                "FrameNab starting"
+                "FrameNapper starting"
             );
+            for note in &renamed {
+                tracing::info!("taken over from FrameNab: {note}");
+            }
+            rename::migrate_autostart(app.handle());
 
             // Loading the system fonts takes a moment; do it now instead of on the first text.
-            std::thread::spawn(framenab_render::text::warm_up);
+            std::thread::spawn(framenapper_render::text::warm_up);
 
             if let Some(main) = app.get_webview_window(windows::MAIN) {
                 windows::fix_titlebar(&main);
@@ -153,7 +160,7 @@ pub fn run() {
             _ => {}
         })
         .run(tauri::generate_context!())
-        .expect("failed to start FrameNab");
+        .expect("failed to start FrameNapper");
 }
 
 /// Opens a recording folder in the editor, reporting failures in the log. Runs in an async task:

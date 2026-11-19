@@ -3,7 +3,7 @@ import type { Project } from "$lib/bindings/Project";
 import type { Watermark } from "$lib/bindings/Watermark";
 import { progressAnnotation, watermarkRect } from "./overlays";
 
-// Same cases as the Rust tests in `framenab_core::overlays`.
+// Same cases as the Rust tests in `framenapper_core::overlays`.
 function project(): Project {
   return {
     version: 1,

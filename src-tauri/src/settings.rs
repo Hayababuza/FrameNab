@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use framenab_export::still::{DEFAULT_TEMPLATE, StillFormat};
+use framenapper_export::still::{DEFAULT_TEMPLATE, StillFormat};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 
@@ -12,10 +12,10 @@ pub struct SaveSettings {
     pub format: StillFormat,
 }
 
-/// `<Pictures>/FrameNab`, or `<Home>/FrameNab` if there is no pictures folder.
+/// `<Pictures>/FrameNapper`, or `<Home>/FrameNapper` if there is no pictures folder.
 pub fn default_save_dir(app: &AppHandle) -> PathBuf {
     let path = app.path();
-    path.picture_dir().or_else(|_| path.home_dir()).unwrap_or_else(|_| PathBuf::from(".")).join("FrameNab")
+    path.picture_dir().or_else(|_| path.home_dir()).unwrap_or_else(|_| PathBuf::from(".")).join("FrameNapper")
 }
 
 pub fn save_settings(app: &AppHandle) -> SaveSettings {

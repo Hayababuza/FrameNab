@@ -1,4 +1,4 @@
-/** Preview of `framenab_export::still::expand_template` for the settings page. Keep in sync. */
+/** Preview of `framenapper_export::still::expand_template` for the settings page. Keep in sync. */
 export function expandTemplate(template: string, now: Date): string {
   const pad = (n: number, len = 2) => String(n).padStart(len, "0");
   const tokens: [string, string][] = [
@@ -29,5 +29,5 @@ export function expandTemplate(template: string, now: Date): string {
   const expanded = template.replace(/\{([^}]*)\}/g, (_, inner: string) => expandTokens(inner));
   // eslint-disable-next-line no-control-regex
   const name = expanded.replace(/[/\\:*?"<>|\u0000-\u001f]/g, "_").trim();
-  return name || "FrameNab";
+  return name || "FrameNapper";
 }

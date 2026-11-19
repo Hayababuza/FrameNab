@@ -2,15 +2,15 @@
 //! there you bind these commands to a key in the system settings.
 //!
 //! ```text
-//! framenab gui        open the screenshot overlay
-//! framenab record          choose the area to record (stops a running recording)
-//! framenab record-screen   record the whole screen (monitor under the mouse)
-//! framenab instant-gif     instant GIF: choose an area, records right away, saved and copied
+//! framenapper gui        open the screenshot overlay
+//! framenapper record          choose the area to record (stops a running recording)
+//! framenapper record-screen   record the whole screen (monitor under the mouse)
+//! framenapper instant-gif     instant GIF: choose an area, records right away, saved and copied
 //!                          when stopped (also `record-now`; stops a running recording)
-//! framenab editor     open the editor
-//! framenab settings   open the settings
-//! framenab edit <dir>      open a recording (*.framenab folder) in the editor
-//! framenab --hidden   start in the tray only (autostart)
+//! framenapper editor     open the editor
+//! framenapper settings   open the settings
+//! framenapper edit <dir>      open a recording (*.framenapper folder) in the editor
+//! framenapper --hidden   start in the tray only (autostart)
 //! ```
 
 use serde::Deserialize;
@@ -70,7 +70,7 @@ mod tests {
         assert_eq!(parse(["record-now"]).action, Some(Action::RecordNow));
         assert_eq!(parse(["instant-gif"]).action, Some(Action::RecordNow));
         assert_eq!(parse(["--hidden", "record"]), Args { action: Some(Action::Record), hidden: true, project: None });
-        assert_eq!(parse(["edit", "/tmp/a.framenab"]).project, Some(std::path::PathBuf::from("/tmp/a.framenab")));
+        assert_eq!(parse(["edit", "/tmp/a.framenapper"]).project, Some(std::path::PathBuf::from("/tmp/a.framenapper")));
         assert_eq!(parse(Vec::<String>::new()), Args::default());
     }
 }

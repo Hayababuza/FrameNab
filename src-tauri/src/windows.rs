@@ -36,7 +36,7 @@ impl Restore {
 /// Brings `window` to the front with the keyboard focus.
 ///
 /// X11/XWayland (GNOME): opened from the tray, a second launch or a shortcut, there is no recent
-/// input event of FrameNab's own, so GNOME's focus-stealing prevention only shows a "FrameNab is
+/// input event of FrameNapper's own, so GNOME's focus-stealing prevention only shows a "FrameNapper is
 /// ready" notification instead of the window. Presenting it with the X server's current time
 /// counts as a fresh request.
 pub fn focus(window: &WebviewWindow) {
@@ -109,7 +109,7 @@ pub fn run(app: &AppHandle, action: Action) {
             show_main(app);
             Ok(())
         }
-        Action::Settings => open(app, SETTINGS, |b| b.title("FrameNab – Settings").inner_size(640.0, 520.0)),
+        Action::Settings => open(app, SETTINGS, |b| b.title("FrameNapper – Settings").inner_size(640.0, 520.0)),
     };
     if let Err(err) = result {
         tracing::error!(?action, %err, "failed to open window");
@@ -148,7 +148,7 @@ fn record_screen(app: &AppHandle) {
     }
     let Some(monitor) = monitor_at(app, None) else { return };
     let region = crate::recorder::Region { x: 0, y: 0, w: monitor.width, h: monitor.height };
-    let portal = framenab_capture::Platform::detect().requires_portal();
+    let portal = framenapper_capture::Platform::detect().requires_portal();
     crate::recorder::open(
         app,
         crate::recorder::Open {
@@ -299,10 +299,10 @@ fn builder_at<'a>(
 /// Screenshot overlay: borderless, always on top, covering the screen(s). It starts hidden and
 /// shows itself once the frozen screen image is drawn, to avoid a white flash.
 // Keeps a taskbar/dock entry: the main window may be hidden while the overlay is open, and
-// FrameNab should not look as if it had quit.
+// FrameNapper should not look as if it had quit.
 pub fn open_overlay(app: &AppHandle, placement: Option<&Placement>) -> tauri::Result<()> {
     close_overlay(app);
-    let window = builder_at(app, OVERLAY, placement).title("FrameNab – Screenshot").build()?;
+    let window = builder_at(app, OVERLAY, placement).title("FrameNapper – Screenshot").build()?;
     if let Some(p) = placement {
         place(&window, p)?;
     }
@@ -316,7 +316,7 @@ pub fn open_recorder(app: &AppHandle, placement: Option<&Placement>) -> tauri::R
     if let Some(w) = app.get_webview_window(RECORDER) {
         let _ = w.close();
     }
-    let window = builder_at(app, RECORDER, placement).title("FrameNab – Recording").transparent(true).build()?;
+    let window = builder_at(app, RECORDER, placement).title("FrameNapper – Recording").transparent(true).build()?;
     if let Some(p) = placement {
         place(&window, p)?;
     }

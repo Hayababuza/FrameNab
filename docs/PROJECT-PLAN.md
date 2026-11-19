@@ -1,4 +1,4 @@
-# FrameNab – Project Plan
+# FrameNapper – Project Plan
 
 > **Status:** Approved on 2026-11-06; phase 0 is done. The decisions taken are listed in §11.
 
@@ -6,7 +6,7 @@
 
 ## 1. Vision
 
-**FrameNab** is a cross-platform, open-source desktop tool that combines two tools:
+**FrameNapper** is a cross-platform, open-source desktop tool that combines two tools:
 
 1. **Quick annotated screenshots** (like Flameshot): shortcut → the screen freezes → select an area → annotate directly in the overlay → copy / save.
 2. **Screen recording as GIF/video with a frame editor** (like ScreenToGif): select an area → record → edit, annotate and trim individual frames in the editor → export as GIF / APNG / WebP / MP4.
@@ -52,7 +52,7 @@ The key idea of the merge: **one shared annotation system** for both. Internally
 
 ## 3. Platform support & capture strategy
 
-Capture is the hardest part, so everything sits behind a common trait (`framenab-capture`):
+Capture is the hardest part, so everything sits behind a common trait (`framenapper-capture`):
 
 ```rust
 trait CaptureBackend {
@@ -74,7 +74,7 @@ trait CaptureBackend {
 - Wayland forbids apps from reading the screen directly. Every capture goes through the portal; the user confirms once, then a *restore token* is stored so they are not asked every time.
 - **Screenshot flow like Flameshot:** first get a fullscreen screenshot through the portal, then open our own borderless fullscreen window showing that frozen image and select/annotate there. This works everywhere, including where overlays over other apps are restricted.
 - **Recording:** the ScreenCast portal provides a PipeWire stream of the whole monitor; Rust crops it to the selected region. The recording frame is shown as its own window, or alternatively just as a border around the region.
-- **Hotkeys:** `framenab gui`, `framenab record` etc. as CLI commands (like `flameshot gui`); they are forwarded to the running instance. See [wayland.md](wayland.md) for binding them to a key in GNOME/KDE.
+- **Hotkeys:** `framenapper gui`, `framenapper record` etc. as CLI commands (like `flameshot gui`); they are forwarded to the running instance. See [wayland.md](wayland.md) for binding them to a key in GNOME/KDE.
 
 ---
 
@@ -101,7 +101,7 @@ trait CaptureBackend {
   - numbered markers (counter 1, 2, 3 …)
   - pixelate and blur (area)
   - color picker, stroke width, undo/redo (Ctrl+Z / Ctrl+Y)
-- Actions: **copy to clipboard** (Enter / Ctrl+C), **save** (Ctrl+S, filename template e.g. `FrameNab_{yyyy-MM-dd_HH-mm-ss}.png`), **open in editor**, pin (keep as a floating always-on-top window), cancel (Esc)
+- Actions: **copy to clipboard** (Enter / Ctrl+C), **save** (Ctrl+S, filename template e.g. `FrameNapper_{yyyy-MM-dd_HH-mm-ss}.png`), **open in editor**, pin (keep as a floating always-on-top window), cancel (Esc)
 - Output: PNG, JPG, WebP
 - **Acceptance:** a region screenshot with an arrow and text is in the clipboard less than 1 s after pressing Enter, on all 3 OSes and on GNOME Wayland.
 
@@ -122,7 +122,7 @@ trait CaptureBackend {
 - **Image:** crop, resize (Lanczos), rotate/flip, border, background/padding
 - **Annotations over frame ranges:** each annotation has `frameStart..frameEnd`, so subtitles or arrows can be shown only on certain frames; tools as in phase 1, plus watermark (image) and progress bar
 - **Transitions:** insert fade and slide between frames
-- Save and load projects (`.framenab` folder or ZIP, see §6), recovery after a crash
+- Save and load projects (`.framenapper` folder or ZIP, see §6), recovery after a crash
 - Undo/redo for every operation (snapshot history)
 
 ### Phase 4 – Export → **v0.4**
@@ -152,7 +152,7 @@ trait CaptureBackend {
 ## 5. Project structure
 
 ```
-FrameNab/
+FrameNapper/
 ├─ .github/workflows/        ci.yml (release.yml in phase 5)
 ├─ docs/                     PROJECT-PLAN.md (this document), ARCHITECTURE.md, wayland.md
 ├─ src/                      # Frontend (SvelteKit + TS)
@@ -175,10 +175,10 @@ FrameNab/
 │  │  ├─ cli.rs, hotkeys.rs, i18n.rs, logging.rs, tray.rs, windows.rs
 │  ├─ icons/, capabilities/, tauri.conf.json, Cargo.toml
 ├─ crates/                   # Core logic, independent of Tauri and therefore testable
-│  ├─ framenab-capture/      CaptureBackend trait + backends: windows, macos, x11, wayland
-│  ├─ framenab-core/         project model, frame store (QOI), undo history, frame operations
-│  ├─ framenab-render/       annotation rendering (tiny-skia, cosmic-text), blur/pixelate
-│  └─ framenab-export/       GIF (gifski), APNG, WebP, FFmpeg integration
+│  ├─ framenapper-capture/      CaptureBackend trait + backends: windows, macos, x11, wayland
+│  ├─ framenapper-core/         project model, frame store (QOI), undo history, frame operations
+│  ├─ framenapper-render/       annotation rendering (tiny-skia, cosmic-text), blur/pixelate
+│  └─ framenapper-export/       GIF (gifski), APNG, WebP, FFmpeg integration
 ├─ Cargo.toml                (workspace)
 ├─ package.json, pnpm-lock.yaml, vite.config.ts, tsconfig.json, svelte.config.js
 ├─ .editorconfig, .gitignore, .prettierrc, eslint.config.js, rustfmt.toml
@@ -191,12 +191,12 @@ FrameNab/
 
 ## 6. Data model (core)
 
-See [ARCHITECTURE.md](ARCHITECTURE.md#project-folder-framenab) for the `project.json` format.
+See [ARCHITECTURE.md](ARCHITECTURE.md#project-folder-framenapper) for the `project.json` format.
 
 - Annotations stay **non-destructive** until export.
 - The same JSON schema is used in TypeScript (UI preview) and Rust (export rendering). The TS types are **generated from Rust** with `ts-rs`, so the two sides never drift apart.
 - Visual regression tests ensure the canvas renderer (UI) and tiny-skia (export) look practically the same.
-- Frames never travel as Base64 over IPC: the UI loads them through a **custom protocol** (`framenab://frame/<project>/<id>?thumb=1`) served by Rust.
+- Frames never travel as Base64 over IPC: the UI loads them through a **custom protocol** (`framenapper://frame/<project>/<id>?thumb=1`) served by Rust.
 
 ---
 

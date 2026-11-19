@@ -62,10 +62,10 @@ export function hitTest(shape: Shape, p: Point, tolerance = 4, width = 4): boole
   }
 }
 
-/** Sizes derived from the stroke width; mirror `framenab_render::{counter_radius, text_padding}`. */
+/** Sizes derived from the stroke width; mirror `framenapper_render::{counter_radius, text_padding}`. */
 export const LINE_HEIGHT = 1.25;
 export const counterRadius = (width: number) => 10 + width * 2;
-/** Outer radius of a click marker; mirrors `framenab_render::click_radius`. */
+/** Outer radius of a click marker; mirrors `framenapper_render::click_radius`. */
 export const clickRadius = (width: number) => 14 + width * 3;
 export const textPadding = (fontSize: number) => Math.round(fontSize * 0.2);
 

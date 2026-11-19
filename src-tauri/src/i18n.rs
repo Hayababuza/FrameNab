@@ -56,9 +56,9 @@ pub fn t(key: &str) -> &'static str {
         }
         "save.projectFilter" => {
             if de {
-                "FrameNab-Projekt"
+                "FrameNapper-Projekt"
             } else {
-                "FrameNab project"
+                "FrameNapper project"
             }
         }
         "save.title" => {
@@ -70,9 +70,9 @@ pub fn t(key: &str) -> &'static str {
         }
         "capture.accessExplain" => {
             if de {
-                "Das System fragt gleich einmalig, ob FrameNab Bildschirmfotos aufnehmen darf. Bitte dort „Erlauben“ wählen – danach fragt es nicht mehr."
+                "Das System fragt gleich einmalig, ob FrameNapper Bildschirmfotos aufnehmen darf. Bitte dort „Erlauben“ wählen – danach fragt es nicht mehr."
             } else {
-                "The system is about to ask once whether FrameNab may take screenshots. Please choose \"Allow\" there – it will not ask again."
+                "The system is about to ask once whether FrameNapper may take screenshots. Please choose \"Allow\" there – it will not ask again."
             }
         }
         "capture.accessContinue" => {
@@ -91,9 +91,9 @@ pub fn t(key: &str) -> &'static str {
         }
         "capture.accessDenied" => {
             if de {
-                "Das System hat Bildschirmfotos für FrameNab nicht erlaubt. In den GNOME-Einstellungen unter Apps → FrameNab lässt sich das ändern."
+                "Das System hat Bildschirmfotos für FrameNapper nicht erlaubt. In den GNOME-Einstellungen unter Apps → FrameNapper lässt sich das ändern."
             } else {
-                "The system did not allow screenshots for FrameNab. This can be changed in the GNOME Settings under Apps → FrameNab."
+                "The system did not allow screenshots for FrameNapper. This can be changed in the GNOME Settings under Apps → FrameNapper."
             }
         }
         "capture.failed" => {

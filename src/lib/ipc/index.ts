@@ -82,17 +82,17 @@ export const copyPin = () => invoke<void>("copy_pin");
 export const defaultSaveDirectory = () => invoke<string>("default_save_directory");
 
 export async function loadPin(info: PinInfo): Promise<ImageBitmap> {
-  const response = await fetch(convertFileSrc(`pin/${info.id}`, "framenab"));
+  const response = await fetch(convertFileSrc(`pin/${info.id}`, "framenapper"));
   if (!response.ok) throw new Error(`pin ${info.id}: HTTP ${response.status}`);
   const pixels = new Uint8ClampedArray(await response.arrayBuffer());
   return createImageBitmap(new ImageData(pixels, info.width, info.height));
 }
 
-/** Loads the pixels of the current capture through the `framenab://` protocol. */
+/** Loads the pixels of the current capture through the `framenapper://` protocol. */
 export async function loadCapture(
   info: CaptureInfo,
 ): Promise<{ bitmap: ImageBitmap; pixels: Uint8ClampedArray }> {
-  const response = await fetch(convertFileSrc(String(info.id), "framenab"));
+  const response = await fetch(convertFileSrc(String(info.id), "framenapper"));
   if (!response.ok) throw new Error(`capture ${info.id}: HTTP ${response.status}`);
   const pixels = new Uint8ClampedArray(await response.arrayBuffer());
   const bitmap = await createImageBitmap(new ImageData(pixels, info.width, info.height));
@@ -126,7 +126,7 @@ export interface RecorderSetup {
 
 /** The frozen screen image of the area selection, shown behind the frame on Wayland. */
 export async function loadRecorderBackground(setup: RecorderSetup): Promise<ImageBitmap> {
-  const response = await fetch(convertFileSrc("recorder-background", "framenab"));
+  const response = await fetch(convertFileSrc("recorder-background", "framenapper"));
   if (!response.ok) throw new Error(`recorder background: HTTP ${response.status}`);
   const pixels = new Uint8ClampedArray(await response.arrayBuffer());
   return createImageBitmap(new ImageData(pixels, setup.imageWidth, setup.imageHeight));
@@ -137,7 +137,7 @@ export async function loadRecorderBackground(setup: RecorderSetup): Promise<Imag
 export const recorderShrink = (x: number, y: number, width: number, height: number) =>
   invoke<[number, number] | null>("recorder_shrink", { x, y, width, height });
 
-/** Brings the calling window to the front (also where GNOME would only say "FrameNab is ready"). */
+/** Brings the calling window to the front (also where GNOME would only say "FrameNapper is ready"). */
 export const focusWindow = () => invoke<void>("focus_window");
 
 export interface RecorderStatus {
@@ -204,11 +204,11 @@ export const recordingFormats = () => invoke<ExportFormat[]>("recording_formats"
 // Frame ids repeat across projects (`f000001` …), so the project path goes into the URL too;
 // otherwise the webview shows cached images of the previously opened recording.
 const frameUrl = (kind: string, frameId: string, project: string) =>
-  `${convertFileSrc(`${kind}/${frameId}`, "framenab")}?p=${encodeURIComponent(project)}`;
+  `${convertFileSrc(`${kind}/${frameId}`, "framenapper")}?p=${encodeURIComponent(project)}`;
 export const thumbUrl = (frameId: string, project: string) => frameUrl("thumb", frameId, project);
 export const previewUrl = (frameId: string, project: string) => frameUrl("preview", frameId, project);
 export const openProject = (path: string) => invoke<void>("open_project", { path });
-/** Exports the open project as `*.framenab.zip`; `null` if the dialog was cancelled. */
+/** Exports the open project as `*.framenapper.zip`; `null` if the dialog was cancelled. */
 /** Saves the open project as a GIF and puts the file on the clipboard; resolves to the file. */
 export const editorCopy = () => invoke<string>("editor_copy");
 export const editorExportProject = () => invoke<string | null>("editor_export_project");
@@ -218,7 +218,7 @@ export const editorSetOverlays = (overlays: Overlays) =>
 export const editorPickWatermark = () => invoke<EditorView | null>("editor_pick_watermark");
 /** URL of an image in the open project's `assets/` folder. */
 export const assetUrl = (file: string, project: string) =>
-  `${convertFileSrc(`asset/${file}`, "framenab")}?p=${encodeURIComponent(project)}`;
+  `${convertFileSrc(`asset/${file}`, "framenapper")}?p=${encodeURIComponent(project)}`;
 
 export interface RecentProject {
   path: string;
@@ -252,7 +252,7 @@ export const applyHotkeys = () => invoke<HotkeyProblem[]>("apply_hotkeys");
 
 /** Windows only: whether Windows takes the Print Screen key for its own screen capture. */
 export const printScreenOwner = () => invoke<"windows" | "free" | null>("print_screen_owner");
-/** Windows only: hands the Print Screen key to FrameNab (after signing in again). */
+/** Windows only: hands the Print Screen key to FrameNapper (after signing in again). */
 export const releasePrintScreen = () => invoke<void>("release_print_screen");
 /** Opens the Windows keyboard settings with the Print Screen option. */
 export const openPrintScreenSettings = () => invoke<void>("open_print_screen_settings");

@@ -19,7 +19,7 @@ pub async fn copy_image(app: &AppHandle, image: RgbaImage) -> Result<(), String>
         let pixbuf = Pixbuf::from_bytes(&bytes, Colorspace::Rgb, true, 8, w as i32, h as i32, (w * 4) as i32);
         let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
         clipboard.set_image(&pixbuf);
-        // Hand the data to a clipboard manager (if any) so it survives FrameNab quitting.
+        // Hand the data to a clipboard manager (if any) so it survives FrameNapper quitting.
         clipboard.store();
         let _ = tx.try_send(());
     })

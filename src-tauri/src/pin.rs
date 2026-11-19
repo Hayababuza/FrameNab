@@ -56,7 +56,7 @@ pub fn open(app: &AppHandle, image: RgbaImage, scale: f64, restore: Option<Strin
     state.images.lock().expect("pin lock").insert(id, Arc::new(image));
 
     let window = WebviewWindowBuilder::new(app, format!("{PREFIX}{id}"), WebviewUrl::App("pin".into()))
-        .title("FrameNab – Pin")
+        .title("FrameNapper – Pin")
         .inner_size(w.max(40.0), h.max(40.0))
         .decorations(false)
         .transparent(true)

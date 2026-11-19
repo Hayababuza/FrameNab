@@ -283,7 +283,7 @@
         {:else if updateState.kind === "error"}
           {t("settings.updateError", { error: updateState.error })}
         {:else}
-          FrameNab {version}
+          FrameNapper {version}
         {/if}
       </span>
       <button onclick={checkUpdate} disabled={updateState.kind === "checking"}
@@ -301,15 +301,15 @@
       <p class="help">{t("settings.hotkeysWayland")}</p>
       <div class="row">
         <span>{t("settings.hotkeyScreenshot")}</span>
-        <code>framenab gui</code>
+        <code>framenapper gui</code>
       </div>
       <div class="row">
         <span>{t("settings.hotkeyRecord")}</span>
-        <code>framenab record</code>
+        <code>framenapper record</code>
       </div>
       <div class="row">
         <span>{t("settings.hotkeyRecordNow")}</span>
-        <code>framenab record-now</code>
+        <code>framenapper record-now</code>
       </div>
     {:else}
       {#each hotkeyRows as [action, title] (action)}

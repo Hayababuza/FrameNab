@@ -1,6 +1,6 @@
 /**
  * Input effects (cursor highlight, click ripples, key captions) as annotations for one moment of
- * a recording. Mirrors `framenab_core::input::effect_annotations` (Rust), which renders the
+ * a recording. Mirrors `framenapper_core::input::effect_annotations` (Rust), which renders the
  * result; keep both in sync (same tests).
  */
 import type { Annotation } from "$lib/bindings/Annotation";

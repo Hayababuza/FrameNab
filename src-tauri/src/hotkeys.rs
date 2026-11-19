@@ -1,11 +1,11 @@
 //! Global shortcuts, configurable in the settings (`hotkeys` in `settings.json`, accelerators
 //! like `Shift+PrintScreen`). Not possible on Wayland (see `docs/wayland.md`); there the system
-//! owns the shortcut and runs `framenab gui` / `framenab record`.
+//! owns the shortcut and runs `framenapper gui` / `framenapper record`.
 
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use framenab_capture::Platform;
+use framenapper_capture::Platform;
 use serde::{Deserialize, Serialize};
 use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Manager, Wry};
@@ -85,7 +85,7 @@ fn load(app: &AppHandle) -> Hotkeys {
 /// Registers the shortcuts from the settings (replacing the previous ones).
 pub fn register(app: &AppHandle) -> Vec<HotkeyProblem> {
     if Platform::detect().requires_portal() {
-        tracing::info!("Wayland detected: bind a system shortcut to `framenab gui` instead");
+        tracing::info!("Wayland detected: bind a system shortcut to `framenapper gui` instead");
         return Vec::new();
     }
     let hotkeys = load(app);

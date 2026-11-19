@@ -20,6 +20,6 @@ A scope is optional, e.g. `feat(capture): Wayland screenshot via portal`.
 
 - **Logic belongs in `crates/*`**, not in `src-tauri`, so it stays testable without a GUI.
 - **No hard-coded UI strings:** new strings go into `src/lib/i18n/en.json` **and** `de.json` (a test checks that both have the same keys).
-- **Changing the model:** edit the Rust types in `framenab-core` and run `pnpm bindings` (any `cargo test` regenerates them too). The generated files in `src/lib/bindings/` are committed exactly as generated (Prettier ignores them).
-- **Platform code** lives behind `CaptureBackend` (`framenab-capture`) and is separated with `#[cfg(...)]`.
+- **Changing the model:** edit the Rust types in `framenapper-core` and run `pnpm bindings` (any `cargo test` regenerates them too). The generated files in `src/lib/bindings/` are committed exactly as generated (Prettier ignores them).
+- **Platform code** lives behind `CaptureBackend` (`framenapper-capture`) and is separated with `#[cfg(...)]`.
 - **Language:** code, comments, docs and commit messages are in English.

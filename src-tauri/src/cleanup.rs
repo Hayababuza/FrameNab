@@ -11,7 +11,7 @@ use tauri_plugin_store::StoreExt;
 
 /// Settings key.
 const KEY: &str = "recordingCleanup";
-/// How often to look for old recordings while FrameNab runs.
+/// How often to look for old recordings while FrameNapper runs.
 const INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,14 +28,14 @@ impl Default for CleanupSettings {
     }
 }
 
-/// Recording folders (`*.framenab`) in `dir` with their last change. `project.json` changes
+/// Recording folders (`*.framenapper`) in `dir` with their last change. `project.json` changes
 /// with every edit, the folder itself when frames are added.
 pub fn recording_folders(dir: &Path) -> Vec<(SystemTime, PathBuf)> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     entries
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .filter(|p| p.is_dir() && p.extension().is_some_and(|e| e == "framenab"))
+        .filter(|p| p.is_dir() && p.extension().is_some_and(crate::rename::is_project_extension))
         .filter_map(|p| {
             let modified = std::fs::metadata(p.join("project.json")).or_else(|_| std::fs::metadata(&p));
             Some((modified.and_then(|m| m.modified()).ok()?, p))
@@ -111,7 +111,7 @@ pub fn run(app: &AppHandle) -> usize {
 /// Runs the cleanup shortly after the start and then every few hours.
 pub fn start(app: &AppHandle) {
     let app = app.clone();
-    let _ = std::thread::Builder::new().name("framenab-cleanup".into()).spawn(move || {
+    let _ = std::thread::Builder::new().name("framenapper-cleanup".into()).spawn(move || {
         std::thread::sleep(Duration::from_secs(30));
         loop {
             run(&app);
@@ -144,11 +144,11 @@ mod tests {
         let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100 * 24 * 3600);
         let day = Duration::from_secs(24 * 3600);
         let folders = vec![
-            (now - day * 40, PathBuf::from("old.framenab")),
-            (now - day * 29, PathBuf::from("recent.framenab")),
-            (now + day, PathBuf::from("future.framenab")),
+            (now - day * 40, PathBuf::from("old.framenapper")),
+            (now - day * 29, PathBuf::from("recent.framenapper")),
+            (now + day, PathBuf::from("future.framenapper")),
         ];
-        assert_eq!(older_than(&folders, now, 30), [PathBuf::from("old.framenab")]);
+        assert_eq!(older_than(&folders, now, 30), [PathBuf::from("old.framenapper")]);
         assert_eq!(older_than(&folders, now, 1).len(), 2);
         assert_eq!(CleanupSettings::default(), CleanupSettings { enabled: false, days: 30 });
     }
@@ -156,11 +156,11 @@ mod tests {
     #[test]
     fn lists_only_recording_folders() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir(dir.path().join("a.framenab")).unwrap();
+        std::fs::create_dir(dir.path().join("a.framenapper")).unwrap();
         std::fs::create_dir(dir.path().join("other")).unwrap();
-        std::fs::write(dir.path().join("b.framenab"), b"not a folder").unwrap();
+        std::fs::write(dir.path().join("b.framenapper"), b"not a folder").unwrap();
         let folders = recording_folders(dir.path());
         assert_eq!(folders.len(), 1);
-        assert!(folders[0].1.ends_with("a.framenab"));
+        assert!(folders[0].1.ends_with("a.framenapper"));
     }
 }

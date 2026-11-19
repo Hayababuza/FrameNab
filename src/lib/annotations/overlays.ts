@@ -1,6 +1,6 @@
 /**
  * Overlays over the whole recording (progress bar, watermark) for the editor preview. Mirrors
- * `framenab_core::overlays` (Rust), which renders the export; keep both in sync (same tests).
+ * `framenapper_core::overlays` (Rust), which renders the export; keep both in sync (same tests).
  */
 import type { Annotation } from "$lib/bindings/Annotation";
 import type { Project } from "$lib/bindings/Project";

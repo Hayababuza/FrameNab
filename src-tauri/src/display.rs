@@ -1,14 +1,14 @@
-//! Which window system FrameNab's own windows use on Linux.
+//! Which window system FrameNapper's own windows use on Linux.
 //!
 //! In a Wayland session, native Wayland windows may neither stay on top nor choose their
 //! position: the recording frame and pins could not stay visible, and the frame could not be
-//! placed exactly. X11 windows through XWayland may do both, so by default FrameNab runs its
+//! placed exactly. X11 windows through XWayland may do both, so by default FrameNapper runs its
 //! windows on XWayland in Wayland sessions. Screen capture still goes through the portal.
 //! The setting `nativeWayland` (settings.json) switches back; it applies after a restart.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use framenab_capture::Platform;
+use framenapper_capture::Platform;
 
 static XWAYLAND: AtomicBool = AtomicBool::new(false);
 
@@ -36,12 +36,12 @@ pub fn choose_backend() {
     }
 }
 
-/// FrameNab's windows run on XWayland inside a Wayland session.
+/// FrameNapper's windows run on XWayland inside a Wayland session.
 pub fn xwayland() -> bool {
     XWAYLAND.load(Ordering::SeqCst)
 }
 
-/// FrameNab's windows are native Wayland windows: they cannot stay on top or be positioned.
+/// FrameNapper's windows are native Wayland windows: they cannot stay on top or be positioned.
 pub fn native_wayland() -> bool {
     Platform::detect() == Platform::LinuxWayland && !xwayland()
 }
@@ -52,7 +52,7 @@ fn native_wayland_preferred() -> bool {
     let data = std::env::var_os("XDG_DATA_HOME")
         .map(std::path::PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share")));
-    let Some(file) = data.map(|d| d.join("dev.framenab.app").join("settings.json")) else { return false };
+    let Some(file) = data.map(|d| d.join(crate::rename::IDENTIFIER).join("settings.json")) else { return false };
     std::fs::read(file)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())

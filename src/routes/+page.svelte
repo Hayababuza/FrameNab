@@ -29,8 +29,8 @@
   }
 
   /**
-   * "Open project": a project archive (*.framenab.zip) or the project.json of a recording folder
-   * (*.framenab), opened in the editor.
+   * "Open project": a project archive (*.framenapper.zip) or the project.json of a recording folder
+   * (*.framenapper), opened in the editor.
    */
   async function pickProject() {
     const picked = await open({
@@ -117,7 +117,7 @@
     <div class="brand">
       <img src="/favicon.png" alt="" width="36" height="36" />
       <div>
-        <h1>FrameNab</h1>
+        <h1>FrameNapper</h1>
         <p>{t("app.tagline")}</p>
       </div>
     </div>
@@ -195,7 +195,7 @@
 
   {#if info}
     {#if info.requiresPortal}
-      <p class="notice">{t("info.wayland", { command: "framenab gui" })}</p>
+      <p class="notice">{t("info.wayland", { command: "framenapper gui" })}</p>
     {/if}
     <dl>
       <dt>{t("info.version")}</dt>

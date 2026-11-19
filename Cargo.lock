@@ -1611,14 +1611,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "framenab"
-version = "0.5.4"
+name = "framenapper"
+version = "0.6.0"
 dependencies = [
  "arboard",
- "framenab-capture",
- "framenab-core",
- "framenab-export",
- "framenab-render",
+ "auto-launch",
+ "dirs 6.0.0",
+ "framenapper-capture",
+ "framenapper-core",
+ "framenapper-export",
+ "framenapper-render",
  "gdkx11",
  "gtk",
  "image",
@@ -1645,13 +1647,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "framenab-capture"
-version = "0.5.4"
+name = "framenapper-capture"
+version = "0.6.0"
 dependencies = [
  "ashpd",
  "device_query",
  "evdev",
- "framenab-core",
+ "framenapper-core",
  "image",
  "pipewire",
  "serde",
@@ -1663,8 +1665,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "framenab-core"
-version = "0.5.4"
+name = "framenapper-core"
+version = "0.6.0"
 dependencies = [
  "image",
  "qoi",
@@ -1678,12 +1680,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "framenab-export"
-version = "0.5.4"
+name = "framenapper-export"
+version = "0.6.0"
 dependencies = [
  "chrono",
- "framenab-core",
- "framenab-render",
+ "framenapper-core",
+ "framenapper-render",
  "gifski",
  "image",
  "image-webp",
@@ -1700,11 +1702,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "framenab-render"
-version = "0.5.4"
+name = "framenapper-render"
+version = "0.6.0"
 dependencies = [
  "cosmic-text",
- "framenab-core",
+ "framenapper-core",
  "image",
  "thiserror 2.0.21",
  "tiny-skia",

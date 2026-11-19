@@ -1,7 +1,7 @@
 //! Editor for recordings (first version): a filmstrip of all frames, deleting frames with
 //! undo/redo, playback, and saving the result as GIF/MP4/WebM into the save folder.
 //!
-//! The project folder (`*.framenab`) is the working copy: edits are written to its
+//! The project folder (`*.framenapper`) is the working copy: edits are written to its
 //! `project.json` right away, frame files are only deleted when the editor closes.
 
 use std::path::PathBuf;
@@ -9,9 +9,9 @@ use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use framenab_core::{FrameOp, FrameStore, History, ImageOp, Project, TransitionOp, ops};
-use framenab_export::animation::{ExportControl, export_animation};
-use framenab_export::{ExportFormat, ExportOptions};
+use framenapper_core::{FrameOp, FrameStore, History, ImageOp, Project, TransitionOp, ops};
+use framenapper_export::animation::{ExportControl, export_animation};
+use framenapper_export::{ExportFormat, ExportOptions};
 use image::codecs::jpeg::JpegEncoder;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -45,12 +45,12 @@ impl EditorState {
 }
 
 /// Opens a project in the editor window: a project folder, its `project.json`, or a project
-/// archive (`*.framenab.zip`, extracted into the recordings folder first).
+/// archive (`*.framenapper.zip`, extracted into the recordings folder first).
 pub fn open(app: &AppHandle, path: PathBuf, restore: Option<String>) -> Result<(), String> {
     let root = if path.is_file() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
         let dir = crate::recorder::recordings_dir(app);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        framenab_core::archive::import_zip(&path, &dir).map_err(|e| e.to_string())?
+        framenapper_core::archive::import_zip(&path, &dir).map_err(|e| e.to_string())?
     } else if path.is_file() && path.file_name().is_some_and(|n| n == "project.json") {
         path.parent().map(PathBuf::from).ok_or("invalid path")?
     } else {
@@ -74,7 +74,7 @@ pub fn open(app: &AppHandle, path: PathBuf, restore: Option<String>) -> Result<(
         return Ok(());
     }
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App(LABEL.into()))
-        .title("FrameNab – Editor")
+        .title("FrameNapper – Editor")
         .inner_size(1100.0, 760.0)
         .min_inner_size(720.0, 480.0)
         .build()
@@ -117,7 +117,10 @@ fn view(open: &Open) -> EditorView {
 }
 
 /// Applies an edit, remembers the previous state for undo and saves `project.json`.
-fn edit(app: &AppHandle, change: impl FnOnce(&mut Project) -> framenab_core::Result<()>) -> Result<EditorView, String> {
+fn edit(
+    app: &AppHandle,
+    change: impl FnOnce(&mut Project) -> framenapper_core::Result<()>,
+) -> Result<EditorView, String> {
     let state = app.state::<EditorState>();
     let mut guard = state.lock();
     let open = guard.as_mut().ok_or("no project open")?;
@@ -137,7 +140,7 @@ pub fn editor_view(app: AppHandle) -> Option<EditorView> {
 /// frame images), then takes the result over as one undoable edit.
 async fn background_edit(
     app: &AppHandle,
-    change: impl FnOnce(&FrameStore, &mut Project) -> framenab_core::Result<()> + Send + 'static,
+    change: impl FnOnce(&FrameStore, &mut Project) -> framenapper_core::Result<()> + Send + 'static,
 ) -> Result<EditorView, String> {
     let (store, before) = {
         let state = app.state::<EditorState>();
@@ -155,7 +158,7 @@ async fn background_edit(
     edit(app, move |p| {
         // Only if nothing else changed the project meanwhile.
         if *p != before {
-            return Err(framenab_core::CoreError::Busy);
+            return Err(framenapper_core::CoreError::Busy);
         }
         *p = project;
         Ok(())
@@ -201,7 +204,7 @@ pub async fn editor_image(app: AppHandle, op: ImageOp) -> Result<EditorView, Str
     };
     let worker_done = std::sync::Arc::clone(&done);
     let result = background_edit(&app, move |store, project| {
-        framenab_core::image_ops::apply_image_op(store, project, &op, &worker_done)
+        framenapper_core::image_ops::apply_image_op(store, project, &op, &worker_done)
     })
     .await;
     done.store(total, Ordering::Relaxed);
@@ -212,13 +215,13 @@ pub async fn editor_image(app: AppHandle, op: ImageOp) -> Result<EditorView, Str
 /// Inserts transition frames (fade, slide) after a frame.
 #[tauri::command]
 pub async fn editor_transition(app: AppHandle, op: TransitionOp) -> Result<EditorView, String> {
-    background_edit(&app, move |store, project| framenab_core::transitions::insert_transition(store, project, &op))
+    background_edit(&app, move |store, project| framenapper_core::transitions::insert_transition(store, project, &op))
         .await
 }
 
 /// The input recorded with the open project (mouse, clicks, keys) for the effect preview.
 #[tauri::command]
-pub fn editor_input(app: AppHandle) -> Result<framenab_core::InputEvents, String> {
+pub fn editor_input(app: AppHandle) -> Result<framenapper_core::InputEvents, String> {
     let state = app.state::<EditorState>();
     let guard = state.lock();
     let open = guard.as_ref().ok_or("no project open")?;
@@ -226,7 +229,7 @@ pub fn editor_input(app: AppHandle) -> Result<framenab_core::InputEvents, String
 }
 
 #[tauri::command]
-pub fn editor_set_effects(app: AppHandle, effects: framenab_core::Effects) -> Result<EditorView, String> {
+pub fn editor_set_effects(app: AppHandle, effects: framenapper_core::Effects) -> Result<EditorView, String> {
     edit(&app, |p| {
         p.effects = effects;
         Ok(())
@@ -235,9 +238,12 @@ pub fn editor_set_effects(app: AppHandle, effects: framenab_core::Effects) -> Re
 
 /// Sets the progress bar and watermark settings.
 #[tauri::command]
-pub fn editor_set_overlays(app: AppHandle, overlays: framenab_core::overlays::Overlays) -> Result<EditorView, String> {
+pub fn editor_set_overlays(
+    app: AppHandle,
+    overlays: framenapper_core::overlays::Overlays,
+) -> Result<EditorView, String> {
     if let Some(wm) = &overlays.watermark
-        && !framenab_core::store::is_asset_name(&wm.file)
+        && !framenapper_core::store::is_asset_name(&wm.file)
     {
         return Err("invalid watermark file".into());
     }
@@ -251,7 +257,7 @@ pub fn editor_set_overlays(app: AppHandle, overlays: framenab_core::overlays::Ov
 /// Resolves to `None` if the dialog was cancelled.
 #[tauri::command]
 pub async fn editor_pick_watermark(app: AppHandle) -> Result<Option<EditorView>, String> {
-    use framenab_core::overlays::{Anchor, Watermark};
+    use framenapper_core::overlays::{Anchor, Watermark};
     use tauri_plugin_dialog::DialogExt;
 
     let store = {
@@ -287,7 +293,7 @@ pub async fn editor_pick_watermark(app: AppHandle) -> Result<Option<EditorView>,
 
 /// Serves `asset/<file>` (the watermark image) of the open project.
 pub fn serve_asset(app: &AppHandle<impl tauri::Runtime>, file: &str) -> Option<Vec<u8>> {
-    if !framenab_core::store::is_asset_name(file) {
+    if !framenapper_core::store::is_asset_name(file) {
         return None;
     }
     let root = app.state::<EditorState>().lock().as_ref()?.store.root().to_path_buf();
@@ -298,7 +304,7 @@ pub fn serve_asset(app: &AppHandle<impl tauri::Runtime>, file: &str) -> Option<V
 #[tauri::command]
 pub fn editor_set_annotations(
     app: AppHandle,
-    annotations: Vec<framenab_core::Annotation>,
+    annotations: Vec<framenapper_core::Annotation>,
 ) -> Result<EditorView, String> {
     edit(&app, |p| {
         p.annotations = annotations;
@@ -353,7 +359,7 @@ pub async fn announce_saved(app: &AppHandle, path: &std::path::Path, copy: bool)
     let shown = path.display().to_string();
     tracing::info!(path = %shown, copied, "recording saved");
     let text = if copied { t("save.recordingCopied") } else { t("save.recordingDone") };
-    if let Err(err) = app.notification().builder().title("FrameNab").body(format!("{text}\n{shown}")).show() {
+    if let Err(err) = app.notification().builder().title("FrameNapper").body(format!("{text}\n{shown}")).show() {
         tracing::warn!(%err, "could not show notification");
     }
 }
@@ -368,7 +374,7 @@ pub async fn editor_estimate(app: AppHandle, format: ExportFormat, options: Expo
         (open.store.clone(), open.project.clone())
     };
     tauri::async_runtime::spawn_blocking(move || {
-        framenab_export::animation::estimate_size(&store, &project, format, &options)
+        framenapper_export::animation::estimate_size(&store, &project, format, &options)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -390,7 +396,7 @@ pub async fn editor_export(
     let format = format.unwrap_or(saved_format);
     let options = options.unwrap_or(saved_options);
     let config = settings::save_settings(&app);
-    let name = framenab_export::still::file_name_now(&config.template);
+    let name = framenapper_export::still::file_name_now(&config.template);
     let (path, format) = if ask {
         let Some(path) = ask_path(&app, &config.directory, &name, format).await? else { return Ok(None) };
         let picked = path.extension().and_then(|e| e.to_str()).and_then(format_for_extension);
@@ -398,7 +404,7 @@ pub async fn editor_export(
         let path = if picked.is_none() { path.with_extension(format.extension()) } else { path };
         (path, format)
     } else {
-        (framenab_export::still::unique_path(&config.directory, &name, format.extension()), format)
+        (framenapper_export::still::unique_path(&config.directory, &name, format.extension()), format)
     };
     export_open_project(&app, &path, format, options).await?;
     announce_saved(&app, &path, copy_setting(&app)).await;
@@ -415,8 +421,8 @@ pub async fn editor_copy(app: AppHandle) -> Result<String, String> {
     remove_older_than(&dir, Duration::from_secs(24 * 3600));
     let (_, options) = saved_choice(&app);
     let config = settings::save_settings(&app);
-    let name = framenab_export::still::file_name_now(&config.template);
-    let path = framenab_export::still::unique_path(&dir, &name, ExportFormat::Gif.extension());
+    let name = framenapper_export::still::file_name_now(&config.template);
+    let path = framenapper_export::still::unique_path(&dir, &name, ExportFormat::Gif.extension());
     export_open_project(&app, &path, ExportFormat::Gif, options).await?;
     crate::clipboard::copy_file(&app, path.clone()).await?;
     tracing::info!(path = %path.display(), "recording copied to the clipboard");
@@ -535,7 +541,7 @@ async fn ask_path(
     picked.map(|p| p.into_path().map_err(|e| e.to_string())).transpose()
 }
 
-/// Exports the open project as a `*.framenab.zip` archive (to pass it on or keep it).
+/// Exports the open project as a `*.framenapper.zip` archive (to pass it on or keep it).
 /// Resolves to the path, or `None` if the dialog was cancelled.
 #[tauri::command]
 pub async fn editor_export_project(app: AppHandle) -> Result<Option<String>, String> {
@@ -552,14 +558,14 @@ pub async fn editor_export_project(app: AppHandle) -> Result<Option<String>, Str
         .root()
         .file_stem()
         .and_then(|s| s.to_str())
-        .map_or_else(|| framenab_export::still::file_name_now(&config.template), String::from);
+        .map_or_else(|| framenapper_export::still::file_name_now(&config.template), String::from);
     let _ = std::fs::create_dir_all(&config.directory);
     let mut dialog = app
         .dialog()
         .file()
         .set_title(t("save.projectTitle"))
         .set_directory(&config.directory)
-        .set_file_name(format!("{name}.{}", framenab_core::archive::EXTENSION))
+        .set_file_name(format!("{name}.{}", framenapper_core::archive::EXTENSION))
         .add_filter(t("save.projectFilter"), &["zip"]);
     if let Some(window) = app.get_webview_window(LABEL) {
         dialog = dialog.set_parent(&window);
@@ -570,10 +576,10 @@ pub async fn editor_export_project(app: AppHandle) -> Result<Option<String>, Str
     let path = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
         path
     } else {
-        path.with_extension(framenab_core::archive::EXTENSION)
+        path.with_extension(framenapper_core::archive::EXTENSION)
     };
     let target = path.clone();
-    tauri::async_runtime::spawn_blocking(move || framenab_core::archive::export_zip(&store, &project, &target))
+    tauri::async_runtime::spawn_blocking(move || framenapper_core::archive::export_zip(&store, &project, &target))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
@@ -637,7 +643,7 @@ pub fn serve<R: tauri::Runtime>(app: &AppHandle<R>, path: &str) -> Option<Vec<u8
 /// Format names offered for recordings, so the settings page can show what works here.
 #[tauri::command]
 pub fn recording_formats() -> Vec<ExportFormat> {
-    framenab_export::available_formats()
+    framenapper_export::available_formats()
 }
 
 /// "Open project" in the main window.
@@ -698,7 +704,7 @@ pub fn open_root(app: &AppHandle) -> Option<PathBuf> {
 pub fn delete_project(app: AppHandle, path: PathBuf) -> Result<(), String> {
     let dir = crate::recorder::recordings_dir(&app).canonicalize().map_err(|e| e.to_string())?;
     let target = path.canonicalize().map_err(|e| e.to_string())?;
-    if target.parent() != Some(dir.as_path()) || target.extension().is_none_or(|e| e != "framenab") {
+    if target.parent() != Some(dir.as_path()) || !target.extension().is_some_and(crate::rename::is_project_extension) {
         return Err("not a recording".into());
     }
     let state = app.state::<EditorState>();

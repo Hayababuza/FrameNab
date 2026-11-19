@@ -1,5 +1,5 @@
 /**
- * Live preview of annotations on a canvas. Mirrors `framenab-render` (Rust), which produces the
+ * Live preview of annotations on a canvas. Mirrors `framenapper-render` (Rust), which produces the
  * actual result, so keep the two in sync. The context's transform must map image pixels to
  * device pixels (scale only, no rotation).
  */
@@ -149,7 +149,7 @@ export function drawAnnotation(ctx: CanvasRenderingContext2D, a: Annotation) {
       break;
     }
     case "click": {
-      // Mirrors framenab_render::draw_click: translucent center, ring in the stroke color.
+      // Mirrors framenapper_render::draw_click: translucent center, ring in the stroke color.
       const r = clickRadius(style.width);
       ctx.fillStyle = css(style.stroke, style.opacity * 0.45);
       ctx.beginPath();

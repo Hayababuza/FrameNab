@@ -12,8 +12,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use framenab_capture::{CaptureTarget, Crop, FrameStream, Recording, StreamOptions, record};
-use framenab_core::recorder::ProjectRecorder;
+use framenapper_capture::{CaptureTarget, Crop, FrameStream, Recording, StreamOptions, record};
+use framenapper_core::recorder::ProjectRecorder;
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
@@ -42,7 +42,7 @@ pub struct Setup {
     image_width: u32,
     image_height: u32,
     /// The frozen screen image from the area selection is available as background
-    /// (`framenab://localhost/recorder-background`). Used on Wayland, where a fullscreen window
+    /// (`framenapper://localhost/recorder-background`). Used on Wayland, where a fullscreen window
     /// cannot be transparent: GNOME puts black behind fullscreen windows.
     background: bool,
     /// Wayland: the window has to shrink to a compact bar while recording.
@@ -66,7 +66,7 @@ struct Inner {
     recording: Option<Recording<ProjectRecorder>>,
     project_dir: Option<PathBuf>,
     /// Records clicks and keys while recording (dropping it stops it).
-    input: Option<framenab_capture::input::InputListener>,
+    input: Option<framenapper_capture::input::InputListener>,
     /// Show the pressed keys in the result (chosen in the recorder bar).
     show_keys: bool,
 }
@@ -120,7 +120,7 @@ pub struct Open {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct InstantGif {
-    pub format: framenab_export::ExportFormat,
+    pub format: framenapper_export::ExportFormat,
     pub fps: u32,
     /// Seconds between choosing the area and the start.
     pub countdown: u32,
@@ -137,7 +137,7 @@ pub struct InstantGif {
 impl Default for InstantGif {
     fn default() -> Self {
         Self {
-            format: framenab_export::ExportFormat::Gif,
+            format: framenapper_export::ExportFormat::Gif,
             fps: 15,
             countdown: 1,
             cursor: true,
@@ -250,7 +250,7 @@ pub async fn recorder_prepare(app: AppHandle, cursor: bool, fps: u32) -> Result<
     };
 
     let stream = tauri::async_runtime::spawn_blocking(move || {
-        framenab_capture::backend().open_stream(&target, &StreamOptions { cursor, restore_token, fps })
+        framenapper_capture::backend().open_stream(&target, &StreamOptions { cursor, restore_token, fps })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -280,13 +280,16 @@ pub fn recorder_start(app: AppHandle, fps: u32, show_keys: bool) -> Result<(), S
     let area = setup.as_ref().and_then(|s| s.region.map(|r| (r, s.origin)));
     let crop = area.map(|(r, o)| Crop { x: r.x + o.0 - origin.0, y: r.y + o.1 - origin.1, width: r.w, height: r.h });
     inner.show_keys = show_keys;
-    let dir = recordings_dir(&app)
-        .join(format!("{}.framenab", framenab_export::still::file_name_now(framenab_export::still::DEFAULT_TEMPLATE)));
+    let dir = recordings_dir(&app).join(format!(
+        "{}.framenapper",
+        framenapper_export::still::file_name_now(framenapper_export::still::DEFAULT_TEMPLATE)
+    ));
     let sink = ProjectRecorder::create(&dir).map_err(|e| e.to_string())?;
     let recording = record(stream, crop, fps, sink);
     let record_input =
         app.store("settings.json").ok().and_then(|s| s.get(INPUT_KEY)).and_then(|v| v.as_bool()).unwrap_or(true);
-    inner.input = if record_input { framenab_capture::input::listen(recording.input_recorder(), origin) } else { None };
+    inner.input =
+        if record_input { framenapper_capture::input::listen(recording.input_recorder(), origin) } else { None };
     inner.recording = Some(recording);
     inner.project_dir = Some(dir.clone());
     tracing::info!(path = %dir.display(), fps, ?crop, clicks_and_keys = inner.input.is_some(), "recording started");
@@ -364,7 +367,7 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
     let direct = match instant {
         Some(i) => {
             let (_, options) = crate::editor::saved_choice(&app);
-            Some((i.format, framenab_export::ExportOptions { scale: i.scale.clamp(0.1, 1.0), ..options }, i.copy))
+            Some((i.format, framenapper_export::ExportOptions { scale: i.scale.clamp(0.1, 1.0), ..options }, i.copy))
         }
         None if app.store("settings.json").ok().and_then(|s| s.get(AFTER_KEY)).is_some_and(|v| v == "save") => {
             let (format, options) = crate::editor::saved_choice(&app);
@@ -380,7 +383,7 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
                 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
                 app.dialog()
                     .message(format!("{}\n\n{err}", crate::i18n::t("save.recordingFailed")))
-                    .title("FrameNab")
+                    .title("FrameNapper")
                     .kind(MessageDialogKind::Error)
                     .show(|_| {});
                 None
@@ -413,19 +416,19 @@ pub async fn recorder_stop(app: AppHandle) -> Result<Summary, String> {
 async fn save_directly(
     app: &AppHandle,
     dir: &std::path::Path,
-    project: &framenab_core::Project,
-    format: framenab_export::ExportFormat,
-    options: framenab_export::ExportOptions,
+    project: &framenapper_core::Project,
+    format: framenapper_export::ExportFormat,
+    options: framenapper_export::ExportOptions,
     copy: bool,
 ) -> Result<PathBuf, String> {
-    use framenab_export::animation::{ExportControl, export_animation};
-    use framenab_export::still::{file_name_now, unique_path};
+    use framenapper_export::animation::{ExportControl, export_animation};
+    use framenapper_export::still::{file_name_now, unique_path};
 
     let config = crate::settings::save_settings(app);
     let path = unique_path(&config.directory, &file_name_now(&config.template), format.extension());
     let (dir, project, target) = (dir.to_owned(), project.clone(), path.clone());
     tauri::async_runtime::spawn_blocking(move || {
-        let store = framenab_core::FrameStore::create(&dir).map_err(|e| e.to_string())?;
+        let store = framenapper_core::FrameStore::create(&dir).map_err(|e| e.to_string())?;
         export_animation(&store, &project, &target, format, &options, &ExportControl::default())
             .map_err(|e| e.to_string())
     })
@@ -441,11 +444,11 @@ const INPUT_KEY: &str = "recordInput";
 /// Saves the recorded input next to the frames and turns on the effects that have data.
 fn save_input(
     dir: &std::path::Path,
-    mut project: framenab_core::Project,
-    input: &framenab_core::InputEvents,
+    mut project: framenapper_core::Project,
+    input: &framenapper_core::InputEvents,
     show_keys: bool,
-) -> Result<framenab_core::Project, String> {
-    let store = framenab_core::FrameStore::create(dir).map_err(|e| e.to_string())?;
+) -> Result<framenapper_core::Project, String> {
+    let store = framenapper_core::FrameStore::create(dir).map_err(|e| e.to_string())?;
     store.save_input(input).map_err(|e| e.to_string())?;
     project.effects.cursor = !input.cursor.is_empty();
     project.effects.clicks = !input.clicks.is_empty();
@@ -456,8 +459,8 @@ fn save_input(
 
 /// Whether clicks and keys can be recorded here (Linux needs the `input` group).
 #[tauri::command]
-pub fn input_support() -> framenab_capture::input::InputSupport {
-    framenab_capture::input::support()
+pub fn input_support() -> framenapper_capture::input::InputSupport {
+    framenapper_capture::input::support()
 }
 
 /// `<app data>/recordings`
@@ -467,7 +470,7 @@ pub fn recording_dir(app: &AppHandle) -> Option<PathBuf> {
 }
 
 pub fn recordings_dir(app: &AppHandle) -> PathBuf {
-    app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("framenab")).join("recordings")
+    app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("framenapper")).join("recordings")
 }
 
 // ---- click-through ----------------------------------------------------------------------------
@@ -652,7 +655,8 @@ pub fn find_marker(image: &RgbaImage, scale: f64) -> Option<(i32, i32)> {
 #[tauri::command]
 pub async fn locate_marker(scale: f64) -> Result<Option<(i32, i32)>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let image = framenab_capture::backend().screenshot(&CaptureTarget::AllMonitors).map_err(|e| e.to_string())?;
+        let image =
+            framenapper_capture::backend().screenshot(&CaptureTarget::AllMonitors).map_err(|e| e.to_string())?;
         let found = find_marker(&image, scale.max(0.5));
         tracing::debug!(?found, scale, "recorder window marker");
         Ok(found)

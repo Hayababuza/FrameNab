@@ -6,7 +6,7 @@ export type ImageFormat = "png" | "jpeg" | "webp";
 export type Theme = "system" | "light" | "dark";
 export type RecordingFormat = "gif" | "apng" | "webp" | "pngSequence" | "mp4" | "webm";
 
-/** Settings of an animation export (mirrors `framenab_export::ExportOptions`). */
+/** Settings of an animation export (mirrors `framenapper_export::ExportOptions`). */
 export interface ExportOptions {
   /** 1–100 */
   quality: number;
@@ -22,7 +22,7 @@ export interface Settings {
   /** `null` = system language */
   locale: Locale | null;
   theme: Theme;
-  /** Folder for Ctrl+S; `null` = `<Pictures>/FrameNab`. */
+  /** Folder for Ctrl+S; `null` = `<Pictures>/FrameNapper`. */
   saveDirectory: string | null;
   /** File name with `{…}` date tokens: yyyy, yy, MM, dd, HH, mm, ss. */
   filenameTemplate: string;
@@ -97,7 +97,7 @@ export const DEFAULT_HOTKEYS: Hotkeys = {
   recordNow: "Ctrl+Shift+PrintScreen",
 };
 
-export const DEFAULT_TEMPLATE = "FrameNab_{yyyy-MM-dd_HH-mm-ss}";
+export const DEFAULT_TEMPLATE = "FrameNapper_{yyyy-MM-dd_HH-mm-ss}";
 
 const defaults: Settings = {
   locale: null,

@@ -1,6 +1,6 @@
 {
-  "name": "framenab",
-  "version": "0.5.4",
+  "name": "framenapper",
+  "version": "0.6.0",
   "description": "Cross-platform screenshots and GIF recordings with annotations",
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bindings": "cargo test -p framenab-core --lib export_bindings",
+    "bindings": "cargo test -p framenapper-core --lib export_bindings",
     "tauri": "tauri"
   },
   "license": "MIT",

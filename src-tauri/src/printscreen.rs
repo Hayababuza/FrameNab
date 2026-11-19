@@ -9,9 +9,9 @@ use serde::Serialize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PrintScreenOwner {
-    /// Windows opens its screen capture; FrameNab does not get the key.
+    /// Windows opens its screen capture; FrameNapper does not get the key.
     Windows,
-    /// The key is free for FrameNab.
+    /// The key is free for FrameNapper.
     Free,
 }
 
