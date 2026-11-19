@@ -302,5 +302,7 @@
   "editor.copyGifTitle": "Als GIF mit allen Anmerkungen in die Zwischenablage kopieren – danach mit Strg+V einfügen (Strg+Umschalt+C)",
   "editor.copiedGif": "GIF in der Zwischenablage – mit Strg+V einfügen.",
   "settings.closeEditorAfterCopy": "Editor nach „In Zwischenablage“ schließen",
-  "settings.closeEditorAfterCopyHelp": "damit du das GIF gleich irgendwo einfügen kannst"
+  "settings.closeEditorAfterCopyHelp": "damit du das GIF gleich irgendwo einfügen kannst",
+  "settings.rightClickCancels": "Rechtsklick bricht den Screenshot ab",
+  "settings.rightClickCancelsHelp": "verwirft Auswahl und Zeichnungen; Esc bricht immer ab"
 }

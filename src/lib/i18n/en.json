@@ -302,5 +302,7 @@
   "editor.copyGifTitle": "Copy as a GIF with all annotations to the clipboard – then paste it with Ctrl+V (Ctrl+Shift+C)",
   "editor.copiedGif": "GIF on the clipboard – paste it with Ctrl+V.",
   "settings.closeEditorAfterCopy": "Close the editor after “Copy”",
-  "settings.closeEditorAfterCopyHelp": "so you can paste the GIF somewhere right away"
+  "settings.closeEditorAfterCopyHelp": "so you can paste the GIF somewhere right away",
+  "settings.rightClickCancels": "Right click cancels the screenshot",
+  "settings.rightClickCancelsHelp": "discards the selection and drawings; Esc always cancels"
 }

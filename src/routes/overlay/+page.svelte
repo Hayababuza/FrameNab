@@ -123,10 +123,14 @@
 
   const imageSelection = $derived(selection && info ? toImagePixels(selection, scale, info) : null);
 
+  /** Setting: a right click cancels the capture. */
+  let rightClickCancels = true;
+
   /** Target folder of "Save", shown in its tooltip. */
   let saveDirectory = $state("");
 
   onMount(async () => {
+    getSetting("rightClickCancels").then((v) => (rightClickCancels = v));
     // The color and width chosen last time (also in the editor).
     getSetting("annotationStyle").then((style) => {
       color = style.color;
@@ -373,7 +377,10 @@
 
   function onpointerdown(e: PointerEvent) {
     if (busy) return;
-    if (e.button === 2) return void cancelCapture();
+    if (e.button === 2) {
+      if (rightClickCancels) cancelCapture();
+      return;
+    }
     const c = point(e);
     // Inspection tools: the middle button, Space+drag or Shift+drag pans the zoomed view.
     if (inspecting && (e.button === 1 || (e.button === 0 && (e.shiftKey || spaceHeld)))) {

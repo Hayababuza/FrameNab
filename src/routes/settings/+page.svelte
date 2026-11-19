@@ -86,6 +86,7 @@
   const INSTANT_SIZES = [1, 0.75, 0.5, 0.25];
   let copyRecording = $state(true);
   let closeEditorAfterCopy = $state(true);
+  let rightClickCancels = $state(true);
   let available = $state<ExportFormat[]>(["gif"]);
   const recordingLabels: Record<RecordingFormat, string> = {
     gif: "GIF",
@@ -122,6 +123,7 @@
     instant = { ...DEFAULT_INSTANT_GIF, ...(await getSetting("instantGif")) };
     copyRecording = await getSetting("copyRecording");
     closeEditorAfterCopy = await getSetting("closeEditorAfterCopy");
+    rightClickCancels = await getSetting("rightClickCancels");
     printScreen = await printScreenOwner().catch(() => null);
     autostart = await autostartEnabled().catch(() => false);
     saveDirectory = await getSetting("saveDirectory");
@@ -494,6 +496,17 @@
           <option value={f.value}>{f.label}</option>
         {/each}
       </select>
+    </label>
+    <label class="row">
+      <span>
+        {t("settings.rightClickCancels")}
+        <small class="help-inline">{t("settings.rightClickCancelsHelp")}</small>
+      </span>
+      <input
+        type="checkbox"
+        bind:checked={rightClickCancels}
+        onchange={() => setSetting("rightClickCancels", rightClickCancels)}
+      />
     </label>
     <label class="row">
       <span>{t("settings.recordingFormat")}</span>

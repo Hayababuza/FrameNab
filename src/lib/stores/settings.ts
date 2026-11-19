@@ -59,6 +59,8 @@ export interface Settings {
   hotkeys: Hotkeys;
   /** Last chosen color and stroke width (CSS pixels) for annotations, in the overlay and editor. */
   annotationStyle: { color: Rgba; width: number };
+  /** A right click in the screenshot overlay cancels it (discarding the selection and drawings). */
+  rightClickCancels: boolean;
 }
 
 /** Mirrors `InstantGif` in `src-tauri/src/recorder.rs`. */
@@ -124,6 +126,7 @@ const defaults: Settings = {
   recordingCleanup: { enabled: false, days: 30 },
   instantGif: { ...DEFAULT_INSTANT_GIF },
   annotationStyle: { color: { r: 0xff, g: 0x3b, b: 0x30, a: 255 }, width: 4 },
+  rightClickCancels: true,
 };
 
 let store: Promise<Store> | undefined;

@@ -9,6 +9,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 - **Color picker** (`I`) in the screenshot mode and the editor: a loupe follows the mouse, a click shows the color as HEX and RGB – each copyable – and "Use for drawing" makes it the color for arrows, text …; the editor reads the exact pixels of the frame
 - With both tools the view zooms (mouse wheel or `+`/`−`, up to 3200 % with sharp pixels) and pans (Space+drag, Shift+drag or the middle mouse button); `0` resets it. In the editor, Space pans instead of playing while one of them is active
 - The last chosen annotation color and stroke width are remembered – across the screenshot mode and the editor, and after a restart
+- Settings → Saving: "Right click cancels the screenshot" can be switched off (on by default); Esc always cancels
 
 ## [0.6.1] - 2026-11-19
 
