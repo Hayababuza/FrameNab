@@ -1612,7 +1612,7 @@ dependencies = [
 
 [[package]]
 name = "framenapper"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "arboard",
  "auto-launch",
@@ -1648,7 +1648,7 @@ dependencies = [
 
 [[package]]
 name = "framenapper-capture"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "ashpd",
  "device_query",
@@ -1666,7 +1666,7 @@ dependencies = [
 
 [[package]]
 name = "framenapper-core"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "image",
  "qoi",
@@ -1681,7 +1681,7 @@ dependencies = [
 
 [[package]]
 name = "framenapper-export"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "framenapper-core",
@@ -1703,7 +1703,7 @@ dependencies = [
 
 [[package]]
 name = "framenapper-render"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "cosmic-text",
  "framenapper-core",

@@ -10,7 +10,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-framenapper-core = { version = "0.6.1", path = "../framenapper-core" }
+framenapper-core = { version = "0.7.0", path = "../framenapper-core" }
 image = "0.25.9"
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"

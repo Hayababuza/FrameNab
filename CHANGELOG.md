@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-19
+
 ### Added
 - **Measure** tool (`M`) in the screenshot mode and the editor: drag an area to see its size in pixels (↔ width × height ↕); the measurement is only shown, not drawn into the image
 - **Color picker** (`I`) in the screenshot mode and the editor: a loupe follows the mouse, a click shows the color as HEX and RGB – each copyable – and "Use for drawing" makes it the color for arrows, text …; the editor reads the exact pixels of the frame
@@ -168,7 +170,8 @@ First version: the screenshot mode (phase 1) on Windows, macOS and Linux (X11 an
 - Wayland: window buttons (minimize, maximize, close) did not react to clicks until the window had been maximized once (tao header bar workaround)
 - Wayland: a second screenshot in the same session hung forever
 
-[Unreleased]: https://github.com/Hayababuza/FrameNapper/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/Hayababuza/FrameNapper/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Hayababuza/FrameNapper/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/Hayababuza/FrameNapper/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Hayababuza/FrameNapper/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/Hayababuza/FrameNapper/compare/v0.5.3...v0.5.4

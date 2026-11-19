@@ -11,8 +11,8 @@ workspace = true
 
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-framenapper-core = { version = "0.6.1", path = "../framenapper-core" }
-framenapper-render = { version = "0.6.1", path = "../framenapper-render" }
+framenapper-core = { version = "0.7.0", path = "../framenapper-core" }
+framenapper-render = { version = "0.7.0", path = "../framenapper-render" }
 gifski = { version = "1.34.0", default-features = false }
 image = "0.25.9"
 image-webp = "0.2.4"
